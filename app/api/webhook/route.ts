@@ -75,12 +75,19 @@ export async function POST(request: Request) {
 
         console.log(`Price created: ${price.id}`);
 
+        // Get Unix timestamp for 1st of next month
+        const now = new Date();
+        const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const billingAnchor = Math.floor(firstOfNextMonth.getTime() / 1000);
+
         // Create the subscription
         console.log(`Creating subscription for customer ${customerId}`);
         const subscription = await stripe.subscriptions.create({
           customer: customerId,
           default_payment_method: paymentMethodId,
           items: [{ price: price.id }],
+          billing_cycle_anchor: billingAnchor, // Start billing on 1st of next month
+          proration_behavior: 'none',          // No partial charges
           metadata: {
             students: metadata.students || "",
             totalAmount: metadata.totalAmount || "",
