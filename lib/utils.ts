@@ -28,9 +28,7 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export function calculateStudentPrice(
-  student: Student
-): {
+export function calculateStudentPrice(student: Student): {
   price: number;
   discount: number;
   isSiblingDiscount: boolean;
@@ -55,5 +53,9 @@ export function calculateStudentPrice(
   };
 }
 
-
-
+export const formatDiscountType = (type: string, amount: number) => {
+  if (type === "Family Discount") {
+    return `Fam ($${amount} off)`;
+  }
+  return type;
+};
