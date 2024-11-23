@@ -37,22 +37,23 @@ export function calculateStudentPrice(
 } {
   const basePrice = student.monthlyRate;
 
-  // If student has no family, return base price
-  if (!student.familyId || !student.totalFamilyMembers) {
-    return {
-      price: basePrice,
-      discount: 0,
-      isSiblingDiscount: false,
-    };
+  // Calculate discount based on family info
+  let discount = 0;
+  let isSiblingDiscount = false;
+
+  if (student.familyId && student.totalFamilyMembers) {
+    discount = getFamilyDiscount(student.totalFamilyMembers);
+    isSiblingDiscount = true;
   }
 
-  // Calculate discount based on total family members
-  const familyDiscount = getFamilyDiscount(student.totalFamilyMembers);
-  const price = basePrice - familyDiscount;
+  const price = basePrice - discount;
 
   return {
     price,
-    discount: familyDiscount,
-    isSiblingDiscount: true,
+    discount,
+    isSiblingDiscount,
   };
 }
+
+
+

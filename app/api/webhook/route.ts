@@ -1,5 +1,6 @@
 // /api/webhook.js
 
+import { calculateStudentPrice } from "@/lib/utils";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
@@ -61,43 +62,70 @@ export async function POST(request: Request) {
         );
       }
 
-      // Create a Price dynamically
-      try {
-        console.log(`Creating price for amount: ${totalAmount}`);
-        const price = await stripe.prices.create({
-          unit_amount: totalAmount * 100, // Amount in cents
-          currency: "usd",
-          recurring: { interval: "month" },
-          product_data: {
-            name: "Tutoring Subscription",
-          },
-        });
+      // Get Unix timestamp for 1st of next month
+      const now = new Date();
+      const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const billingAnchor = Math.floor(firstOfNextMonth.getTime() / 1000);
 
-        console.log(`Price created: ${price.id}`);
-
-        // Get Unix timestamp for 1st of next month
-        const now = new Date();
-        const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-        const billingAnchor = Math.floor(firstOfNextMonth.getTime() / 1000);
-
-        // Create the subscription
-        console.log(`Creating subscription for customer ${customerId}`);
-        const subscription = await stripe.subscriptions.create({
-          customer: customerId,
+      // Update customer's default payment method
+      await stripe.customers.update(customerId, {
+        invoice_settings: {
           default_payment_method: paymentMethodId,
-          items: [{ price: price.id }],
-          billing_cycle_anchor: billingAnchor, // Start billing on 1st of next month
-          proration_behavior: 'none',          // No partial charges
-          metadata: {
-            students: metadata.students || "",
-            totalAmount: metadata.totalAmount || "",
-          },
-        });
+        },
+      });
 
-        console.log("Subscription created:", subscription.id);
-      } catch (error) {
-        console.error("Error creating price or subscription:", error);
-      }
+      // Parse students from metadata
+      const students = JSON.parse(metadata.students || "[]");
+
+      // Build subscription items based on students
+      const subscriptionItems = students.map((student: any) => {
+        const { price, discount, isSiblingDiscount } = calculateStudentPrice(student);
+
+        return {
+          price_data: {
+            currency: 'usd',
+            unit_amount: price * 100, // Amount in cents
+            recurring: { interval: 'month' },
+            product: process.env.STRIPE_PRODUCT_ID!, // Use your existing product ID
+          },
+          quantity: 1,
+          metadata: {
+            studentId: student.id,
+            studentName: student.name,
+            discount: discount.toString(),
+            isSiblingDiscount: isSiblingDiscount.toString(),
+          },
+        };
+      });
+
+      // Create the subscription with subscription items
+      console.log(`Creating subscription for customer ${customerId}`);
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        default_payment_method: paymentMethodId,
+        items: subscriptionItems,
+        billing_cycle_anchor: billingAnchor, // Start billing on 1st of next month
+        proration_behavior: 'none',          // No partial charges
+        metadata: {
+          students: metadata.students || "",
+          totalAmount: metadata.totalAmount || "",
+        },
+        collection_method: 'charge_automatically',
+      });
+
+      console.log("Subscription created:", subscription.id);
+
+      // Optionally, you can retrieve the upcoming invoice to get invoice details
+      const upcomingInvoice = await stripe.invoices.retrieveUpcoming({
+        customer: customerId,
+        subscription: subscription.id,
+      });
+
+      console.log("Upcoming invoice retrieved:", upcomingInvoice.id);
+
+      // Retrieve the invoice PDF URL (Note: Upcoming invoices cannot be finalized)
+      // Invoices will be generated and charged automatically at the billing cycle anchor
+
     } else {
       console.log(`Unhandled event type: ${event.type}`);
     }
