@@ -3,31 +3,58 @@ import Stripe from "stripe";
 import { ProcessedStudent, Student } from "@/lib/types";
 import { calculateStudentPrice } from "@/lib/utils";
 import { STUDENTS } from "@/lib/data";
+import { z } from "zod";
 
+export const dynamic = 'force-dynamic';
+
+// Initialize Stripe with proper error handling
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-11-20.acacia",
+  typescript: true,
+});
+
+// Input validation schema
+const QuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(10),
+  status: z.string().optional(),
+  search: z.string().optional(),
+  discountType: z.string().optional(),
+  sortBy: z.string().optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
 export async function GET(request: Request) {
   try {
+    // Parse and validate query parameters
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
-    const status = searchParams.get("status");
-    const search = searchParams.get("search");
-    const discountType = searchParams.get("discountType");
-    const sortBy = searchParams.get("sortBy");
-    const sortOrder = searchParams.get("sortOrder");
+    const queryResult = QuerySchema.safeParse(Object.fromEntries(searchParams));
+    
+    if (!queryResult.success) {
+      return NextResponse.json(
+        { error: "Invalid query parameters", details: queryResult.error },
+        { status: 400 }
+      );
+    }
 
+    const { page, limit, status, search, discountType, sortBy, sortOrder } = queryResult.data;
+
+    // Fetch subscriptions with proper error handling
     const subscriptions = await stripe.subscriptions.list({
-      expand: [
-        "data.customer",
-        "data.default_payment_method",
-        "data.latest_invoice",
-      ],
+      expand: ["data.customer", "data.default_payment_method", "data.latest_invoice"],
+      limit: 100, // Adjust based on your needs
+    }).catch((error) => {
+      console.error("Stripe API error:", error);
+      throw new Error("Failed to fetch subscriptions");
     });
 
-    const subscribedStudentsMap = new Map();
+    // Process subscriptions with proper type safety
+    const subscribedStudentsMap = new Map<string, {
+      subscription: Stripe.Subscription;
+      customer: Stripe.Customer;
+      price: number;
+    }>();
+
     subscriptions.data.forEach((subscription) => {
       const metadata = subscription.metadata || {};
       try {
@@ -36,7 +63,7 @@ export async function GET(request: Request) {
           subscribedStudentsMap.set(student.name, {
             subscription,
             customer: subscription.customer as Stripe.Customer,
-            price: calculateStudentPrice(student),
+            price: calculateStudentPrice(student).price,
           });
         });
       } catch (e) {
@@ -161,7 +188,7 @@ export async function GET(request: Request) {
     const filteredCount = processedStudents.length;
     const unenrolledStudents = processedStudents.filter(
       (s) => s.status === "not_enrolled"
-    );
+    ) as ProcessedStudent[];
     const filteredUnenrolledCount = unenrolledStudents.length;
 
     // Calculate potential revenue for unenrolled students
@@ -254,34 +281,51 @@ export async function GET(request: Request) {
     const hasMore = start + limit < processedStudents.length;
     const nextCursor = hasMore ? processedStudents[start + limit - 1].id : null;
 
-    return NextResponse.json({
-      students: paginatedStudents,
-      hasMore,
-      nextCursor,
-      totalStudents: STUDENTS.length,
-      filteredCount: processedStudents.length,
-      activeCount: activeStudents.length,
-      activeRevenue,
-      averageActiveRevenue,
-      unenrolledCount: filteredUnenrolledCount,
-      potentialRevenue,
-      pastDueCount: pastDueStudents.length,
-      pastDueRevenue,
-      averagePastDueAmount,
-      canceledCount: canceledStudents.length,
-      canceledRevenue,
-      lastMonthCanceled,
-      familyDiscountCount: familyDiscountStudents.length,
-      familyDiscountTotal,
-      averageFamilyDiscount,
-      noDiscountCount: noDiscountStudents.length,
-      noDiscountRevenue,
-    });
+    // Return response with proper caching headers
+    return NextResponse.json(
+      {
+        students: paginatedStudents,
+        hasMore,
+        nextCursor,
+        totalStudents: STUDENTS.length,
+        filteredCount: processedStudents.length,
+        activeCount: activeStudents.length,
+        activeRevenue,
+        averageActiveRevenue,
+        unenrolledCount: filteredUnenrolledCount,
+        potentialRevenue,
+        pastDueCount: pastDueStudents.length,
+        pastDueRevenue,
+        averagePastDueAmount,
+        canceledCount: canceledStudents.length,
+        canceledRevenue,
+        lastMonthCanceled,
+        familyDiscountCount: familyDiscountStudents.length,
+        familyDiscountTotal,
+        averageFamilyDiscount,
+        noDiscountCount: noDiscountStudents.length,
+        noDiscountRevenue,
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, max-age=300', // 5 minutes cache
+          'Vary': 'Authorization'
+        }
+      }
+    );
   } catch (error) {
     console.error("Dashboard data fetch error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch dashboard data" },
-      { status: 500 }
+      { 
+        error: "Failed to fetch dashboard data",
+        message: error instanceof Error ? error.message : "Unknown error"
+      },
+      { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store'
+        }
+      }
     );
   }
 }

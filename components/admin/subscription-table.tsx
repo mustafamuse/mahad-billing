@@ -12,73 +12,58 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDiscountType } from "@/lib/utils";
-import { DashboardFilters } from "./dashboard-filters";
-import { ChevronLeft, ChevronRight, Loader2, ArrowUpDown, Info } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { formatCurrency } from "@/lib/utils";
+import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Info } from "lucide-react";
 import { ProcessedStudent } from "@/lib/types";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { ColumnToggle } from "./column-toggle";
+import { cn } from "@/lib/utils";
 
 const statusConfig = {
-  active: {
-    label: "Active",
-    color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
-  },
-  past_due: {
-    label: "Past Due",
-    color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
-  },
-  unpaid: {
-    label: "Unpaid",
-    color: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
-  },
-  canceled: {
-    label: "Canceled",
-    color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
-  },
-  not_enrolled: {
-    label: "Not Enrolled",
-    color: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
-  }
+  all: { label: "All Statuses", color: "bg-gray-500" },
+  active: { label: "Active", color: "bg-green-500" },
+  not_enrolled: { label: "Not Enrolled", color: "bg-gray-500" },
+  past_due: { label: "Past Due", color: "bg-yellow-500" },
+  unpaid: { label: "Unpaid", color: "bg-red-500" },
+  canceled: { label: "Canceled", color: "bg-red-500" },
 } as const;
+
+const discountConfig = {
+  all: { label: "All Discounts" },
+  "Family Discount": { label: "Family Discount" },
+  "None": { label: "No Discount" },
+  "Other": { label: "Other Discount" },
+} as const;
+
+type SortOrder = "asc" | "desc";
+
+interface SortConfig {
+  field: string;
+  order: SortOrder;
+}
 
 export function SubscriptionTable() {
   const [page, setPage] = useState(1);
   const [cursor, setCursor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("active");
-  const [discountType, setDiscountType] = useState("all");
-  const [sortConfig, setSortConfig] = useState({ field: "name", order: "asc" });
-
-  const handleSort = (field: string) => {
-    setSortConfig(prev => ({
-      field,
-      order: prev.field === field && prev.order === "asc" ? "desc" : "asc"
-    }));
-  };
-
-  const [visibleColumns, setVisibleColumns] = useState({
-    name: true,
-    payer: true,
-    status: true,
-    nextPayment: true,
-    monthlyAmount: true,
-    discount: true,
+  const [status, setStatus] = useState<keyof typeof statusConfig>("active");
+  const [discountType, setDiscountType] = useState<keyof typeof discountConfig>("all");
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ 
+    field: "name", 
+    order: "asc" 
   });
 
-  const columns = [
-    { key: "name", label: "Student Name", isVisible: visibleColumns.name },
-    { key: "payer", label: "Payer", isVisible: visibleColumns.payer },
-    { key: "status", label: "Status", isVisible: visibleColumns.status },
-    { key: "nextPayment", label: "Next Payment", isVisible: visibleColumns.nextPayment },
-    { key: "monthlyAmount", label: "Monthly Amount", isVisible: visibleColumns.monthlyAmount },
-    { key: "discount", label: "Discount", isVisible: visibleColumns.discount },
-  ];
-
-  const toggleColumn = (key: string) => {
-    setVisibleColumns(prev => ({
-      ...prev,
-      [key]: !prev[key as keyof typeof visibleColumns]
+  const handleSort = (field: string) => {
+    setSortConfig((prev) => ({
+      field,
+      order: prev.field === field && prev.order === "asc" ? "desc" : "asc"
     }));
   };
 
@@ -100,17 +85,29 @@ export function SubscriptionTable() {
       }
       
       const response = await fetch(`/api/admin/dashboard?${params}`);
-      if (!response.ok) throw new Error("Failed to fetch students");
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to fetch students");
+      }
       return response.json();
     },
   });
+
+  const columns = [
+    { key: "name", label: "Student Name" },
+    { key: "payer", label: "Payer" },
+    { key: "status", label: "Status" },
+    { key: "nextPayment", label: "Next Payment" },
+    { key: "monthlyAmount", label: "Monthly Amount" },
+    { key: "discount", label: "Discount" },
+  ];
 
   const renderFilterSummary = () => {
     if (!data) return null;
 
     if (status === "active") {
       return (
-        <div className="bg-muted p-4 rounded-lg mb-4">
+        <div className="bg-muted p-4 rounded-lg">
           <div className="flex justify-between items-center">
             <div>
               <span className="font-medium">
@@ -135,7 +132,7 @@ export function SubscriptionTable() {
 
     if (status === "not_enrolled") {
       return (
-        <div className="bg-muted p-4 rounded-lg mb-4">
+        <div className="bg-muted p-4 rounded-lg">
           <div className="flex justify-between items-center">
             <div>
               <span className="font-medium">
@@ -163,7 +160,7 @@ export function SubscriptionTable() {
 
     if (status === "past_due" || status === "unpaid") {
       return (
-        <div className="bg-muted p-4 rounded-lg mb-4">
+        <div className="bg-muted p-4 rounded-lg">
           <div className="flex justify-between items-center">
             <div>
               <span className="font-medium text-red-600 dark:text-red-400">
@@ -188,7 +185,7 @@ export function SubscriptionTable() {
 
     if (status === "canceled") {
       return (
-        <div className="bg-muted p-4 rounded-lg mb-4">
+        <div className="bg-muted p-4 rounded-lg">
           <div className="flex justify-between items-center">
             <div>
               <span className="font-medium text-gray-600 dark:text-gray-400">
@@ -213,7 +210,7 @@ export function SubscriptionTable() {
 
     if (discountType === "Family Discount") {
       return (
-        <div className="bg-muted p-4 rounded-lg mb-4">
+        <div className="bg-muted p-4 rounded-lg">
           <div className="flex justify-between items-center">
             <div>
               <span className="font-medium">
@@ -241,7 +238,7 @@ export function SubscriptionTable() {
 
     if (discountType === "None") {
       return (
-        <div className="bg-muted p-4 rounded-lg mb-4">
+        <div className="bg-muted p-4 rounded-lg">
           <div className="flex justify-between items-center">
             <div>
               <span className="font-medium">
@@ -270,7 +267,7 @@ export function SubscriptionTable() {
       const pastDueInSearch = data?.students.filter((s: { status: string; }) => s.status === "past_due" || s.status === "unpaid").length || 0;
 
       return (
-        <div className="bg-muted p-4 rounded-lg mb-4">
+        <div className="bg-muted p-4 rounded-lg">
           <div className="flex justify-between items-center">
             <div>
               <span className="font-medium">
@@ -301,69 +298,90 @@ export function SubscriptionTable() {
       );
     }
 
-    if (status !== "all" && discountType !== "all") {
-      const totalRevenue = data?.students.reduce((sum: number, student: { monthlyAmount: number; }) => sum + student.monthlyAmount, 0) || 0;
-      const percentageOfTotal = ((data?.filteredCount || 0) / (data?.totalStudents || 1)) * 100;
-
-      return (
-        <div className="bg-muted p-4 rounded-lg mb-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <span className="font-medium">
-                {data.filteredCount} students match all filters
-              </span>
-              <span className="text-muted-foreground ml-2">
-                ({percentageOfTotal.toFixed(1)}% of total)
-              </span>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-muted-foreground">
-                Combined Revenue
-              </div>
-              <div className="font-medium text-lg">
-                {formatCurrency(totalRevenue)}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     return null;
   };
 
   return (
-    <TooltipProvider>
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <DashboardFilters 
-            onSearchChange={setSearch}
-            onStatusChange={setStatus}
-            onDiscountTypeChange={setDiscountType}
-          />
-          <ColumnToggle 
-            columns={columns}
-            onToggleColumn={toggleColumn}
-          />
-        </div>
-        
-        {renderFilterSummary()}
+    <div>
+      <div className="p-4 space-y-4">
+        {/* Search and Filters */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-grow max-w-[350px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search by student name..."
+              value={search}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+              className="pl-10 pr-4 h-10 w-full"
+            />
+          </div>
 
-        <div className="rounded-md border">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Select
+              value={status}
+              onValueChange={(value: keyof typeof statusConfig) => setStatus(value)}
+            >
+              <SelectTrigger className="w-[180px] h-10">
+                <SelectValue>
+                  {statusConfig[status].label}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.entries(statusConfig) as [keyof typeof statusConfig, typeof statusConfig[keyof typeof statusConfig]][]).map(([key, config]) => (
+                  <SelectItem 
+                    key={key} 
+                    value={key}
+                    className="flex items-center gap-2"
+                  >
+                    <span className={cn("w-2 h-2 rounded-full", config.color)} />
+                    {config.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={discountType}
+              onValueChange={(value: keyof typeof discountConfig) => setDiscountType(value)}
+            >
+              <SelectTrigger className="w-[180px] h-10">
+                <SelectValue>
+                  {discountConfig[discountType].label}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.entries(discountConfig) as [keyof typeof discountConfig, typeof discountConfig[keyof typeof discountConfig]][]).map(([key, config]) => (
+                  <SelectItem 
+                    key={key} 
+                    value={key}
+                  >
+                    {config.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Summary Stats */}
+        {renderFilterSummary()}
+      </div>
+
+      {/* Table */}
+      <div className="border-t">
+        <div className="relative w-full overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                {columns.map(column => column.isVisible && (
-                  <TableHead key={column.key} className="w-[200px]">
-                    <div className="flex items-center">
-                      <Button 
-                        variant="ghost" 
-                        className="font-medium p-0 hover:bg-transparent"
-                        onClick={() => handleSort(column.key)}
-                      >
-                        {column.label}
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
-                      </Button>
+                {columns.map(column => (
+                  <TableHead 
+                    key={column.key}
+                    className="cursor-pointer"
+                    onClick={() => handleSort(column.key)}
+                  >
+                    <div className="flex items-center gap-1">
+                      {column.label}
+                      <ArrowUpDown className="h-4 w-4" />
                     </div>
                   </TableHead>
                 ))}
@@ -372,138 +390,97 @@ export function SubscriptionTable() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                  <TableCell colSpan={columns.length} className="h-24 text-center">
+                    Loading...
                   </TableCell>
                 </TableRow>
-              ) : data?.students.length === 0 ? (
+              ) : data?.students?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={columns.length} className="h-24 text-center">
                     No students found
                   </TableCell>
                 </TableRow>
               ) : (
-                data?.students.map((student: ProcessedStudent) => (
+                data?.students?.map((student: ProcessedStudent) => (
                   <TableRow key={student.id}>
-                    {visibleColumns.name && (
-                      <TableCell className="font-medium">
-                        {student.name}
-                      </TableCell>
-                    )}
-                    {visibleColumns.payer && (
-                      <TableCell>
-                        {student.status === "not_enrolled" ? (
-                          <Badge 
-                            variant="secondary"
-                            className={statusConfig["not_enrolled"].color}
-                          >
-                            Not Enrolled
-                          </Badge>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <div className="font-medium">{student.guardian.name || "No payer assigned"}</div>
+                    <TableCell className="font-medium">{student.name}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span>{student.guardian.name || "No payer assigned"}</span>
+                        {student.guardian.email && (
+                          <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger>
-                                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                                <Info className="h-4 w-4 text-muted-foreground" />
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>{student.guardian.email || "No email"}</p>
+                                <p>{student.guardian.email}</p>
                               </TooltipContent>
                             </Tooltip>
-                          </div>
+                          </TooltipProvider>
                         )}
-                      </TableCell>
-                    )}
-                    {visibleColumns.status && (
-                      <TableCell>
-                        <Badge 
-                          variant="secondary"
-                          className={statusConfig[student.status as keyof typeof statusConfig].color}
-                        >
-                          {statusConfig[student.status as keyof typeof statusConfig].label}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className={statusConfig[student.status as keyof typeof statusConfig].color}>
+                        {statusConfig[student.status as keyof typeof statusConfig].label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {student.currentPeriodEnd 
+                        ? new Date(student.currentPeriodEnd * 1000).toLocaleDateString()
+                        : "N/A"
+                      }
+                    </TableCell>
+                    <TableCell>{formatCurrency(student.monthlyAmount)}</TableCell>
+                    <TableCell>
+                      {student.discount.amount > 0 ? (
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                          {student.discount.type} ({formatCurrency(student.discount.amount)})
                         </Badge>
-                      </TableCell>
-                    )}
-                    {visibleColumns.nextPayment && (
-                      <TableCell>
-                        {student.status === "not_enrolled" ? 
-                          <Badge 
-                            variant="secondary"
-                            className={statusConfig["not_enrolled"].color}
-                          >
-                            N/A
-                          </Badge> :
-                          student.currentPeriodEnd ? 
-                            new Date(student.currentPeriodEnd * 1000).toLocaleDateString() :
-                            "No date set"
-                        }
-                      </TableCell>
-                    )}
-                    {visibleColumns.monthlyAmount && (
-                      <TableCell>
-                        {student.status === "not_enrolled" ? (
-                          <Badge 
-                            variant="secondary"
-                            className={statusConfig["not_enrolled"].color}
-                          >
-                            Would pay {formatCurrency(student.monthlyAmount)}
-                          </Badge>
-                        ) : (
-                          formatCurrency(student.monthlyAmount)
-                        )}
-                      </TableCell>
-                    )}
-                    {visibleColumns.discount && (
-                      <TableCell>
-                        <div className="flex items-center">
-                          {student.discount.amount > 0 ? (
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
-                              {formatDiscountType(student.discount.type, student.discount.amount)}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">None</span>
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
+                      ) : (
+                        "None"
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
         </div>
-
-        <div className="flex items-center justify-end space-x-2 py-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (page > 1) {
-                setPage(page - 1);
-                setCursor(null);
-              }
-            }}
-            disabled={page === 1 || isLoading}
-          >
-            <ChevronLeft className="h-4 w-4 mr-2" />
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (data?.hasMore) {
-                setPage(page + 1);
-                setCursor(data.nextCursor);
-              }
-            }}
-            disabled={!data?.hasMore || isLoading}
-          >
-            Next
-            <ChevronRight className="h-4 w-4 ml-2" />
-          </Button>
-        </div>
       </div>
-    </TooltipProvider>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-end space-x-2 p-4 border-t">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (page > 1) {
+              setPage(page - 1);
+              setCursor(null);
+            }
+          }}
+          disabled={page === 1 || isLoading}
+        >
+          <ChevronLeft className="h-4 w-4 mr-2" />
+          Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (data?.hasMore) {
+              setPage(page + 1);
+              setCursor(data.nextCursor);
+            }
+          }}
+          disabled={!data?.hasMore || isLoading}
+        >
+          Next
+          <ChevronRight className="h-4 w-4 ml-2" />
+        </Button>
+      </div>
+    </div>
   );
 } 

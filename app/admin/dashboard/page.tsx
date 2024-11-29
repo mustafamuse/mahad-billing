@@ -4,55 +4,70 @@ import { Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DashboardHeader } from "@/components/admin/dashboard-header";
 import { DashboardStats } from "@/components/admin/dashboard-stats";
-// import { FinancialInsights } from "@/components/admin/financial-insights";
 import { SubscriptionTable } from "@/components/admin/subscription-table";
-import { Card } from "@/components/ui/card";
-import { useQuery } from "@tanstack/react-query";
-import type { DashboardStats as DashboardStatsType } from "@/lib/types";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
-// Create a client
-const queryClient = new QueryClient();
-
-function Dashboard() {
-  const { data: stats, isLoading } = useQuery<DashboardStatsType>({
-    queryKey: ["dashboard-stats"],
-    queryFn: async () => {
-      const response = await fetch("/api/admin/stats");
-      if (!response.ok) throw new Error("Failed to fetch stats");
-      return response.json();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 2,
+      refetchOnWindowFocus: false,
     },
-  });
+  },
+});
 
+function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <div className="container mx-auto px-4 py-8">
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+function AdminDashboard() {
+  return (
+    <div className="container mx-auto px-4 py-8 space-y-8">
       <DashboardHeader />
-      
-      <Suspense fallback={<div>Loading stats...</div>}>
-        <DashboardStats />
-      </Suspense>
 
-      {/* Commented out Financial Insights for future use
-      {stats && (
-        <Suspense fallback={<div>Loading insights...</div>}>
-          <FinancialInsights stats={stats} />
+      <ErrorBoundary>
+        <Suspense 
+          fallback={
+            <LoadingSpinner 
+              size="lg" 
+              text="Loading dashboard statistics..." 
+              className="min-h-[200px]"
+            />
+          }
+        >
+          <DashboardStats />
         </Suspense>
-      )} */}
+      </ErrorBoundary>
 
-      <Card className="mt-8">
-        <div className="p-6">
-          <Suspense fallback={<div>Loading subscriptions...</div>}>
+      <div className="bg-background border rounded-lg">
+        <ErrorBoundary>
+          <Suspense 
+            fallback={
+              <LoadingSpinner 
+                size="lg" 
+                text="Loading subscription data..." 
+                className="min-h-[400px]"
+              />
+            }
+          >
             <SubscriptionTable />
           </Suspense>
-        </div>
-      </Card>
+        </ErrorBoundary>
+      </div>
     </div>
   );
 }
 
-export default function AdminDashboardPage() {
+export default function AdminDashboardLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <Dashboard />
-    </QueryClientProvider>
+    <Providers>
+      <AdminDashboard />
+    </Providers>
   );
 } 
