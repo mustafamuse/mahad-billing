@@ -21,26 +21,72 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
-import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Info } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Info, CheckCircle2, XCircle, AlertCircle, Clock, Ban, Tags } from "lucide-react";
 import { ProcessedStudent } from "@/lib/types";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
+import React from "react";
 
 const statusConfig = {
-  all: { label: "All Statuses", color: "bg-gray-500" },
-  active: { label: "Active", color: "bg-green-500" },
-  not_enrolled: { label: "Not Enrolled", color: "bg-gray-500" },
-  past_due: { label: "Past Due", color: "bg-yellow-500" },
-  unpaid: { label: "Unpaid", color: "bg-red-500" },
-  canceled: { label: "Canceled", color: "bg-red-500" },
+  all: { 
+    label: "All Statuses", 
+    color: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+    icon: AlertCircle 
+  },
+  active: { 
+    label: "Active", 
+    color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30",
+    icon: CheckCircle2 
+  },
+  not_enrolled: { 
+    label: "Not Enrolled", 
+    color: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+    icon: XCircle 
+  },
+  past_due: { 
+    label: "Past Due", 
+    color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-500/30",
+    icon: Clock 
+  },
+  unpaid: { 
+    label: "Unpaid", 
+    color: "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/30",
+    icon: AlertCircle 
+  },
+  canceled: { 
+    label: "Canceled", 
+    color: "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-500/30",
+    icon: Ban 
+  },
 } as const;
 
 const discountConfig = {
-  all: { label: "All Discounts" },
-  "Family Discount": { label: "Family Discount" },
-  "None": { label: "No Discount" },
-  "Other": { label: "Other Discount" },
+  all: { 
+    label: "All Discounts",
+    icon: Tags
+  },
+  "Family Discount": { 
+    label: "Fam",
+    icon: Tags
+  },
+  "None": { 
+    label: "None",
+    icon: XCircle
+  },
+  "Other": { 
+    label: "Other",
+    icon: Tags
+  },
 } as const;
+
+const rowsPerPageOptions = [10, 20, 30, 40, 50] as const;
 
 type SortOrder = "asc" | "desc";
 
@@ -51,6 +97,7 @@ interface SortConfig {
 
 export function SubscriptionTable() {
   const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState<typeof rowsPerPageOptions[number]>(10);
   const [cursor, setCursor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<keyof typeof statusConfig>("active");
@@ -59,6 +106,7 @@ export function SubscriptionTable() {
     field: "name", 
     order: "asc" 
   });
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
 
   const handleSort = (field: string) => {
     setSortConfig((prev) => ({
@@ -68,11 +116,11 @@ export function SubscriptionTable() {
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["subscriptions", page, cursor, search, status, discountType, sortConfig],
+    queryKey: ["subscriptions", page, rowsPerPage, cursor, search, status, discountType, sortConfig],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: "10",
+        limit: rowsPerPage.toString(),
       });
       
       if (cursor) params.set("cursor", cursor);
@@ -89,11 +137,52 @@ export function SubscriptionTable() {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.message || "Failed to fetch students");
       }
-      return response.json();
+      const responseData = await response.json();
+      return {
+        ...responseData,
+        totalCount: responseData.totalCount || responseData.students?.length || 0,
+      };
     },
   });
 
+  const handleSelectAll = (checked: boolean | string) => {
+    if (checked === true && data?.students) {
+      setSelectedRows(new Set(data.students.map((s: ProcessedStudent) => s.id)));
+    } else {
+      setSelectedRows(new Set());
+    }
+  };
+
+  const handleSelectRow = (studentId: string, checked: boolean | string) => {
+    const newSelected = new Set(selectedRows);
+    if (checked === true) {
+      newSelected.add(studentId);
+    } else {
+      newSelected.delete(studentId);
+    }
+    setSelectedRows(newSelected);
+  };
+
   const columns = [
+    {
+      id: "select",
+      header: ({ table }: any) => (
+        <Checkbox
+          checked={data?.students?.length > 0 && selectedRows.size === data.students.length}
+          onCheckedChange={handleSelectAll}
+          aria-label="Select all"
+          className="translate-y-[2px]"
+        />
+      ),
+      cell: ({ row }: any) => (
+        <Checkbox
+          checked={selectedRows.has(row.id)}
+          onCheckedChange={(checked) => handleSelectRow(row.id, checked)}
+          aria-label="Select row"
+          className="translate-y-[2px]"
+        />
+      ),
+    },
     { key: "name", label: "Student Name" },
     { key: "payer", label: "Payer" },
     { key: "status", label: "Status" },
@@ -301,6 +390,27 @@ export function SubscriptionTable() {
     return null;
   };
 
+  // Get the correct total count based on the current filter
+  const getTotalFilteredCount = () => {
+    if (!data) return 0;
+    
+    if (status === "active") return data.activeCount;
+    if (status === "not_enrolled") return data.unenrolledCount;
+    if (status === "past_due") return data.pastDueCount;
+    if (status === "canceled") return data.canceledCount;
+    if (discountType === "Family Discount") return data.familyDiscountCount;
+    if (discountType === "None") return data.noDiscountCount;
+    if (search) return data.filteredCount;
+    
+    return data.totalCount;
+  };
+
+  // Update pagination calculation
+  const totalEntries = getTotalFilteredCount();
+  const currentPageCount = data?.students?.length || 0;
+  const startEntry = currentPageCount > 0 ? ((page - 1) * rowsPerPage) + 1 : 0;
+  const endEntry = startEntry + currentPageCount - 1;
+
   return (
     <div>
       <div className="p-4 space-y-4">
@@ -331,10 +441,11 @@ export function SubscriptionTable() {
                   <SelectItem 
                     key={key} 
                     value={key}
-                    className="flex items-center gap-2"
                   >
-                    <span className={cn("w-2 h-2 rounded-full", config.color)} />
-                    {config.label}
+                    <div className="flex items-center gap-2 min-w-[100px]">
+                      <config.icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{config.label}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -355,7 +466,10 @@ export function SubscriptionTable() {
                     key={key} 
                     value={key}
                   >
-                    {config.label}
+                    <div className="flex items-center gap-2 min-w-[100px]">
+                      <config.icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{config.label}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -368,21 +482,35 @@ export function SubscriptionTable() {
       </div>
 
       {/* Table */}
-      <div className="border-t">
+      <div className="rounded-md border">
         <div className="relative w-full overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                {columns.map(column => (
+                {columns.map((column, i) => (
                   <TableHead 
-                    key={column.key}
-                    className="cursor-pointer"
-                    onClick={() => handleSort(column.key)}
+                    key={i}
+                    className={cn(
+                      "h-10 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+                      column.key && "cursor-pointer hover:text-foreground"
+                    )}
+                    onClick={() => column.key && handleSort(column.key)}
                   >
-                    <div className="flex items-center gap-1">
-                      {column.label}
-                      <ArrowUpDown className="h-4 w-4" />
-                    </div>
+                    {column.header ? (
+                      column.header({ table: {} })
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        {column.label}
+                        {column.key && (
+                          <ArrowUpDown 
+                            className={cn(
+                              "h-4 w-4 transition-transform",
+                              sortConfig.field === column.key && sortConfig.order === "desc" && "rotate-180"
+                            )} 
+                          />
+                        )}
+                      </div>
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
@@ -402,9 +530,17 @@ export function SubscriptionTable() {
                 </TableRow>
               ) : (
                 data?.students?.map((student: ProcessedStudent) => (
-                  <TableRow key={student.id}>
-                    <TableCell className="font-medium">{student.name}</TableCell>
-                    <TableCell>
+                  <TableRow key={student.id} className="hover:bg-muted/50">
+                    <TableCell className="h-12 px-4 [&:has([role=checkbox])]:pr-0">
+                      <Checkbox
+                        checked={selectedRows.has(student.id)}
+                        onCheckedChange={(checked) => handleSelectRow(student.id, checked)}
+                        aria-label="Select row"
+                        className="translate-y-[2px]"
+                      />
+                    </TableCell>
+                    <TableCell className="px-4 py-2 font-medium">{student.name}</TableCell>
+                    <TableCell className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <span>{student.guardian.name || "No payer assigned"}</span>
                         {student.guardian.email && (
@@ -421,25 +557,45 @@ export function SubscriptionTable() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={statusConfig[student.status as keyof typeof statusConfig].color}>
-                        {statusConfig[student.status as keyof typeof statusConfig].label}
+                    <TableCell className="px-4 py-2">
+                      <Badge 
+                        variant="secondary" 
+                        className={cn(
+                          "inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5",
+                          statusConfig[student.status as keyof typeof statusConfig].color
+                        )}
+                      >
+                        {React.createElement(statusConfig[student.status as keyof typeof statusConfig].icon, {
+                          className: "h-3.5 w-3.5 shrink-0"
+                        })}
+                        <span className="truncate">
+                          {statusConfig[student.status as keyof typeof statusConfig].label}
+                        </span>
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="px-4 py-2">
                       {student.currentPeriodEnd 
                         ? new Date(student.currentPeriodEnd * 1000).toLocaleDateString()
                         : "N/A"
                       }
                     </TableCell>
-                    <TableCell>{formatCurrency(student.monthlyAmount)}</TableCell>
-                    <TableCell>
+                    <TableCell className="px-4 py-2">{formatCurrency(student.monthlyAmount)}</TableCell>
+                    <TableCell className="px-4 py-2">
                       {student.discount.amount > 0 ? (
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                          {student.discount.type} ({formatCurrency(student.discount.amount)})
+                        <Badge 
+                          variant="secondary" 
+                          className="inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/30"
+                        >
+                          <Tags className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">
+                            {discountConfig[student.discount.type as keyof typeof discountConfig]?.label || student.discount.type} ({formatCurrency(student.discount.amount)})
+                          </span>
                         </Badge>
                       ) : (
-                        "None"
+                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                          <XCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span>None</span>
+                        </span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -450,36 +606,83 @@ export function SubscriptionTable() {
         </div>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-end space-x-2 p-4 border-t">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            if (page > 1) {
-              setPage(page - 1);
-              setCursor(null);
-            }
-          }}
-          disabled={page === 1 || isLoading}
-        >
-          <ChevronLeft className="h-4 w-4 mr-2" />
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            if (data?.hasMore) {
-              setPage(page + 1);
-              setCursor(data.nextCursor);
-            }
-          }}
-          disabled={!data?.hasMore || isLoading}
-        >
-          Next
-          <ChevronRight className="h-4 w-4 ml-2" />
-        </Button>
+      {/* Footer with Pagination and Toolbar */}
+      <div className="border-t">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4">
+          {/* Selection and Rows Per Page */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 text-sm text-muted-foreground">
+            <div>
+              {selectedRows.size} of {totalEntries} row(s) selected
+            </div>
+            <div className="flex items-center gap-2">
+              <span>Rows per page</span>
+              <Select
+                value={rowsPerPage.toString()}
+                onValueChange={(value) => {
+                  const newValue = parseInt(value) as typeof rowsPerPageOptions[number];
+                  setRowsPerPage(newValue);
+                  setPage(1);
+                  setCursor(null);
+                }}
+              >
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue>{rowsPerPage}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {rowsPerPageOptions.map((option) => (
+                    <SelectItem key={option} value={option.toString()}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-end gap-4">
+            <div className="text-sm text-muted-foreground">
+              {currentPageCount > 0 ? (
+                <>Showing {startEntry} to {endEntry} of {totalEntries} entries</>
+              ) : (
+                <>No entries to show</>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (page > 1) {
+                    setPage(page - 1);
+                    setCursor(null);
+                  }
+                }}
+                disabled={page === 1 || isLoading}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span className="sr-only">Previous</span>
+              </Button>
+              <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+                Page {page}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (data?.hasMore) {
+                    setPage(page + 1);
+                    setCursor(data.nextCursor);
+                  }
+                }}
+                disabled={!data?.hasMore || isLoading}
+              >
+                <ChevronRight className="h-4 w-4" />
+                <span className="sr-only">Next</span>
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
