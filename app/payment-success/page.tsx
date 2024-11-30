@@ -1,27 +1,29 @@
-"use client";
-import { useRouter } from "next/navigation";
+'use client'
+import { useRouter } from 'next/navigation'
 
 export default function PaymentSuccessPage() {
-  const router = useRouter();
+  const router = useRouter()
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
-      <div className="max-w-md w-full mx-auto p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
+      <div className="mx-auto w-full max-w-md rounded-lg bg-white p-8 shadow-lg dark:bg-gray-800">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Payment Successful!
+          <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
+            Tuition Payment Successful!
           </h1>
-          <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Thank you for enrolling in our tutoring program. You will receive a confirmation email shortly.
+          <p className="mb-6 text-gray-600 dark:text-gray-300">
+            Thank you for completing your tuition payment! A confirmation email
+            has been sent to your inbox. If you have any questions, feel free to
+            contact us.
           </p>
           <button
-            onClick={() => router.push("/")}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg"
+            onClick={() => router.push('/')}
+            className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
           >
-            Return to Home
+            Back to Dashboard
           </button>
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -1,21 +1,22 @@
-"use client";
+'use client'
 
-import { Button } from "@/components/ui/button";
+import { Settings2 } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Settings2 } from "lucide-react";
+} from '@/components/ui/dropdown-menu'
 
 interface ColumnToggleProps {
   columns: {
-    key: string;
-    label: string;
-    isVisible: boolean;
-  }[];
-  onToggleColumn: (key: string) => void;
+    key: string
+    label: string
+    isVisible: boolean
+  }[]
+  onToggleColumn: (key: string) => void
 }
 
 export function ColumnToggle({ columns, onToggleColumn }: ColumnToggleProps) {
@@ -23,7 +24,7 @@ export function ColumnToggle({ columns, onToggleColumn }: ColumnToggleProps) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="ml-auto">
-          <Settings2 className="h-4 w-4 mr-2" />
+          <Settings2 className="mr-2 h-4 w-4" />
           View
         </Button>
       </DropdownMenuTrigger>
@@ -40,5 +41,5 @@ export function ColumnToggle({ columns, onToggleColumn }: ColumnToggleProps) {
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-} 
+  )
+}

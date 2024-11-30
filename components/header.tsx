@@ -1,18 +1,19 @@
-import { GraduationCap } from "lucide-react";
+import { GraduationCap } from 'lucide-react'
 
 export function Header() {
   return (
-    <header className="text-center mb-12">
-      <div className="flex items-center justify-center mb-4">
+    <header className="mb-12 text-center">
+      <div className="mb-4 flex items-center justify-center">
         <GraduationCap className="h-12 w-12 text-blue-600 dark:text-blue-400" />
       </div>
-      <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-        Enroll in Our Tutoring Program
+      <h1 className="mb-4 text-4xl font-bold text-gray-900 dark:text-white">
+        Set Up Your Tuition Payment
       </h1>
-      <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-        Join our comprehensive tutoring program designed to help students excel. 
-        Complete the form below to begin your educational journey.
+      <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-300">
+        Welcome to Irshād Mahad&apos;s tuition payment portal. Use this app to
+        set up your monthly tuition payments easily and securely. Simply select
+        your name and complete the payment process.
       </p>
     </header>
-  );
+  )
 }

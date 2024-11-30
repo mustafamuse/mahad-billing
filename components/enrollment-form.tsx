@@ -1,176 +1,224 @@
-// EnrollmentForm.jsx
-"use client";
+'use client'
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { Appearance, loadStripe } from "@stripe/stripe-js";
-import { Elements } from "@stripe/react-stripe-js";
-import * as z from "zod";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Form } from "@/components/ui/form";
-import { StudentSelect } from "./student-select";
-import { PaymentOptions } from "./payment-options";
-import { PayerInformation } from "./payer-information";
-import { useToast } from "@/components/ui/use-toast";
-import { Student } from "@/lib/types";
-import { calculateTotal } from "@/lib/utils";
-import { useRouter } from "next/navigation";
-import { StripePaymentForm } from "./stripe-payment-form";
+import * as React from 'react'
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+import { useRouter } from 'next/navigation'
 
-const formSchema = z.object({
-  students: z.array(z.string()).min(1, "Please select at least one student"),
-  firstName: z.string().min(2, "First name must be at least 2 characters"),
-  lastName: z.string().min(2, "Last name must be at least 2 characters"),
-  email: z.string().email("Please enter a valid email address"),
-  phone: z.string().min(10, "Please enter a valid phone number"),
-  termsAccepted: z.boolean().refine((val) => val === true, {
-    message: "You must accept the terms and conditions",
-  }),
-});
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Elements } from '@stripe/react-stripe-js'
+import { loadStripe } from '@stripe/stripe-js'
+import { useForm } from 'react-hook-form'
+import * as z from 'zod'
 
-type FormValues = z.infer<typeof formSchema>;
+import { TermsModal } from '@/components/terms-modal'
+import { Card, CardContent } from '@/components/ui/card'
+import { Form } from '@/components/ui/form'
+import { Steps, Step } from '@/components/ui/steps'
+import { useToast } from '@/components/ui/use-toast'
+import { stripeAppearance } from '@/lib/stripe-config'
+import { Student } from '@/lib/types'
+import { calculateTotal } from '@/lib/utils'
+
+import { PaymentDetailsStep } from './enrollment/payment-details-step'
+import { StudentSelectionStep } from './enrollment/student-selection-step'
+import { StripePaymentForm } from './stripe-payment-form'
+
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+)
 
 interface EnrollmentResponse {
-  clientSecret: string;
+  clientSecret: string
 }
 
-export function EnrollmentForm(): JSX.Element {
-  const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [clientSecret, setClientSecret] = useState<string>();
-  const { toast } = useToast();
-  const router = useRouter();
-  const [formData, setFormData] = useState<FormValues>();
+// Form schema
+const formSchema = z.object({
+  students: z.array(z.string()).min(1, 'Please select at least one student'),
+  firstName: z.string().min(2, 'First name must be at least 2 characters'),
+  lastName: z.string().min(2, 'Last name must be at least 2 characters'),
+  email: z.string().email('Please enter a valid email address'),
+  phone: z.string().min(10, 'Please enter a valid phone number'),
+  termsAccepted: z.boolean(),
+})
 
+type FormValues = z.infer<typeof formSchema>
+
+export function EnrollmentForm() {
+  // State management
+  const [step, setStep] = React.useState(1)
+  const [selectedStudents, setSelectedStudents] = React.useState<Student[]>([])
+  const [isProcessing, setIsProcessing] = React.useState(false)
+  const [clientSecret, setClientSecret] = React.useState<string>()
+  const [termsModalOpen, setTermsModalOpen] = React.useState(false)
+  const [hasViewedTerms, setHasViewedTerms] = React.useState(false)
+
+  const { toast } = useToast()
+  const router = useRouter()
+
+  // Form initialization
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       students: [],
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
       termsAccepted: false,
     },
-  });
+    mode: 'onChange',
+  })
 
-  async function onSubmit(values: FormValues) {
-    try {
-      setIsProcessing(true);
-      setFormData(values);
+  // Form submission handler
+  const onSubmit = async (values: FormValues) => {
+    console.log('Form submission started', { values, step })
 
-      const response = await fetch("/api/enroll", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          total: calculateTotal(selectedStudents),
-          email: values.email,
-          firstName: values.firstName,
-          lastName: values.lastName,
-          phone: values.phone,
-          students: selectedStudents,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to create SetupIntent");
+    if (step === 1) {
+      console.log('Step 1 validation', { selectedStudents })
+      if (selectedStudents.length === 0) {
+        toast({
+          title: 'Error',
+          description: 'Please select at least one student',
+          variant: 'destructive',
+        })
+        return
       }
+      console.log('Moving to step 2')
+      setStep(2)
+      return
+    }
 
-      const { clientSecret } = await response.json() as EnrollmentResponse;
-      setClientSecret(clientSecret);
-    } catch (error) {
-      console.error("Enrollment error:", error);
-      toast({
-        title: "Enrollment Failed",
-        description: error instanceof Error ? error.message : "Please try again or contact support.",
-        variant: "destructive",
-      });
-      setIsProcessing(false);
+    // Only proceed with API call if we're on step 2
+    if (step === 2) {
+      try {
+        setIsProcessing(true)
+        const response = await fetch('/api/enroll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            total: calculateTotal(selectedStudents),
+            email: values.email,
+            firstName: values.firstName,
+            lastName: values.lastName,
+            phone: values.phone,
+            students: selectedStudents,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(
+            (await response.text()) || 'Failed to create SetupIntent'
+          )
+        }
+
+        const { clientSecret } = (await response.json()) as EnrollmentResponse
+        setClientSecret(clientSecret)
+        setStep(3)
+      } catch (error) {
+        console.error('Enrollment error:', error)
+        toast({
+          title: 'Enrollment Failed',
+          description:
+            error instanceof Error
+              ? error.message
+              : 'Please try again or contact support.',
+          variant: 'destructive',
+        })
+      } finally {
+        setIsProcessing(false)
+      }
     }
   }
 
-  const appearance: Appearance = {
-    theme: 'stripe',
-    variables: {
-      colorPrimary: '#0F172A'
+  // Terms modal handlers
+  const handleTermsModalChange = (open: boolean) => {
+    setTermsModalOpen(open)
+    if (!open && !hasViewedTerms) {
+      form.setValue('termsAccepted', false)
     }
-  };
+  }
+
+  const handleTermsAgree = () => {
+    setHasViewedTerms(true)
+    form.setValue('termsAccepted', true, {
+      shouldValidate: true,
+      shouldDirty: true,
+      shouldTouch: true,
+    })
+  }
 
   return (
-    <div className="space-y-8">
-      {!clientSecret ? (
+    <div className="mx-auto max-w-2xl space-y-6 p-2 sm:space-y-8 sm:p-4">
+      <Steps className="mb-6 sm:mb-8">
+        <Step isActive={step === 1}>Select Students</Step>
+        <Step isActive={step === 2}>Payment Details</Step>
+      </Steps>
+
+      {clientSecret ? (
+        <Card className="border-0 sm:border">
+          <CardContent className="p-4 sm:p-6">
+            <Elements
+              stripe={stripePromise}
+              options={{
+                clientSecret,
+                appearance: stripeAppearance,
+                loader: 'auto',
+              }}
+            >
+              <StripePaymentForm
+                clientSecret={clientSecret}
+                customerName={`${form.getValues('firstName')} ${form.getValues('lastName')}`}
+                customerEmail={form.getValues('email')}
+                onSuccess={() => router.push('/payment-success')}
+                onError={(error) => {
+                  toast({
+                    title: 'Payment Setup Failed',
+                    description:
+                      'There was an issue connecting your bank account. Please try again.',
+                    variant: 'destructive',
+                  })
+                  setClientSecret(undefined)
+                  setIsProcessing(false)
+                  setStep(2)
+                  console.error('Bank connection error:', error)
+                }}
+              />
+            </Elements>
+          </CardContent>
+        </Card>
+      ) : (
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <div className="grid gap-8 p-6 bg-card rounded-lg shadow-lg">
-              <StudentSelect
-                form={form}
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-6 sm:space-y-8"
+          >
+            {step === 1 && (
+              <StudentSelectionStep
                 selectedStudents={selectedStudents}
                 setSelectedStudents={setSelectedStudents}
+                form={form}
+                onSubmit={onSubmit}
               />
-              
-              <PaymentOptions total={calculateTotal(selectedStudents)} />
-              
-              <PayerInformation form={form} />
-              
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    {...form.register("termsAccepted")}
-                    id="terms"
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <label htmlFor="terms" className="text-sm text-muted-foreground">
-                    I agree to the{" "}
-                    <a href="#" className="text-primary hover:underline">
-                      Terms and Conditions
-                    </a>{" "}
-                    and authorize monthly charges for the tutoring program.
-                  </label>
-                </div>
-                {form.formState.errors.termsAccepted && (
-                  <p className="text-sm text-destructive">
-                    {form.formState.errors.termsAccepted.message}
-                  </p>
-                )}
-              </div>
+            )}
 
-              <Button
-                type="submit"
-                className="w-full"
-                size="lg"
-                disabled={isProcessing}
-              >
-                {isProcessing ? "Processing..." : "Continue to Payment"}
-              </Button>
-            </div>
+            {step === 2 && (
+              <PaymentDetailsStep
+                form={form}
+                isProcessing={isProcessing}
+                hasViewedTerms={hasViewedTerms}
+                onBack={() => setStep(1)}
+                onOpenTerms={() => setTermsModalOpen(true)}
+              />
+            )}
           </form>
         </Form>
-      ) : (
-        <Elements 
-          stripe={stripePromise} 
-          options={{
-            clientSecret,
-            appearance,
-            loader: "auto",
-          }}
-        >
-          <StripePaymentForm 
-            clientSecret={clientSecret}
-            customerName={`${formData?.firstName} ${formData?.lastName}`}
-            customerEmail={formData?.email || ''}
-            onSuccess={() => router.push("/payment-success")}
-            onError={(error) => {
-              toast({
-                title: "Payment Failed",
-                description: error.message,
-                variant: "destructive",
-              });
-              setClientSecret(undefined);
-              setIsProcessing(false);
-            }}
-          />
-        </Elements>
       )}
+
+      <TermsModal
+        open={termsModalOpen}
+        onOpenChange={handleTermsModalChange}
+        onAgree={handleTermsAgree}
+      />
     </div>
-  );
+  )
 }

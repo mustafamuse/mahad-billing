@@ -1,5 +1,6 @@
-import { Button } from "@/components/ui/button";
-import { Download, PlusCircle } from "lucide-react";
+import { Download, PlusCircle } from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
 
 export function DashboardHeader() {
   return (
@@ -10,7 +11,7 @@ export function DashboardHeader() {
           Manage student subscriptions, payments, and analytics
         </p>
       </div>
-      
+
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm">
           <Download className="mr-2 h-4 w-4" />
@@ -22,5 +23,5 @@ export function DashboardHeader() {
         </Button>
       </div>
     </div>
-  );
-} 
+  )
+}
