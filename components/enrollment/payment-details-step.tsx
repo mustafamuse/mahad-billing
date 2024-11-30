@@ -186,18 +186,10 @@ export function PaymentDetailsStep({
         </Button>
         <Button
           type="submit"
-          className="h-12 w-full text-base font-medium"
-          disabled={
-            isProcessing || !hasViewedTerms || !form.getValues('termsAccepted')
-          }
+          className="h-12 w-full bg-white text-base font-medium text-black hover:bg-gray-100"
+          disabled={isProcessing}
         >
-          {isProcessing
-            ? 'Processing...'
-            : !hasViewedTerms
-              ? 'Please review Terms and Conditions'
-              : !form.getValues('termsAccepted')
-                ? 'Please accept Terms and Conditions'
-                : 'Confirm and Proceed to Payment'}
+          {isProcessing ? 'Processing...' : 'Confirm and Proceed to Payment'}
         </Button>
       </CardFooter>
     </Card>
