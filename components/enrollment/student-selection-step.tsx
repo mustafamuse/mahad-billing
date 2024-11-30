@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 
-import { Check, ChevronsUpDown, Search, X } from 'lucide-react'
+import { Check, ChevronsUpDown, Search, X, AlertCircle } from 'lucide-react'
 import { UseFormReturn } from 'react-hook-form'
 
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +33,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { STUDENTS } from '@/lib/data'
 import { Student } from '@/lib/types'
 import { calculateTotal, calculateStudentPrice, cn } from '@/lib/utils'
@@ -60,6 +66,27 @@ export function StudentSelectionStep({
   onSubmit,
 }: StudentSelectionStepProps) {
   const [open, setOpen] = React.useState(false)
+  const [enrolledStudents, setEnrolledStudents] = React.useState<Set<string>>(
+    new Set()
+  )
+  const [isLoading, setIsLoading] = React.useState(true)
+
+  // Fetch enrolled students
+  React.useEffect(() => {
+    async function fetchEnrolledStudents() {
+      try {
+        const response = await fetch('/api/students/enrolled')
+        if (!response.ok) throw new Error('Failed to fetch enrolled students')
+        const { enrolledStudents } = await response.json()
+        setEnrolledStudents(new Set(enrolledStudents))
+      } catch (error) {
+        console.error('Error fetching enrolled students:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchEnrolledStudents()
+  }, [])
 
   const handleStudentSelect = (student: Student) => {
     if (!selectedStudents.find((s) => s.id === student.id)) {
@@ -88,6 +115,51 @@ export function StudentSelectionStep({
     )
   }
 
+  const renderStudentItem = (student: Student) => {
+    const isSelected = selectedStudents.some((s) => s.id === student.id)
+    const isEnrolled = enrolledStudents.has(student.id)
+
+    return (
+      <CommandItem
+        key={student.id}
+        onSelect={() => !isEnrolled && handleStudentSelect(student)}
+        className={cn(
+          'px-2 py-3 text-base sm:py-2 sm:text-sm',
+          isEnrolled && 'cursor-not-allowed opacity-50'
+        )}
+        disabled={isEnrolled}
+      >
+        <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Check
+              className={cn(
+                'h-4 w-4 shrink-0',
+                isSelected ? 'opacity-100' : 'opacity-0'
+              )}
+            />
+            <span className="truncate">{student.name}</span>
+          </div>
+
+          {isEnrolled && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex shrink-0 items-center gap-1 text-muted-foreground">
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="text-xs">Already Enrolled</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>This student is already enrolled in the program</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
+      </CommandItem>
+    )
+  }
+
   return (
     <Card className="border-0 sm:border">
       <CardHeader className="space-y-2 p-4 sm:p-6">
@@ -111,9 +183,12 @@ export function StudentSelectionStep({
                         role="combobox"
                         aria-expanded={open}
                         className="h-12 w-full justify-between sm:h-10"
+                        disabled={isLoading}
                       >
                         <span className="truncate text-sm text-muted-foreground sm:text-base">
-                          Search students...
+                          {isLoading
+                            ? 'Loading students...'
+                            : 'Search students...'}
                         </span>
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
@@ -132,25 +207,7 @@ export function StudentSelectionStep({
                         </div>
                         <CommandEmpty>No student found.</CommandEmpty>
                         <CommandGroup className="max-h-[300px] overflow-auto p-1">
-                          {STUDENTS.map((student) => (
-                            <CommandItem
-                              key={student.id}
-                              onSelect={() => handleStudentSelect(student)}
-                              className="px-2 py-3 text-base sm:py-2 sm:text-sm"
-                            >
-                              <Check
-                                className={cn(
-                                  'mr-2 h-4 w-4',
-                                  selectedStudents.find(
-                                    (s) => s.id === student.id
-                                  )
-                                    ? 'opacity-100'
-                                    : 'opacity-0'
-                                )}
-                              />
-                              {student.name}
-                            </CommandItem>
-                          ))}
+                          {STUDENTS.map(renderStudentItem)}
                         </CommandGroup>
                       </Command>
                     </PopoverContent>
