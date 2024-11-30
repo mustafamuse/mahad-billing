@@ -7,11 +7,10 @@ export function Header() {
         <GraduationCap className="h-12 w-12 text-blue-600 dark:text-blue-400" />
       </div>
       <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-        Enroll in Our Tutoring Program
+        Set Up Your Tuition Payment
       </h1>
       <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-        Join our comprehensive tutoring program designed to help students excel. 
-        Complete the form below to begin your educational journey.
+        Welcome to Irshād Mahad&apos;s tuition payment portal. Use this app to set up your monthly tuition payments easily and securely. Simply select your name and complete the payment process.
       </p>
     </header>
   );
