@@ -121,7 +121,7 @@ export async function POST(request: Request) {
         subscription: subscription.id,
       });
 
-      console.log("Upcoming invoice retrieved:", upcomingInvoice.id);
+      // console.log("Upcoming invoice retrieved:", upcomingInvoice.id);
 
       // Retrieve the invoice PDF URL (Note: Upcoming invoices cannot be finalized)
       // Invoices will be generated and charged automatically at the billing cycle anchor

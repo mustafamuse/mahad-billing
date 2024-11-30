@@ -1,0 +1,73 @@
+"use client";
+
+import { Suspense } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DashboardHeader } from "@/components/admin/dashboard-header";
+import { DashboardStats } from "@/components/admin/dashboard-stats";
+import { SubscriptionTable } from "@/components/admin/subscription-table";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+function AdminDashboard() {
+  return (
+    <div className="container mx-auto px-4 py-8 space-y-8">
+      <DashboardHeader />
+
+      <ErrorBoundary>
+        <Suspense 
+          fallback={
+            <LoadingSpinner 
+              size="lg" 
+              text="Loading dashboard statistics..." 
+              className="min-h-[200px]"
+            />
+          }
+        >
+          <DashboardStats />
+        </Suspense>
+      </ErrorBoundary>
+
+      <div className="bg-background border rounded-lg">
+        <ErrorBoundary>
+          <Suspense 
+            fallback={
+              <LoadingSpinner 
+                size="lg" 
+                text="Loading subscription data..." 
+                className="min-h-[400px]"
+              />
+            }
+          >
+            <SubscriptionTable />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminDashboardLayout() {
+  return (
+    <Providers>
+      <AdminDashboard />
+    </Providers>
+  );
+} 

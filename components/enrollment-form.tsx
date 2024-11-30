@@ -33,7 +33,11 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export function EnrollmentForm() {
+interface EnrollmentResponse {
+  clientSecret: string;
+}
+
+export function EnrollmentForm(): JSX.Element {
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [clientSecret, setClientSecret] = useState<string>();
@@ -71,7 +75,7 @@ export function EnrollmentForm() {
         throw new Error("Failed to create SetupIntent");
       }
 
-      const { clientSecret } = await response.json();
+      const { clientSecret } = await response.json() as EnrollmentResponse;
       setClientSecret(clientSecret);
     } catch (error) {
       console.error("Enrollment error:", error);
@@ -85,10 +89,10 @@ export function EnrollmentForm() {
   }
 
   const appearance: Appearance = {
-    theme: 'stripe' as const,
+    theme: 'stripe',
     variables: {
-      colorPrimary: '#0F172A',
-    },
+      colorPrimary: '#0F172A'
+    }
   };
 
   return (
