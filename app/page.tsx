@@ -1,6 +1,6 @@
-import { EnrollmentForm } from "@/components/enrollment-form";
-import { Header } from "@/components/header";
-import { Footer } from "@/components/footer";
+import { EnrollmentForm } from '@/components/enrollment-form'
+import { Footer } from '@/components/footer'
+import { Header } from '@/components/header'
 
 export default function Home() {
   return (
@@ -11,5 +11,5 @@ export default function Home() {
         <Footer />
       </div>
     </main>
-  );
+  )
 }

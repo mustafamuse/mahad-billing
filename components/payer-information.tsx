@@ -1,24 +1,32 @@
-"use client";
+'use client'
 
-import { UseFormReturn } from "react-hook-form";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { UseFormReturn } from 'react-hook-form'
+
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+interface FormValues {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+}
 
 interface PayerInformationProps {
-  form: UseFormReturn<any>;
+  form: UseFormReturn<FormValues>
 }
 
 export function PayerInformation({ form }: PayerInformationProps) {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">Payer Information</h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="firstName">First Name</Label>
           <Input
             id="firstName"
-            {...form.register("firstName")}
+            {...form.register('firstName')}
             placeholder="Enter first name"
           />
           {form.formState.errors.firstName && (
@@ -32,7 +40,7 @@ export function PayerInformation({ form }: PayerInformationProps) {
           <Label htmlFor="lastName">Last Name</Label>
           <Input
             id="lastName"
-            {...form.register("lastName")}
+            {...form.register('lastName')}
             placeholder="Enter last name"
           />
           {form.formState.errors.lastName && (
@@ -47,7 +55,7 @@ export function PayerInformation({ form }: PayerInformationProps) {
           <Input
             id="email"
             type="email"
-            {...form.register("email")}
+            {...form.register('email')}
             placeholder="Enter email address"
           />
           {form.formState.errors.email && (
@@ -62,7 +70,7 @@ export function PayerInformation({ form }: PayerInformationProps) {
           <Input
             id="phone"
             type="tel"
-            {...form.register("phone")}
+            {...form.register('phone')}
             placeholder="Enter phone number"
           />
           {form.formState.errors.phone && (
@@ -73,5 +81,5 @@ export function PayerInformation({ form }: PayerInformationProps) {
         </div>
       </div>
     </div>
-  );
+  )
 }

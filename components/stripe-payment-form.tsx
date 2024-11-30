@@ -1,92 +1,99 @@
 // StripePaymentForm.jsx
-"use client";
+'use client'
 
-import { useEffect, useState } from "react";
-import { useStripe } from "@stripe/react-stripe-js";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from 'react'
+
+import { useStripe } from '@stripe/react-stripe-js'
 
 interface StripePaymentFormProps {
-  onSuccess: () => void;
-  onError: (error: Error) => void;
-  clientSecret: string;
-  customerName: string;
-  customerEmail: string;
+  onSuccess: () => void
+  onError: (error: Error) => void
+  clientSecret: string
+  customerName: string
+  customerEmail: string
 }
 
-export function StripePaymentForm({ 
-  onSuccess, 
+export function StripePaymentForm({
+  onSuccess,
   onError,
   clientSecret,
   customerName,
-  customerEmail
+  customerEmail,
 }: StripePaymentFormProps) {
-  const stripe = useStripe();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const stripe = useStripe()
+  const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
-    if (!stripe || !clientSecret) return;
+    if (!stripe || !clientSecret) return
 
     const collectBankAccount = async () => {
-      setIsProcessing(true);
+      setIsProcessing(true)
 
       try {
-        const { error: collectError } = await stripe.collectBankAccountForSetup({
-          clientSecret,
-          params: {
-            payment_method_type: 'us_bank_account',
-            payment_method_data: {
-              billing_details: {
-                name: customerName,
-                email: customerEmail,
+        const { error: collectError } = await stripe.collectBankAccountForSetup(
+          {
+            clientSecret,
+            params: {
+              payment_method_type: 'us_bank_account',
+              payment_method_data: {
+                billing_details: {
+                  name: customerName,
+                  email: customerEmail,
+                },
               },
             },
-          },
-        });
+          }
+        )
 
         if (collectError) {
-          throw collectError;
+          throw collectError
         }
 
         // Confirm the SetupIntent
         const { setupIntent, error: confirmError } = await stripe.confirmSetup({
           clientSecret,
           redirect: 'if_required',
-        });
+        })
 
         if (confirmError) {
-          throw confirmError;
+          throw confirmError
         }
 
         // Check the SetupIntent status
         if (setupIntent?.status === 'succeeded') {
-          onSuccess();
+          onSuccess()
         } else if (setupIntent?.status === 'requires_action') {
           if (setupIntent.next_action?.type === 'verify_with_microdeposits') {
-            onSuccess(); // Or handle differently to show verification instructions
+            onSuccess() // Or handle differently to show verification instructions
           } else {
-            console.error(`Unexpected next_action type: ${setupIntent.next_action?.type}`);
-            throw new Error('Unexpected verification step required.');
+            console.error(
+              `Unexpected next_action type: ${setupIntent.next_action?.type}`
+            )
+            throw new Error('Unexpected verification step required.')
           }
         } else {
-          console.error(`Unexpected SetupIntent status: ${setupIntent?.status}`);
-          throw new Error('Setup failed. Please try again.');
+          console.error(`Unexpected SetupIntent status: ${setupIntent?.status}`)
+          throw new Error('Setup failed. Please try again.')
         }
       } catch (error) {
-        console.error("Error during bank account collection and confirmation:", error);
-        onError(error as Error);
+        console.error(
+          'Error during bank account collection and confirmation:',
+          error
+        )
+        onError(error as Error)
       } finally {
-        setIsProcessing(false);
+        setIsProcessing(false)
       }
-    };
+    }
 
     // Automatically start the bank account collection process
-    collectBankAccount();
-  }, [stripe, clientSecret, customerName, customerEmail, onSuccess, onError]);
+    collectBankAccount()
+  }, [stripe, clientSecret, customerName, customerEmail, onSuccess, onError])
 
   return (
     <div className="space-y-8">
-      <div className="bg-card p-6 rounded-lg shadow-lg text-center">
-        <h2 className="text-lg font-semibold mb-4">
+      <div className="rounded-lg bg-card p-6 text-center shadow-lg">
+        <h2 className="mb-4 text-lg font-semibold">
           Connecting Your Bank Account
         </h2>
         {isProcessing && (
@@ -96,5 +103,5 @@ export function StripePaymentForm({
         )}
       </div>
     </div>
-  );
+  )
 }

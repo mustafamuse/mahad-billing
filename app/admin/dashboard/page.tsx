@@ -1,12 +1,14 @@
-"use client";
+'use client'
 
-import { Suspense } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DashboardHeader } from "@/components/admin/dashboard-header";
-import { DashboardStats } from "@/components/admin/dashboard-stats";
-import { SubscriptionTable } from "@/components/admin/subscription-table";
-import { ErrorBoundary } from "@/components/error-boundary";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Suspense } from 'react'
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+import { DashboardHeader } from '@/components/admin/dashboard-header'
+import { DashboardStats } from '@/components/admin/dashboard-stats'
+import { SubscriptionTable } from '@/components/admin/subscription-table'
+import { ErrorBoundary } from '@/components/error-boundary'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,27 +18,25 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
-});
+})
 
 function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  );
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  )
 }
 
 function AdminDashboard() {
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
+    <div className="container mx-auto space-y-8 px-4 py-8">
       <DashboardHeader />
 
       <ErrorBoundary>
-        <Suspense 
+        <Suspense
           fallback={
-            <LoadingSpinner 
-              size="lg" 
-              text="Loading dashboard statistics..." 
+            <LoadingSpinner
+              size="lg"
+              text="Loading dashboard statistics..."
               className="min-h-[200px]"
             />
           }
@@ -45,13 +45,13 @@ function AdminDashboard() {
         </Suspense>
       </ErrorBoundary>
 
-      <div className="bg-background border rounded-lg">
+      <div className="rounded-lg border bg-background">
         <ErrorBoundary>
-          <Suspense 
+          <Suspense
             fallback={
-              <LoadingSpinner 
-                size="lg" 
-                text="Loading subscription data..." 
+              <LoadingSpinner
+                size="lg"
+                text="Loading subscription data..."
                 className="min-h-[400px]"
               />
             }
@@ -61,7 +61,7 @@ function AdminDashboard() {
         </ErrorBoundary>
       </div>
     </div>
-  );
+  )
 }
 
 export default function AdminDashboardLayout() {
@@ -69,5 +69,5 @@ export default function AdminDashboardLayout() {
     <Providers>
       <AdminDashboard />
     </Providers>
-  );
-} 
+  )
+}
