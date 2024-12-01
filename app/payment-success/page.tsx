@@ -1,20 +1,9 @@
 'use client'
 
-import { useEffect } from 'react'
-
 import { useRouter } from 'next/navigation'
-
-import { toasts } from '@/components/toast/toast-utils'
 
 export default function PaymentSuccessPage() {
   const router = useRouter()
-
-  useEffect(() => {
-    toasts.success(
-      'Welcome to Our Program!',
-      'Your enrollment is complete and your payment has been set up successfully.'
-    )
-  }, [])
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
@@ -29,13 +18,7 @@ export default function PaymentSuccessPage() {
             contact us.
           </p>
           <button
-            onClick={() => {
-              toasts.success(
-                'Returning to Dashboard',
-                'Thank you for enrolling with us!'
-              )
-              router.push('/')
-            }}
+            onClick={() => router.push('/')}
             className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
           >
             Back to Dashboard

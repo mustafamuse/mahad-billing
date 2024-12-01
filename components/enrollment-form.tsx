@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -38,7 +39,9 @@ const formSchema = z.object({
   lastName: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().min(10, 'Please enter a valid phone number'),
-  termsAccepted: z.boolean(),
+  termsAccepted: z.boolean().refine((val) => val === true, {
+    message: 'You must accept the terms and conditions',
+  }),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -49,8 +52,8 @@ export function EnrollmentForm() {
   const [selectedStudents, setSelectedStudents] = React.useState<Student[]>([])
   const [isProcessing, setIsProcessing] = React.useState(false)
   const [clientSecret, setClientSecret] = React.useState<string>()
-  const [termsModalOpen, setTermsModalOpen] = React.useState(false)
-  const [hasViewedTerms, setHasViewedTerms] = React.useState(false)
+  const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false)
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false)
 
   const router = useRouter()
 
@@ -133,22 +136,14 @@ export function EnrollmentForm() {
     }
   }
 
-  // Terms modal handlers
-  const handleTermsModalChange = (open: boolean) => {
-    setTermsModalOpen(open)
-    if (!open && !hasViewedTerms) {
-      form.setValue('termsAccepted', false)
-    }
-  }
-
-  const handleTermsAgree = () => {
-    setHasViewedTerms(true)
+  const handleTermsAgreement = () => {
+    setHasAgreedToTerms(true)
+    setIsTermsModalOpen(false)
     form.setValue('termsAccepted', true, {
       shouldValidate: true,
       shouldDirty: true,
       shouldTouch: true,
     })
-    toasts.success('Terms Accepted', 'You can now proceed with the enrollment.')
   }
 
   return (
@@ -215,9 +210,9 @@ export function EnrollmentForm() {
               <PaymentDetailsStep
                 form={form}
                 isProcessing={isProcessing}
-                hasViewedTerms={hasViewedTerms}
+                hasViewedTerms={hasAgreedToTerms}
                 onBack={() => setStep(1)}
-                onOpenTerms={() => setTermsModalOpen(true)}
+                onOpenTerms={() => setIsTermsModalOpen(true)}
               />
             )}
           </form>
@@ -225,9 +220,9 @@ export function EnrollmentForm() {
       )}
 
       <TermsModal
-        open={termsModalOpen}
-        onOpenChange={handleTermsModalChange}
-        onAgree={handleTermsAgree}
+        open={isTermsModalOpen}
+        onOpenChange={setIsTermsModalOpen}
+        onAgree={handleTermsAgreement}
       />
     </div>
   )

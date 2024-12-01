@@ -165,7 +165,7 @@ export function StudentSelectionStep({
       <CardHeader className="space-y-2 p-4 sm:p-6">
         <CardTitle className="text-xl sm:text-2xl">Select Your Name</CardTitle>
         <CardDescription className="text-sm sm:text-base">
-          Choose the students you want to enroll in the tutoring program
+          Choose the students you want to enroll in the mahad autopay system
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 p-4 sm:p-6">
