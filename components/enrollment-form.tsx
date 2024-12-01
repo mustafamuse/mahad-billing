@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -11,10 +12,10 @@ import { useForm } from 'react-hook-form'
 import * as z from 'zod'
 
 import { TermsModal } from '@/components/terms-modal'
+import { toasts } from '@/components/toast/toast-utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
 import { Steps, Step } from '@/components/ui/steps'
-import { useToast } from '@/components/ui/use-toast'
 import { stripeAppearance } from '@/lib/stripe-config'
 import { Student } from '@/lib/types'
 import { calculateTotal } from '@/lib/utils'
@@ -38,7 +39,9 @@ const formSchema = z.object({
   lastName: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
   phone: z.string().min(10, 'Please enter a valid phone number'),
-  termsAccepted: z.boolean(),
+  termsAccepted: z.boolean().refine((val) => val === true, {
+    message: 'You must accept the terms and conditions',
+  }),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -49,10 +52,9 @@ export function EnrollmentForm() {
   const [selectedStudents, setSelectedStudents] = React.useState<Student[]>([])
   const [isProcessing, setIsProcessing] = React.useState(false)
   const [clientSecret, setClientSecret] = React.useState<string>()
-  const [termsModalOpen, setTermsModalOpen] = React.useState(false)
-  const [hasViewedTerms, setHasViewedTerms] = React.useState(false)
+  const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false)
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false)
 
-  const { toast } = useToast()
   const router = useRouter()
 
   // Form initialization
@@ -76,15 +78,20 @@ export function EnrollmentForm() {
     if (step === 1) {
       console.log('Step 1 validation', { selectedStudents })
       if (selectedStudents.length === 0) {
-        toast({
-          title: 'Error',
-          description: 'Please select at least one student',
-          variant: 'destructive',
+        toasts.apiError({
+          title: 'No Students Selected',
+          error: new Error(
+            'Please select at least one student to proceed with enrollment.'
+          ),
         })
         return
       }
       console.log('Moving to step 2')
       setStep(2)
+      toasts.success(
+        'Students Selected',
+        `Selected ${selectedStudents.length} student${selectedStudents.length > 1 ? 's' : ''} for enrollment.`
+      )
       return
     }
 
@@ -92,7 +99,7 @@ export function EnrollmentForm() {
     if (step === 2) {
       try {
         setIsProcessing(true)
-        const response = await fetch('/api/enroll', {
+        const promise = fetch('/api/enroll', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -105,6 +112,13 @@ export function EnrollmentForm() {
           }),
         })
 
+        await toasts.promise(promise, {
+          loading: 'Setting up your enrollment...',
+          success: 'Enrollment setup complete',
+          error: 'Failed to setup enrollment',
+        })
+
+        const response = await promise
         if (!response.ok) {
           throw new Error(
             (await response.text()) || 'Failed to create SetupIntent'
@@ -115,31 +129,16 @@ export function EnrollmentForm() {
         setClientSecret(clientSecret)
         setStep(3)
       } catch (error) {
-        console.error('Enrollment error:', error)
-        toast({
-          title: 'Enrollment Failed',
-          description:
-            error instanceof Error
-              ? error.message
-              : 'Please try again or contact support.',
-          variant: 'destructive',
-        })
+        toasts.apiError({ error })
       } finally {
         setIsProcessing(false)
       }
     }
   }
 
-  // Terms modal handlers
-  const handleTermsModalChange = (open: boolean) => {
-    setTermsModalOpen(open)
-    if (!open && !hasViewedTerms) {
-      form.setValue('termsAccepted', false)
-    }
-  }
-
-  const handleTermsAgree = () => {
-    setHasViewedTerms(true)
+  const handleTermsAgreement = () => {
+    setHasAgreedToTerms(true)
+    setIsTermsModalOpen(false)
     form.setValue('termsAccepted', true, {
       shouldValidate: true,
       shouldDirty: true,
@@ -169,13 +168,19 @@ export function EnrollmentForm() {
                 clientSecret={clientSecret}
                 customerName={`${form.getValues('firstName')} ${form.getValues('lastName')}`}
                 customerEmail={form.getValues('email')}
-                onSuccess={() => router.push('/payment-success')}
+                onSuccess={() => {
+                  toasts.success(
+                    'Payment Setup Successful',
+                    'Your enrollment is complete! Redirecting you to the success page.'
+                  )
+                  router.push('/payment-success')
+                }}
                 onError={(error) => {
-                  toast({
+                  toasts.apiError({
                     title: 'Payment Setup Failed',
-                    description:
-                      'There was an issue connecting your bank account. Please try again.',
-                    variant: 'destructive',
+                    error: new Error(
+                      'There was an issue connecting your bank account. Please try again.'
+                    ),
                   })
                   setClientSecret(undefined)
                   setIsProcessing(false)
@@ -205,9 +210,9 @@ export function EnrollmentForm() {
               <PaymentDetailsStep
                 form={form}
                 isProcessing={isProcessing}
-                hasViewedTerms={hasViewedTerms}
+                hasViewedTerms={hasAgreedToTerms}
                 onBack={() => setStep(1)}
-                onOpenTerms={() => setTermsModalOpen(true)}
+                onOpenTerms={() => setIsTermsModalOpen(true)}
               />
             )}
           </form>
@@ -215,9 +220,9 @@ export function EnrollmentForm() {
       )}
 
       <TermsModal
-        open={termsModalOpen}
-        onOpenChange={handleTermsModalChange}
-        onAgree={handleTermsAgree}
+        open={isTermsModalOpen}
+        onOpenChange={setIsTermsModalOpen}
+        onAgree={handleTermsAgreement}
       />
     </div>
   )

@@ -20,6 +20,12 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 interface PaymentDetailsStepProps {
   form: UseFormReturn<FormValues>
@@ -139,16 +145,30 @@ export function PaymentDetailsStep({
           render={({ field }) => (
             <FormItem className="flex flex-row items-start space-x-3 space-y-0">
               <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={(checked) => {
-                    if (checked && !hasViewedTerms) {
-                      onOpenTerms()
-                      return
-                    }
-                    field.onChange(checked)
-                  }}
-                />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            if (!hasViewedTerms) {
+                              onOpenTerms()
+                              return
+                            }
+                            field.onChange(checked)
+                          }}
+                          disabled={!hasViewedTerms}
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    {!hasViewedTerms && (
+                      <TooltipContent>
+                        <p>Please read the terms and conditions first</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               </FormControl>
               <div className="space-y-1 leading-none">
                 <FormLabel className="text-base font-normal">
@@ -186,18 +206,10 @@ export function PaymentDetailsStep({
         </Button>
         <Button
           type="submit"
-          className="h-12 w-full text-base font-medium"
-          disabled={
-            isProcessing || !hasViewedTerms || !form.getValues('termsAccepted')
-          }
+          className="h-12 w-full bg-white text-base font-medium text-black hover:bg-gray-100"
+          disabled={isProcessing || !form.getValues('termsAccepted')}
         >
-          {isProcessing
-            ? 'Processing...'
-            : !hasViewedTerms
-              ? 'Please review Terms and Conditions'
-              : !form.getValues('termsAccepted')
-                ? 'Please accept Terms and Conditions'
-                : 'Confirm and Proceed to Payment'}
+          {isProcessing ? 'Processing...' : 'Confirm and Proceed to Payment'}
         </Button>
       </CardFooter>
     </Card>

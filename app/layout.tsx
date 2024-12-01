@@ -4,13 +4,13 @@ import type { Metadata } from 'next'
 
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
-import { Toaster } from '@/components/ui/toaster'
+import { Toaster } from '@/components/toast'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Tutoring Program Enrollment',
-  description: 'Enroll in our comprehensive tutoring program',
+  title: 'Mahad AutoPay Enrollment',
+  description: 'Enroll in our mahad autopay system',
 }
 
 export default function RootLayout({
