@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { DashboardHeader } from '@/components/admin/dashboard-header'
 import { DashboardStats } from '@/components/admin/dashboard-stats'
+import { PaymentMonitoring } from '@/components/admin/payment-monitoring'
 import { SubscriptionTable } from '@/components/admin/subscription-table'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
@@ -51,14 +52,18 @@ function AdminDashboard() {
             fallback={
               <LoadingSpinner
                 size="lg"
-                text="Loading subscription data..."
+                text="Loading payment data..."
                 className="min-h-[400px]"
               />
             }
           >
-            <SubscriptionTable />
+            <PaymentMonitoring />
           </Suspense>
         </ErrorBoundary>
+      </div>
+
+      <div className="rounded-lg border bg-background">
+        <SubscriptionTable />
       </div>
     </div>
   )

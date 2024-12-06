@@ -139,3 +139,22 @@ export interface FinancialHealth {
     isOnTrack: boolean
   }
 }
+
+export interface StudentMetadata {
+  id: string
+  name: string
+  familyId?: string
+  totalFamilyMembers?: number
+}
+
+export interface PaymentNotification {
+  type: 'payment_failed' | 'payment_succeeded' | 'subscription_canceled'
+  subscriptionId: string
+  customerId: string
+  customerName: string
+  studentNames: string[]
+  amount: number
+  attemptCount?: number
+  nextAttempt?: number
+  timestamp: number
+}

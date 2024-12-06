@@ -46,16 +46,19 @@ export function StripePaymentForm({
         )
 
         if (collectError) {
+          console.error('Error during bank account collection:', collectError)
           throw collectError
         }
 
         // Confirm the SetupIntent
-        const { setupIntent, error: confirmError } = await stripe.confirmSetup({
-          clientSecret,
-          redirect: 'if_required',
-        })
+        const { setupIntent, error: confirmError } =
+          await stripe.confirmUsBankAccountSetup(clientSecret)
 
         if (confirmError) {
+          console.error(
+            'Error during bank account setup confirmation:',
+            confirmError
+          )
           throw confirmError
         }
 
@@ -64,7 +67,7 @@ export function StripePaymentForm({
           onSuccess()
         } else if (setupIntent?.status === 'requires_action') {
           if (setupIntent.next_action?.type === 'verify_with_microdeposits') {
-            onSuccess() // Or handle differently to show verification instructions
+            throw new Error('Setup failed. Please try again.')
           } else {
             console.error(
               `Unexpected next_action type: ${setupIntent.next_action?.type}`
