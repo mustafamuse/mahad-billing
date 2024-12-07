@@ -1,6 +1,14 @@
 import { Student } from './types'
 
-const familyGroups = {
+// ---------------------------------------
+// Configuration & Constants
+// ---------------------------------------
+const BASE_RATE = 150
+
+// ---------------------------------------
+// Family Groups Data
+// ---------------------------------------
+const FAMILY_GROUPS = {
   'family-sh-dayib': {
     members: ['Abdullahi Dayib Ahmed', 'Majda Sh Dayib', 'Najla Sh Dayib'],
   },
@@ -13,23 +21,29 @@ const familyGroups = {
     ],
   },
   'family-isse': {
-    // Only Salman and Shuayb remain, both indicated having exactly 1 sibling
     members: ['Salman Isse', 'Shuayb Isse'],
   },
   'family-haji': {
-    // Only Aisha and Yasmin remain, each with 1 sibling
     members: ['Aisha Haji', 'Yasmin Haji'],
   },
   'family-abdisamad': {
     members: ['Mohamed Abdisamad', 'Sudays Abdisamad'],
   },
+  'family-yusuf': {
+    members: ['Adnan Yussuf', 'Anwar Yusuf'],
+  },
 }
 
-// Base monthly rate
-const BASE_RATE = 150
+// ---------------------------------------
+// Helper Functions
+// ---------------------------------------
 
+/**
+ * Retrieves family information for a given student name.
+ * Returns the familyId and totalFamilyMembers if found, otherwise null.
+ */
 function getFamilyInfo(name: string) {
-  for (const [familyId, family] of Object.entries(familyGroups)) {
+  for (const [familyId, family] of Object.entries(FAMILY_GROUPS)) {
     if (family.members.includes(name)) {
       return {
         familyId,
@@ -40,8 +54,29 @@ function getFamilyInfo(name: string) {
   return null
 }
 
-export const STUDENTS: Student[] = [
-  'Mustafa Muse',
+/**
+ * Extracts the last name from a full name string.
+ */
+function getLastName(fullName: string): string {
+  const parts = fullName.trim().split(' ')
+  return parts[parts.length - 1].toLowerCase()
+}
+
+/**
+ * Sorts an array of names alphabetically by their last name.
+ */
+function sortByLastName(names: string[]): string[] {
+  return names.sort((a, b) => {
+    const aLast = getLastName(a)
+    const bLast = getLastName(b)
+    return aLast.localeCompare(bLast)
+  })
+}
+
+// ---------------------------------------
+// Student Data
+// ---------------------------------------
+const NAMES = [
   'Aisha Elmoge',
   'Maryam Ali',
   'Shamis Mohamud',
@@ -67,7 +102,7 @@ export const STUDENTS: Student[] = [
   'Aisha Dahir',
   'Rahma Abdullahi',
   'Samiro Mohamed',
-  'Amal Isse', // Now stands alone, no familyId
+  'Amal Isse', // no familyId
   'Salma Dayib',
   'Shuayb Isse',
   'Ilwad Hassan',
@@ -85,7 +120,7 @@ export const STUDENTS: Student[] = [
   'Mohamed Farah',
   'Sumaya Moalim',
   'Khadija Ali-Daar',
-  'Nadira Haji', // Now stands alone, no familyId
+  'Nadira Haji', // no familyId
   'Hirse Omar',
   'Sumaya Hassan',
   'Lujayn Ahmed',
@@ -103,7 +138,14 @@ export const STUDENTS: Student[] = [
   'Abdoul Barry',
   'Nassra Mohsin',
   'Hafsa Abdulmalik',
-].map((name, index) => {
+]
+
+// ---------------------------------------
+// Generate the Final STUDENTS Array
+// ---------------------------------------
+const sortedNames = sortByLastName(NAMES)
+
+export const STUDENTS: Student[] = sortedNames.map((name, index) => {
   const familyInfo = getFamilyInfo(name)
   return {
     id: (index + 1).toString(),
