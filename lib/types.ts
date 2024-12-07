@@ -143,12 +143,18 @@ export interface FinancialHealth {
 export interface StudentMetadata {
   id: string
   name: string
+  monthlyRate: number
   familyId?: string
   totalFamilyMembers?: number
 }
 
 export interface PaymentNotification {
-  type: 'payment_failed' | 'payment_succeeded' | 'subscription_canceled'
+  type:
+    | 'payment_failed'
+    | 'payment_succeeded'
+    | 'subscription_canceled'
+    | 'insufficient_funds_warning'
+    | 'balance_refreshed'
   subscriptionId: string
   customerId: string
   customerName: string
@@ -157,4 +163,5 @@ export interface PaymentNotification {
   attemptCount?: number
   nextAttempt?: number
   timestamp: number
+  balance?: number
 }

@@ -82,6 +82,11 @@ const statusConfig = {
       'bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-500/30',
     icon: Ban,
   },
+  balance_pending: {
+    label: 'Balance Pending',
+    color: 'bg-yellow-100 text-yellow-700',
+    icon: Clock,
+  },
 } as const
 
 const discountConfig = {

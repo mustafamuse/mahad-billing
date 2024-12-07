@@ -53,6 +53,16 @@ export function PaymentMonitoring() {
     }
   }
 
+  function getStatusBadge(type: string) {
+    switch (type) {
+      case 'balance_refreshed':
+        return <Badge variant="secondary">Balance Updated</Badge>
+      case 'payment_failed':
+        return <Badge variant="destructive">Failed</Badge>
+      // ... other cases
+    }
+  }
+
   return (
     <div className="space-y-4 p-6">
       <div className="flex items-center justify-between">
@@ -88,15 +98,7 @@ export function PaymentMonitoring() {
           {notifications?.map((n: PaymentNotification) => (
             <TableRow key={`${n.subscriptionId}-${n.timestamp}`}>
               <TableCell>{formatDate(n.timestamp)}</TableCell>
-              <TableCell>
-                <Badge
-                  variant={
-                    n.type === 'payment_failed' ? 'destructive' : 'default'
-                  }
-                >
-                  {n.type.replace('_', ' ')}
-                </Badge>
-              </TableCell>
+              <TableCell>{getStatusBadge(n.type)}</TableCell>
               <TableCell>{n.customerName}</TableCell>
               <TableCell>{n.studentNames.join(', ')}</TableCell>
               <TableCell>{formatCurrency(n.amount)}</TableCell>
@@ -115,6 +117,13 @@ export function PaymentMonitoring() {
                   </Button>
                 )}
               </TableCell>
+              {n.type === 'balance_refreshed' && (
+                <TableCell>
+                  <div className="text-sm text-muted-foreground">
+                    Available: {formatCurrency(n.balance || 0)}
+                  </div>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

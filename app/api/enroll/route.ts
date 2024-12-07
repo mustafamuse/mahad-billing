@@ -53,6 +53,13 @@ export async function POST(request: Request) {
     const setupIntent = await stripe.setupIntents.create({
       customer: customer.id,
       payment_method_types: ['us_bank_account'],
+      payment_method_options: {
+        us_bank_account: {
+          financial_connections: {
+            permissions: ['payment_method', 'balances'],
+          },
+        },
+      },
       metadata: {
         ...customerData.metadata,
         total: total.toString(),
