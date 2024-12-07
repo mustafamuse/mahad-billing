@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
+import { BASE_RATE } from '@/lib/data'
 import { Student } from '@/lib/types'
 import { calculateStudentPrice } from '@/lib/utils'
 
-const BASE_RATE = 150
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-11-20.acacia',
 })

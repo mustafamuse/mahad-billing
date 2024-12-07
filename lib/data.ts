@@ -3,7 +3,7 @@ import { Student } from './types'
 // ---------------------------------------
 // Configuration & Constants
 // ---------------------------------------
-const BASE_RATE = 150
+export const BASE_RATE = 150
 
 // ---------------------------------------
 // Family Groups Data

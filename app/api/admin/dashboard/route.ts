@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { z } from 'zod'
 
-import { STUDENTS } from '@/lib/data'
+import { BASE_RATE, STUDENTS } from '@/lib/data'
 import { ProcessedStudent, Student } from '@/lib/types'
 import { calculateStudentPrice } from '@/lib/utils'
 
@@ -211,17 +211,15 @@ export async function GET(request: Request) {
 
     // Calculate potential revenue for unenrolled students
     const calculatePotentialRevenue = (student: ProcessedStudent) => {
-      const baseRate = 150 // Base monthly rate
-
       // If student has family members, apply the appropriate discount
-      let finalPrice = baseRate
+      let finalPrice = BASE_RATE
       if (student.familyId && student.totalFamilyMembers) {
         if (student.totalFamilyMembers >= 4) {
-          finalPrice = baseRate * 0.7 // 30% discount
+          finalPrice = BASE_RATE * 0.7 // 30% discount
         } else if (student.totalFamilyMembers === 3) {
-          finalPrice = baseRate * 0.8 // 20% discount
+          finalPrice = BASE_RATE * 0.8 // 20% discount
         } else if (student.totalFamilyMembers === 2) {
-          finalPrice = baseRate * 0.9 // 10% discount
+          finalPrice = BASE_RATE * 0.9 // 10% discount
         }
       }
 
