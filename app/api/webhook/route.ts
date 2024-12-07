@@ -52,19 +52,22 @@ export async function POST(request: Request) {
 
     switch (event.type) {
       case 'setup_intent.succeeded':
-        const setupIntent = event.data.object as Stripe.SetupIntent
-        logPaymentEvent(
-          'setup_intent.succeeded',
-          {
-            customer: setupIntent.customer,
-            paymentMethod: setupIntent.payment_method,
-            metadata: setupIntent.metadata,
-            status: setupIntent.status,
-          },
-          'Bank account successfully connected'
-        )
-
         try {
+          const setupIntent = event.data.object as Stripe.SetupIntent
+
+          // Initial setup status
+          await redis.set(
+            `payment_setup:${setupIntent.customer}`,
+            JSON.stringify({
+              customerId: setupIntent.customer,
+              subscriptionId: null,
+              setupCompleted: true,
+              bankVerified: true,
+              subscriptionActive: false,
+              timestamp: Date.now(),
+            })
+          )
+
           // Parse students from metadata
           const students = JSON.parse(setupIntent.metadata?.students || '[]')
 
@@ -121,27 +124,43 @@ export async function POST(request: Request) {
           })
         } catch (error) {
           console.error('Error in setup_intent.succeeded handler:', error)
+          const failedSetupIntent = event.data.object as Stripe.SetupIntent
           logPaymentEvent('subscription_creation_failed', {
             error: (error as Error).message,
-            customer: setupIntent.customer,
-            setupIntentId: setupIntent.id,
+            customer: failedSetupIntent.customer,
+            setupIntentId: failedSetupIntent.id,
           })
         }
         break
 
       case 'customer.subscription.created':
-        const subscription = event.data.object as Stripe.Subscription
-        logPaymentEvent(
-          'customer.subscription.created',
-          {
-            id: subscription.id,
-            customer: subscription.customer,
-            status: subscription.status,
-            startDate: new Date(subscription.start_date * 1000),
-            items: subscription.items.data,
-          },
-          'New subscription created'
-        )
+        try {
+          const subscription = event.data.object as Stripe.Subscription
+
+          // Update setup status
+          const setupStatus = await redis.get(
+            `payment_setup:${subscription.customer}`
+          )
+          if (setupStatus) {
+            // Fix: Handle case where setupStatus might be an object
+            const currentStatus =
+              typeof setupStatus === 'string'
+                ? JSON.parse(setupStatus)
+                : setupStatus
+
+            await redis.set(
+              `payment_setup:${subscription.customer}`,
+              JSON.stringify({
+                ...currentStatus,
+                subscriptionId: subscription.id,
+                subscriptionActive: true,
+                timestamp: Date.now(),
+              })
+            )
+          }
+        } catch (error) {
+          console.error('Error in subscription.created handler:', error)
+        }
         break
 
       case 'invoice.created':
@@ -186,18 +205,24 @@ export async function POST(request: Request) {
         break
 
       case 'payment_method.attached':
-        const paymentMethod = event.data.object as Stripe.PaymentMethod
-        logPaymentEvent(
-          'payment_method.attached',
-          {
-            id: paymentMethod.id,
-            type: paymentMethod.type,
-            customer: paymentMethod.customer,
-            bankLast4: paymentMethod.us_bank_account?.last4,
-            bankName: paymentMethod.us_bank_account?.bank_name,
-          },
-          'Payment method attached to customer'
-        )
+        try {
+          const paymentMethod = event.data.object as Stripe.PaymentMethod
+
+          // For ACH Direct Debit, bank is verified through Plaid/instant verification
+          if (paymentMethod.type === 'us_bank_account') {
+            await redis.set(
+              `bank_account:${paymentMethod.customer}`,
+              JSON.stringify({
+                customerId: paymentMethod.customer,
+                verified: true,
+                last4: paymentMethod.us_bank_account?.last4,
+                timestamp: Date.now(),
+              })
+            )
+          }
+        } catch (error) {
+          console.error('Error in payment_method.attached handler:', error)
+        }
         break
 
       case 'financial_connections.account.created':

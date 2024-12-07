@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
+import { redis } from './redis'
 import { Student } from './types'
 
 export function cn(...inputs: ClassValue[]) {
@@ -69,4 +70,39 @@ export function formatDate(timestamp: number): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+export async function verifyPaymentSetup(customerId: string) {
+  const [paymentSetup, bankAccount] = await Promise.all([
+    redis.get(`payment_setup:${customerId}`),
+    redis.get(`bank_account:${customerId}`),
+  ])
+
+  // Add debug logging
+  console.log('Verification Check:', {
+    customerId,
+    paymentSetup,
+    bankAccount,
+    timestamp: new Date().toISOString(),
+  })
+
+  if (!paymentSetup || !bankAccount) {
+    console.log('❌ Missing setup data:', { paymentSetup, bankAccount })
+    return false
+  }
+
+  const setup =
+    typeof paymentSetup === 'string' ? JSON.parse(paymentSetup) : paymentSetup
+
+  const bank =
+    typeof bankAccount === 'string' ? JSON.parse(bankAccount) : bankAccount
+
+  console.log('🔍 Verification Status:', {
+    setupCompleted: setup.setupCompleted,
+    subscriptionActive: setup.subscriptionActive,
+    bankVerified: bank.verified,
+    timestamp: new Date(setup.timestamp).toISOString(),
+  })
+
+  return setup.setupCompleted && setup.subscriptionActive && bank.verified
 }

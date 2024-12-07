@@ -165,3 +165,19 @@ export interface PaymentNotification {
   timestamp: number
   balance?: number
 }
+
+export interface PaymentSetupStatus {
+  customerId: string
+  subscriptionId: string | null
+  setupCompleted: boolean
+  bankVerified: boolean
+  subscriptionActive: boolean
+  timestamp: number
+}
+
+export interface BankAccountStatus {
+  customerId: string
+  verified: boolean
+  last4: string
+  timestamp: number
+}

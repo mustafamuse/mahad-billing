@@ -179,20 +179,18 @@ export function EnrollmentForm() {
                 clientSecret={clientSecret}
                 customerName={`${form.getValues('firstName')} ${form.getValues('lastName')}`}
                 customerEmail={form.getValues('email')}
-                onSuccess={() => {
+                onSuccess={({ setupIntentId }) => {
                   toasts.success(
                     'Payment Setup Successful',
                     'Your enrollment is complete!'
                   )
-                  router.push('/payment-success')
+                  router.push(`/payment-success?setupIntentId=${setupIntentId}`)
                 }}
                 onError={(error) => {
-                  console.error('Stripe Payment Form Error:', error)
+                  console.error('❌ Stripe Payment Form Error:', error)
                   toasts.apiError({
                     title: 'Payment Setup Failed',
-                    error: new Error(
-                      'There was an issue connecting your bank account.'
-                    ),
+                    error: error,
                   })
                   resetFormState()
                 }}

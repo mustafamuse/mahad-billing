@@ -63,6 +63,7 @@ export async function POST(request: Request) {
       metadata: {
         ...customerData.metadata,
         total: total.toString(),
+        customerId: customer.id,
       },
     })
 
