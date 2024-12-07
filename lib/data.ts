@@ -1,20 +1,33 @@
 import { Student } from './types'
 
-// Family groups mapping
 const familyGroups = {
   'family-sh-dayib': {
-    members: ['Abdullahi Sh Dayib', 'Majda Sh Dayib', 'Najla Sh Dayib'],
+    members: ['Abdullahi Dayib Ahmed', 'Majda Sh Dayib', 'Najla Sh Dayib'],
   },
   'family-haibah': {
-    members: ['Abdiwahab Haibah', 'Fatima Haibah'],
+    members: [
+      'Abdiwahab Haibah',
+      'Fatima Haibah',
+      'Abdishakur Haibah',
+      'Abdiladif Haibah',
+    ],
   },
-  // Add more family groups as needed
+  'family-isse': {
+    // Only Salman and Shuayb remain, both indicated having exactly 1 sibling
+    members: ['Salman Isse', 'Shuayb Isse'],
+  },
+  'family-haji': {
+    // Only Aisha and Yasmin remain, each with 1 sibling
+    members: ['Aisha Haji', 'Yasmin Haji'],
+  },
+  'family-abdisamad': {
+    members: ['Mohamed Abdisamad', 'Sudays Abdisamad'],
+  },
 }
 
 // Base monthly rate
 const BASE_RATE = 150
 
-// Helper function to get family info for a student
 function getFamilyInfo(name: string) {
   for (const [familyId, family] of Object.entries(familyGroups)) {
     if (family.members.includes(name)) {
@@ -28,27 +41,68 @@ function getFamilyInfo(name: string) {
 }
 
 export const STUDENTS: Student[] = [
-  'Abdiwahab Haibah',
-  'Abdilatif Haibe',
-  'Abdoul Samad Barry',
-  'Abdullahi Sh Dayib',
-  'Amina Guled',
-  'Anzal Omar',
-  'Fatima Ahmed',
+  'Mustafa Muse',
+  'Aisha Elmoge',
+  'Maryam Ali',
+  'Shamis Mohamud',
+  'Salma Farah',
+  'Adnan Yussuf',
+  'Hannan Abdi',
+  'Salman Isse',
+  'Samira Moalim',
+  'Aaliyah Ismail',
+  'Bilal Gani',
   'Fatima Haibah',
-  'Haarun Abdirahim Mohamed',
-  'Hafsah Hassan',
-  'Hamza Hired',
-  'Hamza Mohamed Hassan',
   'Hoda Abdullahi',
-  'Khaalid Cumar',
+  'Hamza Hired',
+  'Anzal Omar',
+  'Amina Guled',
+  'Zihaam Nor',
+  'Nasteho Mowlid Abdiqadir',
+  'Sumaya Omar',
+  'Mohamed Abdisamad',
+  'Abdishakur Haibah',
+  'Ayan Hassan',
+  'Rahma Yusuf',
+  'Aisha Dahir',
+  'Rahma Abdullahi',
+  'Samiro Mohamed',
+  'Amal Isse', // Now stands alone, no familyId
+  'Salma Dayib',
+  'Shuayb Isse',
+  'Ilwad Hassan',
+  'Ikhlas Hassan',
+  'Sudays Abdisamad',
+  'Aisha Haji',
+  'Gani Gani',
+  'Abdullahi Dayib Ahmed',
+  'Rahma Dek',
+  'Yasmin Haji',
+  'Sagal Mohamud',
+  'Ugbad Dek',
+  'Zamzam Farah',
+  'Anwar Yusuf',
+  'Mohamed Farah',
+  'Sumaya Moalim',
+  'Khadija Ali-Daar',
+  'Nadira Haji', // Now stands alone, no familyId
+  'Hirse Omar',
+  'Sumaya Hassan',
+  'Lujayn Ahmed',
+  'Deeqa Jama',
+  'Fatima Ahmed',
+  'Ahmed Adan',
+  'Haarun Abdirahim Mohamed',
+  'Abdulkadir Mohamud',
+  'Hafsa Hassan',
+  'Abdiwahab Haibah',
+  'Abdiladif Haibah',
+  'Abdulmalik Mohamud',
   'Khalid Ismail',
-  'Majda Sh Dayib',
-  'Mustafa Mahad',
-  'Najla Sh Dayib',
-  'Rukia Gesaade',
-  'Samira Mohamed',
-  'Ziham Noor',
+  'Hamza Mohamed Hassan',
+  'Abdoul Barry',
+  'Nassra Mohsin',
+  'Hafsa Abdulmalik',
 ].map((name, index) => {
   const familyInfo = getFamilyInfo(name)
   return {
