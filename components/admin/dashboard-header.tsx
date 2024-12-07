@@ -1,20 +1,19 @@
-import { Download, PlusCircle } from 'lucide-react'
+import { Download } from 'lucide-react'
 
+import { PaymentMonitoring } from '@/components/admin/payment-monitoring'
 import { BaseHeader } from '@/components/base-header'
 import { Button } from '@/components/ui/button'
 
 export function DashboardHeader() {
   const actions = (
-    <>
+    <div className="flex items-center gap-2">
+      <PaymentMonitoring />
       <Button variant="outline" size="sm">
         <Download className="mr-2 h-4 w-4" />
         Export Data
       </Button>
-      <Button size="sm">
-        <PlusCircle className="mr-2 h-4 w-4" />
-        Add Student
-      </Button>
-    </>
+      <Button size="sm">Add Student</Button>
+    </div>
   )
 
   return (

@@ -1,15 +1,7 @@
 import { STUDENTS } from '@/lib/data'
-import { Student, StudentMetadata } from '@/lib/types'
+import { StudentMetadata } from '@/lib/types'
 
-export function formatStudentMetadata(students: Student[]): string {
-  const metadata: StudentMetadata[] = students.map((student) => ({
-    id: student.id,
-    name: student.name,
-    familyId: student.familyId,
-    totalFamilyMembers: student.totalFamilyMembers,
-  }))
-  return JSON.stringify(metadata)
-}
+import { calculateStudentPrice } from '../utils'
 
 export function parseStudentMetadata(
   metadata: string | unknown
@@ -20,6 +12,7 @@ export function parseStudentMetadata(
       return metadata.map((student) => ({
         id: student.id,
         name: student.name,
+        monthlyRate: student.monthlyRate,
         familyId: student.familyId,
         totalFamilyMembers: student.totalFamilyMembers,
       }))
@@ -33,6 +26,7 @@ export function parseStudentMetadata(
           return parsed.map((student) => ({
             id: student.id,
             name: student.name,
+            monthlyRate: calculateStudentPrice(student).price,
             familyId: student.familyId,
             totalFamilyMembers: student.totalFamilyMembers,
           }))
@@ -44,6 +38,7 @@ export function parseStudentMetadata(
             {
               id: student.id,
               name: student.name,
+              monthlyRate: calculateStudentPrice(student).price,
               familyId: student.familyId,
               totalFamilyMembers: student.totalFamilyMembers,
             },
@@ -57,6 +52,7 @@ export function parseStudentMetadata(
             {
               id: student.id,
               name: student.name,
+              monthlyRate: calculateStudentPrice(student).price,
               familyId: student.familyId,
               totalFamilyMembers: student.totalFamilyMembers,
             },

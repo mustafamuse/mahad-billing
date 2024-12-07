@@ -99,13 +99,18 @@ export async function GET(request: Request) {
         return 0
       }
 
+      // Here's how the payment status is determined:
+      // 1. If no subscription exists -> 'not_enrolled'
+      // 2. If subscription exists -> use its status (active, past_due, etc)
       return {
         id: student.id,
         name: student.name,
+        // Payment status tracking
         subscriptionId: subscriptionData?.subscription?.id || null,
         status: subscriptionData?.subscription?.status || 'not_enrolled',
         currentPeriodEnd:
           subscriptionData?.subscription?.current_period_end || null,
+        // Guardian info for payment communications
         guardian: subscriptionData
           ? {
               id: subscriptionData.customer.id,
@@ -117,6 +122,7 @@ export async function GET(request: Request) {
               name: null,
               email: null,
             },
+        // Payment amounts
         monthlyAmount: subscriptionData ? price : price,
         discount: {
           amount: discount,
@@ -131,8 +137,9 @@ export async function GET(request: Request) {
         },
         familyId: student.familyId,
         totalFamilyMembers: student.totalFamilyMembers,
+        // Revenue tracking
         revenue: {
-          monthly: subscriptionData ? price : 0,
+          monthly: subscriptionData ? price : 0, // Only count if subscribed
           annual: subscriptionData ? price * 12 : 0,
           lifetime: 0,
         },

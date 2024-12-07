@@ -3,9 +3,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle } from 'lucide-react'
 
-import { toasts } from '@/components/toast/toast-utils'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -24,7 +29,7 @@ export function PaymentMonitoring() {
       const res = await fetch('/api/admin/notifications')
       return res.json()
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   })
 
   const handleRetryPayment = async (subscriptionId: string) => {
@@ -34,100 +39,92 @@ export function PaymentMonitoring() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscriptionId }),
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to retry payment')
-      }
-
-      // Refresh the notifications list
+      if (!response.ok) throw new Error('Failed to retry payment')
       refetch()
-
-      // Use your existing toast utility
-      toasts.success('Payment Retry', 'Payment retry has been initiated')
     } catch (error) {
       console.error('Error retrying payment:', error)
-      toasts.apiError({
-        title: 'Retry Failed',
-        error,
-      })
     }
   }
 
-  function getStatusBadge(type: string) {
-    switch (type) {
-      case 'balance_refreshed':
-        return <Badge variant="secondary">Balance Updated</Badge>
-      case 'payment_failed':
-        return <Badge variant="destructive">Failed</Badge>
-      // ... other cases
-    }
-  }
+  const hasFailedPayments = notifications?.some(
+    (n: { type: string }) => n.type === 'payment_failed'
+  )
 
   return (
-    <div className="space-y-4 p-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Payment Monitoring</h2>
-        <Button variant="outline" onClick={() => refetch()}>
-          Refresh
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          variant={hasFailedPayments ? 'destructive' : 'outline'}
+          size="sm"
+          className="flex items-center gap-2"
+        >
+          {hasFailedPayments && <AlertCircle className="h-4 w-4" />}
+          Monitor Payments
+          {hasFailedPayments && (
+            <span className="text-xs">• Action Required</span>
+          )}
         </Button>
-      </div>
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle>Payment Monitoring</DialogTitle>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Refresh
+            </Button>
+          </div>
+        </DialogHeader>
 
-      {notifications?.some(
-        (n: { type: string }) => n.type === 'payment_failed'
-      ) && (
-        <div className="flex items-center gap-2 rounded-md bg-destructive/15 p-3 text-destructive">
-          <AlertCircle className="h-5 w-5" />
-          <span>There are failed payments that require attention</span>
+        {hasFailedPayments && (
+          <div className="flex items-center gap-2 rounded-md bg-destructive/15 p-3 text-destructive">
+            <AlertCircle className="h-5 w-5" />
+            <span>There are failed payments that require attention</span>
+          </div>
+        )}
+
+        <div className="max-h-[60vh] overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Students</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Attempts</TableHead>
+                <TableHead>Next Attempt</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {notifications?.map((n: PaymentNotification) => (
+                <TableRow key={`${n.subscriptionId}-${n.timestamp}`}>
+                  <TableCell>{formatDate(n.timestamp)}</TableCell>
+                  <TableCell>{n.type}</TableCell>
+                  <TableCell>{n.customerName}</TableCell>
+                  <TableCell>{n.studentNames.join(', ')}</TableCell>
+                  <TableCell>{formatCurrency(n.amount)}</TableCell>
+                  <TableCell>{n.attemptCount || 'N/A'}</TableCell>
+                  <TableCell>
+                    {n.nextAttempt ? formatDate(n.nextAttempt * 1000) : 'N/A'}
+                  </TableCell>
+                  <TableCell>
+                    {n.type === 'payment_failed' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRetryPayment(n.subscriptionId)}
+                      >
+                        Retry Payment
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
-      )}
-
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Students</TableHead>
-            <TableHead>Amount</TableHead>
-            <TableHead>Attempts</TableHead>
-            <TableHead>Next Attempt</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {notifications?.map((n: PaymentNotification) => (
-            <TableRow key={`${n.subscriptionId}-${n.timestamp}`}>
-              <TableCell>{formatDate(n.timestamp)}</TableCell>
-              <TableCell>{getStatusBadge(n.type)}</TableCell>
-              <TableCell>{n.customerName}</TableCell>
-              <TableCell>{n.studentNames.join(', ')}</TableCell>
-              <TableCell>{formatCurrency(n.amount)}</TableCell>
-              <TableCell>{n.attemptCount || 'N/A'}</TableCell>
-              <TableCell>
-                {n.nextAttempt ? formatDate(n.nextAttempt * 1000) : 'N/A'}
-              </TableCell>
-              <TableCell>
-                {n.type === 'payment_failed' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRetryPayment(n.subscriptionId)}
-                  >
-                    Retry Payment
-                  </Button>
-                )}
-              </TableCell>
-              {n.type === 'balance_refreshed' && (
-                <TableCell>
-                  <div className="text-sm text-muted-foreground">
-                    Available: {formatCurrency(n.balance || 0)}
-                  </div>
-                </TableCell>
-              )}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
