@@ -1,4 +1,5 @@
 import { Student } from './types'
+import { getFamilyDiscount } from './utils'
 
 // ---------------------------------------
 // Configuration & Constants
@@ -147,10 +148,16 @@ const sortedNames = sortByLastName(NAMES)
 
 export const STUDENTS: Student[] = sortedNames.map((name, index) => {
   const familyInfo = getFamilyInfo(name)
+
+  // Calculate the monthly rate with family discount if applicable
+  const monthlyRate = familyInfo
+    ? BASE_RATE - getFamilyDiscount(familyInfo.totalFamilyMembers)
+    : BASE_RATE
+
   return {
     id: (index + 1).toString(),
     name,
-    monthlyRate: BASE_RATE,
+    monthlyRate,
     ...(familyInfo && {
       familyId: familyInfo.familyId,
       totalFamilyMembers: familyInfo.totalFamilyMembers,

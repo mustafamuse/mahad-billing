@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
+import { BASE_RATE } from './data'
 import { redis } from './redis'
 import { Student } from './types'
 
@@ -16,10 +17,7 @@ export function getFamilyDiscount(totalFamilyMembers: number): number {
 }
 
 export function calculateTotal(students: Student[]): number {
-  return students.reduce((total, student) => {
-    const { price } = calculateStudentPrice(student)
-    return total + price
-  }, 0)
+  return students.reduce((total, student) => total + student.monthlyRate, 0)
 }
 
 export function formatCurrency(amount: number): string {
@@ -35,23 +33,10 @@ export function calculateStudentPrice(student: Student): {
   discount: number
   isSiblingDiscount: boolean
 } {
-  const basePrice = student.monthlyRate
-
-  // Calculate discount based on family info
-  let discount = 0
-  let isSiblingDiscount = false
-
-  if (student.familyId && student.totalFamilyMembers) {
-    discount = getFamilyDiscount(student.totalFamilyMembers)
-    isSiblingDiscount = true
-  }
-
-  const price = basePrice - discount
-
   return {
-    price,
-    discount,
-    isSiblingDiscount,
+    price: student.monthlyRate,
+    discount: BASE_RATE - student.monthlyRate,
+    isSiblingDiscount: !!student.familyId,
   }
 }
 

@@ -14,9 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { STUDENTS } from '@/lib/data'
+import { BASE_RATE, STUDENTS } from '@/lib/data'
 import { Student } from '@/lib/types'
-import { calculateStudentPrice } from '@/lib/utils'
 
 interface FormValues {
   students: string[] // Array of student IDs
@@ -65,8 +64,8 @@ export function StudentSelect({
   }
 
   const renderSelectedStudent = (student: Student) => {
-    const { price, isSiblingDiscount } = calculateStudentPrice(student)
-    const basePrice = student.monthlyRate
+    const isSiblingDiscount = !!student.familyId
+    const discount = BASE_RATE - student.monthlyRate
 
     return (
       <div
@@ -81,16 +80,16 @@ export function StudentSelect({
                 variant="secondary"
                 className="text-green-600 dark:text-green-400"
               >
-                Family Discount Applied
+                Family Discount: ${discount} off
               </Badge>
             )}
           </div>
           {isSiblingDiscount && (
             <div className="text-sm text-muted-foreground">
-              <span className="line-through">${basePrice}</span>
+              <span className="line-through">${BASE_RATE}</span>
               {' → '}
               <span className="font-medium text-green-600 dark:text-green-400">
-                ${price}
+                ${student.monthlyRate}
               </span>
               <span className="ml-1">per month</span>
             </div>

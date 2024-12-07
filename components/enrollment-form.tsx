@@ -21,7 +21,6 @@ import {
 } from '@/lib/schemas/enrollment'
 import { stripeAppearance } from '@/lib/stripe-config'
 import { Student } from '@/lib/types'
-import { calculateTotal } from '@/lib/utils'
 
 import { PaymentDetailsStep } from './enrollment/payment-details-step'
 import { StudentSelectionStep } from './enrollment/student-selection-step'
@@ -116,7 +115,7 @@ export function EnrollmentForm() {
     try {
       setIsProcessing(true)
       const requestBody = {
-        total: calculateTotal(selectedStudents),
+        total: selectedStudents.reduce((sum, s) => sum + s.monthlyRate, 0),
         email: values.email,
         firstName: values.firstName,
         lastName: values.lastName,

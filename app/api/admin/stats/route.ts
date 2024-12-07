@@ -4,7 +4,6 @@ import Stripe from 'stripe'
 
 import { BASE_RATE } from '@/lib/data'
 import { Student } from '@/lib/types'
-import { calculateStudentPrice } from '@/lib/utils'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-11-20.acacia',
@@ -109,9 +108,8 @@ export async function GET() {
       totalStudents += students.length
 
       students.forEach((student: Student) => {
-        const { price } = calculateStudentPrice(student)
-        monthlyRecurringRevenue += price
-        potentialRevenue += BASE_RATE
+        monthlyRecurringRevenue += student.monthlyRate
+        potentialRevenue += BASE_RATE // This is correct - keeps using BASE_RATE for potential
       })
     })
 

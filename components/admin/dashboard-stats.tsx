@@ -13,6 +13,8 @@ import { Card } from '@/components/ui/card'
 import type { DashboardStats } from '@/lib/types'
 import { formatCurrency } from '@/lib/utils'
 
+import { DashboardStatsSkeleton } from './dashboard-stats-skeleton'
+
 export function DashboardStats() {
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
@@ -24,7 +26,7 @@ export function DashboardStats() {
   })
 
   if (isLoading) {
-    return <div>Loading stats...</div>
+    return <DashboardStatsSkeleton />
   }
 
   // Calculate various metrics
@@ -36,24 +38,27 @@ export function DashboardStats() {
 
   const averageRevenuePerStudent =
     (stats?.monthlyRecurringRevenue || 0) / (stats?.totalStudents || 1)
-  const isLowAverageRevenue = averageRevenuePerStudent < 120 // Alert if average is below $120
+  const isLowRevenue = averageRevenuePerStudent < 120 // Alert if below $120
+
+  const revenueEfficiency =
+    ((stats?.monthlyRecurringRevenue || 0) / (stats?.potentialRevenue || 1)) *
+    100
 
   const hasOverduePayments = (stats?.overduePayments || 0) > 0
   const churnRate =
-    ((stats?.canceledLastMonth || 0) / (stats?.totalActiveSubscriptions || 1)) *
-    100
+    ((stats?.canceledLastMonth || 0) / (stats?.totalStudents || 1)) * 100
   const isHighChurn = churnRate > 10 // Alert if churn rate is above 10%
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {/* Revenue Card */}
-      <Card className={isLowAverageRevenue ? 'border-orange-500' : ''}>
+      <Card className={isLowRevenue ? 'border-orange-500' : ''}>
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-sm font-medium text-muted-foreground">
               Monthly Revenue
             </div>
-            {isLowAverageRevenue && (
+            {isLowRevenue && (
               <AlertCircle className="h-5 w-5 text-orange-500" />
             )}
           </div>
@@ -68,28 +73,66 @@ export function DashboardStats() {
         </div>
       </Card>
 
-      {/* Discount Impact Card */}
+      {/* Revenue Performance Card */}
       <Card className={isHighDiscountImpact ? 'border-yellow-500' : ''}>
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-sm font-medium text-muted-foreground">
-              Discount Impact
+              Revenue Performance
             </div>
             {isHighDiscountImpact && (
               <AlertTriangle className="h-5 w-5 text-yellow-500" />
             )}
           </div>
-          <div className="mt-2">
-            <div className="flex items-center gap-2 text-3xl font-bold">
-              {discountImpact.toFixed(1)}%
-              <TrendingDown className="h-5 w-5 text-red-500" />
+          <div className="mt-4">
+            {/* Main Metrics */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Discount Impact */}
+              <div>
+                <div className="mb-1 text-sm text-muted-foreground">
+                  Lost to Discounts
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-3xl font-bold text-red-600 dark:text-red-400">
+                    {discountImpact.toFixed(1)}%
+                  </div>
+                  <TrendingDown className="h-5 w-5 text-red-500" />
+                </div>
+              </div>
+              {/* Revenue Efficiency */}
+              <div className="text-right">
+                <div className="mb-1 text-sm text-muted-foreground">
+                  Revenue Efficiency
+                </div>
+                <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                  {revenueEfficiency.toFixed(1)}%
+                </div>
+              </div>
             </div>
-            <div className="mt-2 text-sm text-muted-foreground">
-              Lost:{' '}
-              {formatCurrency(
-                (stats?.potentialRevenue || 0) -
-                  (stats?.monthlyRecurringRevenue || 0)
-              )}
+
+            {/* Revenue Details */}
+            <div className="mt-4 border-t pt-4">
+              <div className="flex items-center justify-between text-sm">
+                <div>
+                  <div className="text-muted-foreground">Monthly Revenue</div>
+                  <div className="font-medium">
+                    {formatCurrency(stats?.monthlyRecurringRevenue || 0)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-muted-foreground">Potential Revenue</div>
+                  <div className="font-medium">
+                    {formatCurrency(stats?.potentialRevenue || 0)}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 text-center text-xs text-muted-foreground">
+                Revenue lost:{' '}
+                {formatCurrency(
+                  (stats?.potentialRevenue || 0) -
+                    (stats?.monthlyRecurringRevenue || 0)
+                )}
+              </div>
             </div>
           </div>
         </div>

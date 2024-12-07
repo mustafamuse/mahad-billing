@@ -4,18 +4,15 @@ import Stripe from 'stripe'
 import { z } from 'zod'
 
 import { BASE_RATE, STUDENTS } from '@/lib/data'
-import { ProcessedStudent, Student } from '@/lib/types'
-import { calculateStudentPrice } from '@/lib/utils'
+import { Student } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
-// Initialize Stripe with proper error handling
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-11-20.acacia',
   typescript: true,
 })
 
-// Input validation schema
 const QuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(10),
@@ -28,7 +25,6 @@ const QuerySchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    // Parse and validate query parameters
     const { searchParams } = new URL(request.url)
     const queryResult = QuerySchema.safeParse(Object.fromEntries(searchParams))
 
@@ -42,28 +38,23 @@ export async function GET(request: Request) {
     const { page, limit, status, search, discountType, sortBy, sortOrder } =
       queryResult.data
 
-    // Fetch subscriptions with proper error handling
+    // Fetch active subscriptions
     const subscriptions = await stripe.subscriptions
       .list({
-        expand: [
-          'data.customer',
-          'data.default_payment_method',
-          'data.latest_invoice',
-        ],
-        limit: 100, // Adjust based on your needs
+        expand: ['data.customer'],
+        limit: 100,
       })
       .catch((error) => {
         console.error('Stripe API error:', error)
         throw new Error('Failed to fetch subscriptions')
       })
 
-    // Process subscriptions with proper type safety
+    // Create subscription lookup map
     const subscribedStudentsMap = new Map<
       string,
       {
         subscription: Stripe.Subscription
         customer: Stripe.Customer
-        price: number
       }
     >()
 
@@ -75,7 +66,6 @@ export async function GET(request: Request) {
           subscribedStudentsMap.set(student.name, {
             subscription,
             customer: subscription.customer as Stripe.Customer,
-            price: calculateStudentPrice(student).price,
           })
         })
       } catch (e) {
@@ -83,34 +73,17 @@ export async function GET(request: Request) {
       }
     })
 
+    // Process all students
     let processedStudents = STUDENTS.map((student) => {
       const subscriptionData = subscribedStudentsMap.get(student.name)
-      const {
-        price = 0,
-        discount = 0,
-        isSiblingDiscount = false,
-      } = calculateStudentPrice(student)
 
-      const getFamilyDiscountRate = (totalMembers?: number) => {
-        if (!totalMembers) return 0
-        if (totalMembers >= 4) return 30
-        if (totalMembers === 3) return 20
-        if (totalMembers === 2) return 10
-        return 0
-      }
-
-      // Here's how the payment status is determined:
-      // 1. If no subscription exists -> 'not_enrolled'
-      // 2. If subscription exists -> use its status (active, past_due, etc)
       return {
         id: student.id,
         name: student.name,
-        // Payment status tracking
         subscriptionId: subscriptionData?.subscription?.id || null,
         status: subscriptionData?.subscription?.status || 'not_enrolled',
         currentPeriodEnd:
           subscriptionData?.subscription?.current_period_end || null,
-        // Guardian info for payment communications
         guardian: subscriptionData
           ? {
               id: subscriptionData.customer.id,
@@ -122,31 +95,26 @@ export async function GET(request: Request) {
               name: null,
               email: null,
             },
-        // Payment amounts
-        monthlyAmount: subscriptionData ? price : price,
+        monthlyAmount: student.monthlyRate,
         discount: {
-          amount: discount,
-          type: isSiblingDiscount
-            ? 'Family Discount'
-            : discount > 0
-              ? 'Other'
-              : 'None',
-          percentage: isSiblingDiscount
-            ? getFamilyDiscountRate(student.totalFamilyMembers)
+          amount: BASE_RATE - student.monthlyRate,
+          type: student.familyId ? 'Family Discount' : 'None',
+          percentage: student.familyId
+            ? ((BASE_RATE - student.monthlyRate) / BASE_RATE) * 100
             : 0,
         },
         familyId: student.familyId,
         totalFamilyMembers: student.totalFamilyMembers,
-        // Revenue tracking
         revenue: {
-          monthly: subscriptionData ? price : 0, // Only count if subscribed
-          annual: subscriptionData ? price * 12 : 0,
+          monthly: subscriptionData ? student.monthlyRate : 0,
+          annual: subscriptionData ? student.monthlyRate * 12 : 0,
           lifetime: 0,
         },
         isEnrolled: !!subscriptionData,
       }
     })
 
+    // Apply filters
     if (search) {
       const searchLower = search.toLowerCase()
       processedStudents = processedStudents.filter((student) =>
@@ -168,6 +136,7 @@ export async function GET(request: Request) {
       )
     }
 
+    // Apply sorting
     if (sortBy) {
       processedStudents.sort((a, b) => {
         switch (sortBy) {
@@ -179,125 +148,93 @@ export async function GET(request: Request) {
             return sortOrder === 'desc'
               ? b.monthlyAmount - a.monthlyAmount
               : a.monthlyAmount - b.monthlyAmount
-
           case 'name':
             return sortOrder === 'desc'
               ? b.name.localeCompare(a.name)
               : a.name.localeCompare(b.name)
-
           case 'status':
             return sortOrder === 'desc'
               ? b.status.localeCompare(a.status)
               : a.status.localeCompare(b.status)
-
           case 'discount':
             if (a.discount.amount === 0 && b.discount.amount > 0) return 1
             if (a.discount.amount > 0 && b.discount.amount === 0) return -1
             return sortOrder === 'desc'
               ? b.discount.amount - a.discount.amount
               : a.discount.amount - b.discount.amount
-
           default:
             return 0
         }
       })
     }
 
-    // Calculate totals before pagination
-    const unenrolledStudents = processedStudents.filter(
-      (s) => s.status === 'not_enrolled'
-    ) as ProcessedStudent[]
-    const filteredUnenrolledCount = unenrolledStudents.length
-
-    // Calculate potential revenue for unenrolled students
-    const calculatePotentialRevenue = (student: ProcessedStudent) => {
-      // If student has family members, apply the appropriate discount
-      let finalPrice = BASE_RATE
-      if (student.familyId && student.totalFamilyMembers) {
-        if (student.totalFamilyMembers >= 4) {
-          finalPrice = BASE_RATE * 0.7 // 30% discount
-        } else if (student.totalFamilyMembers === 3) {
-          finalPrice = BASE_RATE * 0.8 // 20% discount
-        } else if (student.totalFamilyMembers === 2) {
-          finalPrice = BASE_RATE * 0.9 // 10% discount
-        }
-      }
-
-      return finalPrice
-    }
-
-    const potentialRevenue = unenrolledStudents.reduce((total, student) => {
-      return total + calculatePotentialRevenue(student)
-    }, 0)
-
-    // Calculate active-specific metrics
+    // Calculate metrics
     const activeStudents = processedStudents.filter(
       (s) => s.status === 'active'
     )
-    const activeRevenue = activeStudents.reduce(
-      (sum, student) => sum + student.monthlyAmount,
-      0
+    const unenrolledStudents = processedStudents.filter(
+      (s) => s.status === 'not_enrolled'
     )
-    const averageActiveRevenue =
-      activeStudents.length > 0 ? activeRevenue / activeStudents.length : 0
-
-    // Calculate past due metrics
     const pastDueStudents = processedStudents.filter(
       (s) => s.status === 'past_due' || s.status === 'unpaid'
     )
-    const pastDueRevenue = pastDueStudents.reduce(
-      (sum, student) => sum + student.monthlyAmount,
+    const canceledStudents = processedStudents.filter(
+      (s) => s.status === 'canceled'
+    )
+    const familyDiscountStudents = processedStudents.filter(
+      (s) => s.discount.type === 'Family Discount'
+    )
+    const noDiscountStudents = processedStudents.filter(
+      (s) => s.discount.type === 'None'
+    )
+
+    // Calculate revenues
+    const activeRevenue = activeStudents.reduce(
+      (sum, s) => sum + s.monthlyAmount,
       0
     )
+    const pastDueRevenue = pastDueStudents.reduce(
+      (sum, s) => sum + s.monthlyAmount,
+      0
+    )
+    const canceledRevenue = canceledStudents.reduce(
+      (sum, s) => sum + s.monthlyAmount,
+      0
+    )
+    const familyDiscountTotal = familyDiscountStudents.reduce(
+      (sum, s) => sum + s.discount.amount,
+      0
+    )
+    const noDiscountRevenue = noDiscountStudents.reduce(
+      (sum, s) => sum + s.monthlyAmount,
+      0
+    )
+
+    // Calculate averages
+    const averageActiveRevenue =
+      activeStudents.length > 0 ? activeRevenue / activeStudents.length : 0
     const averagePastDueAmount =
       pastDueStudents.length > 0 ? pastDueRevenue / pastDueStudents.length : 0
+    const averageFamilyDiscount =
+      familyDiscountStudents.length > 0
+        ? familyDiscountTotal / familyDiscountStudents.length
+        : 0
 
     // Calculate canceled metrics
     const now = new Date()
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-
-    const canceledStudents = processedStudents.filter(
-      (s) => s.status === 'canceled'
-    )
-    const canceledRevenue = canceledStudents.reduce(
-      (sum, student) => sum + student.monthlyAmount,
-      0
-    )
     const lastMonthCanceled = canceledStudents.filter((student) => {
       if (!student.currentPeriodEnd) return false
       const cancelDate = new Date(student.currentPeriodEnd * 1000)
       return cancelDate >= lastMonth && cancelDate <= now
     }).length
 
-    // Calculate family discount metrics
-    const familyDiscountStudents = processedStudents.filter(
-      (s) => s.discount.type === 'Family Discount'
-    )
-    const familyDiscountTotal = familyDiscountStudents.reduce(
-      (sum, student) => sum + student.discount.amount,
-      0
-    )
-    const averageFamilyDiscount =
-      familyDiscountStudents.length > 0
-        ? familyDiscountTotal / familyDiscountStudents.length
-        : 0
-
-    // Calculate no discount metrics
-    const noDiscountStudents = processedStudents.filter(
-      (s) => s.discount.type === 'None'
-    )
-    const noDiscountRevenue = noDiscountStudents.reduce(
-      (sum, student) => sum + student.monthlyAmount,
-      0
-    )
-
-    // Apply pagination after calculating totals
+    // Apply pagination
     const start = (page - 1) * limit
     const paginatedStudents = processedStudents.slice(start, start + limit)
     const hasMore = start + limit < processedStudents.length
     const nextCursor = hasMore ? processedStudents[start + limit - 1].id : null
 
-    // Return response with proper caching headers
     return NextResponse.json(
       {
         students: paginatedStudents,
@@ -308,8 +245,8 @@ export async function GET(request: Request) {
         activeCount: activeStudents.length,
         activeRevenue,
         averageActiveRevenue,
-        unenrolledCount: filteredUnenrolledCount,
-        potentialRevenue,
+        unenrolledCount: unenrolledStudents.length,
+        potentialRevenue: activeRevenue + pastDueRevenue,
         pastDueCount: pastDueStudents.length,
         pastDueRevenue,
         averagePastDueAmount,
@@ -324,7 +261,7 @@ export async function GET(request: Request) {
       },
       {
         headers: {
-          'Cache-Control': 'private, max-age=300', // 5 minutes cache
+          'Cache-Control': 'private, max-age=300',
           Vary: 'Authorization',
         },
       }
@@ -336,12 +273,7 @@ export async function GET(request: Request) {
         error: 'Failed to fetch dashboard data',
         message: error instanceof Error ? error.message : 'Unknown error',
       },
-      {
-        status: 500,
-        headers: {
-          'Cache-Control': 'no-store',
-        },
-      }
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     )
   }
 }

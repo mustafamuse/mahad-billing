@@ -5,9 +5,10 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
+import { BASE_RATE } from '@/lib/data'
 import { redis } from '@/lib/redis'
 import { Student, PaymentNotification } from '@/lib/types'
-import { calculateStudentPrice } from '@/lib/utils'
+
 
 export const dynamic = 'force-dynamic'
 
@@ -84,24 +85,23 @@ export async function POST(request: Request) {
           const subscription = await stripe.subscriptions.create({
             customer: setupIntent.customer as string,
             default_payment_method: setupIntent.payment_method as string,
-            items: students.map((student: Student) => {
-              const { price } = calculateStudentPrice(student)
-              return {
-                price_data: {
-                  currency: 'usd',
-                  unit_amount: price * 100, // Convert to cents
-                  recurring: { interval: 'month' },
-                  product: process.env.STRIPE_PRODUCT_ID!,
-                },
-                quantity: 1,
-                metadata: {
-                  studentId: student.id,
-                  studentName: student.name,
-                  familyId: student.familyId || null,
-                  calculatedRate: price,
-                },
-              }
-            }),
+            items: students.map((student: Student) => ({
+              price_data: {
+                currency: 'usd',
+                unit_amount: student.monthlyRate * 100, // Use pre-calculated rate
+                recurring: { interval: 'month' },
+                product: process.env.STRIPE_PRODUCT_ID!,
+              },
+              quantity: 1,
+              metadata: {
+                studentId: student.id,
+                studentName: student.name,
+                familyId: student.familyId || null,
+                baseRate: BASE_RATE,
+                monthlyRate: student.monthlyRate,
+                discount: BASE_RATE - student.monthlyRate,
+              },
+            })),
             billing_cycle_anchor: billingAnchor,
             proration_behavior: 'none',
             metadata: setupIntent.metadata,
