@@ -29,25 +29,32 @@ export function DashboardStats() {
     return <DashboardStatsSkeleton />
   }
 
+  // Debug logs
+  console.log('Raw Stats:', {
+    monthlyRecurringRevenue: stats?.monthlyRecurringRevenue,
+    potentialRevenue: stats?.potentialRevenue,
+    totalStudents: stats?.totalStudents,
+    discountImpact: stats?.discountImpact,
+    revenueEfficiency: stats?.revenueEfficiency,
+  })
+
+  // Log calculations
+  console.log('Calculations:', {
+    revenueLost:
+      (stats?.potentialRevenue || 0) - (stats?.monthlyRecurringRevenue || 0),
+    avgRevenuePerStudent:
+      (stats?.monthlyRecurringRevenue || 0) / (stats?.totalStudents || 1),
+    isHighDiscountImpact: (stats?.discountImpact || 0) > 20,
+    isLowRevenue:
+      (stats?.monthlyRecurringRevenue || 0) / (stats?.totalStudents || 1) < 120,
+  })
+
   // Calculate various metrics
-  const discountImpact =
-    (((stats?.potentialRevenue || 0) - (stats?.monthlyRecurringRevenue || 0)) /
-      (stats?.potentialRevenue || 1)) *
-    100
-  const isHighDiscountImpact = discountImpact > 20
-
-  const averageRevenuePerStudent =
-    (stats?.monthlyRecurringRevenue || 0) / (stats?.totalStudents || 1)
-  const isLowRevenue = averageRevenuePerStudent < 120 // Alert if below $120
-
-  const revenueEfficiency =
-    ((stats?.monthlyRecurringRevenue || 0) / (stats?.potentialRevenue || 1)) *
-    100
-
-  const hasOverduePayments = (stats?.overduePayments || 0) > 0
-  const churnRate =
-    ((stats?.canceledLastMonth || 0) / (stats?.totalStudents || 1)) * 100
-  const isHighChurn = churnRate > 10 // Alert if churn rate is above 10%
+  const isHighDiscountImpact = (stats?.discountImpact || 0) > 20
+  const isLowRevenue =
+    (stats?.monthlyRecurringRevenue || 0) / (stats?.totalStudents || 1) < 120
+  const isHighChurn =
+    ((stats?.canceledLastMonth || 0) / (stats?.totalStudents || 1)) * 100 > 10
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -56,7 +63,7 @@ export function DashboardStats() {
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-sm font-medium text-muted-foreground">
-              Monthly Revenue
+              M.R.R
             </div>
             {isLowRevenue && (
               <AlertCircle className="h-5 w-5 text-orange-500" />
@@ -67,7 +74,13 @@ export function DashboardStats() {
               {formatCurrency(stats?.monthlyRecurringRevenue || 0)}
             </div>
             <div className="mt-2 text-sm text-muted-foreground">
-              Avg. {formatCurrency(averageRevenuePerStudent)}/student
+              Avg.{' '}
+              {formatCurrency(
+                (stats?.activeCount || 0) > 0
+                  ? (stats?.monthlyRecurringRevenue || 0) /
+                      (stats?.activeCount || 1)
+                  : 0
+              )}
             </div>
           </div>
         </div>
@@ -90,22 +103,22 @@ export function DashboardStats() {
               {/* Discount Impact */}
               <div>
                 <div className="mb-1 text-sm text-muted-foreground">
-                  Lost to Discounts
+                  Discount Impact
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="text-3xl font-bold text-red-600 dark:text-red-400">
-                    {discountImpact.toFixed(1)}%
+                    {(stats?.discountImpact || 0).toFixed(1)}%
                   </div>
                   <TrendingDown className="h-5 w-5 text-red-500" />
                 </div>
               </div>
-              {/* Revenue Efficiency */}
+              {/* Revenue Realization */}
               <div className="text-right">
                 <div className="mb-1 text-sm text-muted-foreground">
-                  Revenue Efficiency
+                  Revenue Realization
                 </div>
                 <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                  {revenueEfficiency.toFixed(1)}%
+                  {(stats?.revenueEfficiency || 0).toFixed(1)}%
                 </div>
               </div>
             </div>
@@ -114,24 +127,22 @@ export function DashboardStats() {
             <div className="mt-4 border-t pt-4">
               <div className="flex items-center justify-between text-sm">
                 <div>
-                  <div className="text-muted-foreground">Monthly Revenue</div>
+                  <div className="text-muted-foreground">
+                    Unrealized Revenue
+                  </div>
                   <div className="font-medium">
-                    {formatCurrency(stats?.monthlyRecurringRevenue || 0)}
+                    {formatCurrency(
+                      (stats?.actualPotentialRevenue || 0) -
+                        (stats?.monthlyRecurringRevenue || 0)
+                    )}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-muted-foreground">Potential Revenue</div>
                   <div className="font-medium">
-                    {formatCurrency(stats?.potentialRevenue || 0)}
+                    {formatCurrency(stats?.actualPotentialRevenue || 0)}
                   </div>
                 </div>
-              </div>
-              <div className="mt-2 text-center text-xs text-muted-foreground">
-                Revenue lost:{' '}
-                {formatCurrency(
-                  (stats?.potentialRevenue || 0) -
-                    (stats?.monthlyRecurringRevenue || 0)
-                )}
               </div>
             </div>
           </div>
@@ -139,13 +150,17 @@ export function DashboardStats() {
       </Card>
 
       {/* Overdue Payments Card */}
-      <Card className={hasOverduePayments ? 'border-red-500' : ''}>
+      <Card
+        className={(stats?.overduePayments || 0) > 0 ? 'border-red-500' : ''}
+      >
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="text-sm font-medium text-muted-foreground">
               Payment Status
             </div>
-            {hasOverduePayments && <Clock className="h-5 w-5 text-red-500" />}
+            {(stats?.overduePayments || 0) > 0 && (
+              <Clock className="h-5 w-5 text-red-500" />
+            )}
           </div>
           <div className="mt-2">
             <div className="text-3xl font-bold">
@@ -168,7 +183,14 @@ export function DashboardStats() {
             {isHighChurn && <Users className="h-5 w-5 text-red-500" />}
           </div>
           <div className="mt-2">
-            <div className="text-3xl font-bold">{churnRate.toFixed(1)}%</div>
+            <div className="text-3xl font-bold">
+              {(
+                ((stats?.canceledLastMonth || 0) /
+                  (stats?.totalStudents || 1)) *
+                100
+              ).toFixed(1)}
+              %
+            </div>
             <div className="mt-2 text-sm text-muted-foreground">
               {stats?.canceledLastMonth || 0} cancellations this month
             </div>

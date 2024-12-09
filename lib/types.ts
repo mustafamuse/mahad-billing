@@ -49,8 +49,12 @@ export interface DashboardSubscription {
 export interface DashboardStats {
   totalActiveSubscriptions: number
   totalStudents: number
+  activeCount: number
   monthlyRecurringRevenue: number
   potentialRevenue: number
+  actualPotentialRevenue: number
+  discountImpact: number
+  revenueEfficiency: number
   overduePayments: number
   canceledLastMonth: number
   averageRevenuePerStudent: number

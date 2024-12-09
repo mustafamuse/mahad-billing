@@ -235,6 +235,23 @@ export async function GET(request: Request) {
     const hasMore = start + limit < processedStudents.length
     const nextCursor = hasMore ? processedStudents[start + limit - 1].id : null
 
+    // Calculate potential revenue if everyone paid full price (BASE_RATE)
+    const potentialRevenue = STUDENTS.length * BASE_RATE
+
+    // Calculate actual revenue we're getting (with discounts)
+    const actualRevenue = activeRevenue
+
+    // Calculate total discounts (difference between potential and what they would pay)
+    const totalDiscounts = STUDENTS.reduce((total, student) => {
+      return total + (BASE_RATE - student.monthlyRate)
+    }, 0)
+
+    // Calculate revenue efficiency (what percentage of BASE_RATE we're collecting)
+    const revenueEfficiency = (actualRevenue / potentialRevenue) * 100
+
+    // Calculate discount impact percentage
+    const discountImpact = (totalDiscounts / potentialRevenue) * 100
+
     return NextResponse.json(
       {
         students: paginatedStudents,
@@ -244,9 +261,13 @@ export async function GET(request: Request) {
         filteredCount: processedStudents.length,
         activeCount: activeStudents.length,
         activeRevenue,
+        potentialRevenue,
+        actualRevenue,
+        totalDiscounts,
+        discountImpact,
+        revenueEfficiency,
         averageActiveRevenue,
         unenrolledCount: unenrolledStudents.length,
-        potentialRevenue: activeRevenue + pastDueRevenue,
         pastDueCount: pastDueStudents.length,
         pastDueRevenue,
         averagePastDueAmount,

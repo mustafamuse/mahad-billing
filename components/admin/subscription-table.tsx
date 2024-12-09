@@ -345,10 +345,6 @@ export function SubscriptionTable() {
                 {formatCurrency(actualRevenue / (data?.students.length || 1))}{' '}
                 per student/month
               </div>
-              <div className="text-xs text-muted-foreground">
-                {((totalDiscounts / totalBaseRateRevenue) * 100).toFixed(1)}%
-                less than potential revenue
-              </div>
             </div>
           </div>
         </div>
