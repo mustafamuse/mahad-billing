@@ -1,11 +1,13 @@
 // /api/webhook.js
 
+import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
-import { Student } from '@/lib/types'
-import { calculateStudentPrice } from '@/lib/utils'
+import { BASE_RATE } from '@/lib/data'
+import { redis } from '@/lib/redis'
+import { Student, PaymentNotification } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,8 +17,22 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
+// Update the logging helper to be more detailed
+function logPaymentEvent(type: string, data: any, metadata?: string) {
+  console.log(`\n=== STRIPE WEBHOOK EVENT: ${type} ===`)
+  console.log(`Timestamp: ${new Date().toISOString()}`)
+  console.log('Data:', JSON.stringify(data, null, 2))
+  if (metadata) console.log('Metadata:', metadata)
+  console.log('=====================================\n')
+}
+
 export async function POST(request: Request) {
-  console.log('Webhook handler invoked')
+  const headersList = headers()
+  console.log('\n🔔 Webhook Request Headers:', {
+    'stripe-signature': headersList.get('stripe-signature'),
+    'content-type': headersList.get('content-type'),
+  })
+
   try {
     const payload = await request.text()
     const signature = request.headers.get('stripe-signature')!
@@ -25,121 +41,272 @@ export async function POST(request: Request) {
 
     try {
       event = stripe.webhooks.constructEvent(payload, signature, webhookSecret)
-      console.log(`Received event: ${event.type}`)
+      logPaymentEvent(event.type, event.data.object)
     } catch (err) {
-      console.error('Webhook signature verification failed:', err)
+      console.error('❌ Webhook signature verification failed:', err)
       return NextResponse.json(
         { error: 'Webhook signature verification failed' },
         { status: 400 }
       )
     }
 
-    if (event.type === 'setup_intent.succeeded') {
-      console.log('Handling setup_intent.succeeded event')
-      const setupIntent = event.data.object as Stripe.SetupIntent
-      const customerId = setupIntent.customer as string
-      const paymentMethodId = setupIntent.payment_method as string
+    switch (event.type) {
+      case 'setup_intent.succeeded':
+        try {
+          const setupIntent = event.data.object as Stripe.SetupIntent
 
-      // Retrieve customer metadata if needed
-      const customer = await stripe.customers.retrieve(customerId)
+          // Initial setup status
+          await redis.set(
+            `payment_setup:${setupIntent.customer}`,
+            JSON.stringify({
+              customerId: setupIntent.customer,
+              subscriptionId: null,
+              setupCompleted: true,
+              bankVerified: true,
+              subscriptionActive: false,
+              timestamp: Date.now(),
+            })
+          )
 
-      if ((customer as Stripe.DeletedCustomer).deleted) {
-        console.error(`Customer ${customerId} has been deleted.`)
-        return NextResponse.json(
-          { error: 'Customer has been deleted' },
-          { status: 400 }
-        )
-      }
+          // Parse students from metadata
+          const students = JSON.parse(setupIntent.metadata?.students || '[]')
 
-      const customerData = customer as Stripe.Customer
-      const metadata = customerData.metadata
+          // Get Unix timestamp for 1st of next month
+          const now = new Date()
+          const firstOfNextMonth = new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            1
+          )
+          const billingAnchor = Math.floor(firstOfNextMonth.getTime() / 1000)
 
-      // Parse the total amount from metadata
-      const totalAmount = parseInt(metadata.totalAmount || '0', 10)
-      console.log(`Total amount from metadata: ${totalAmount}`)
-      if (isNaN(totalAmount) || totalAmount <= 0) {
-        console.error('Invalid total amount')
-        return NextResponse.json(
-          { error: 'Invalid total amount' },
-          { status: 400 }
-        )
-      }
+          // Create subscription with dynamic prices for each student
+          const subscription = await stripe.subscriptions.create({
+            customer: setupIntent.customer as string,
+            default_payment_method: setupIntent.payment_method as string,
+            items: students.map((student: Student) => ({
+              price_data: {
+                currency: 'usd',
+                unit_amount: student.monthlyRate * 100, // Use pre-calculated rate
+                recurring: { interval: 'month' },
+                product: process.env.STRIPE_PRODUCT_ID!,
+              },
+              quantity: 1,
+              metadata: {
+                studentId: student.id,
+                studentName: student.name,
+                familyId: student.familyId || null,
+                baseRate: BASE_RATE,
+                monthlyRate: student.monthlyRate,
+                discount: BASE_RATE - student.monthlyRate,
+              },
+            })),
+            billing_cycle_anchor: billingAnchor,
+            proration_behavior: 'none',
+            metadata: setupIntent.metadata,
+            collection_method: 'charge_automatically',
+            payment_settings: {
+              payment_method_types: ['us_bank_account'],
+              save_default_payment_method: 'on_subscription',
+            },
+          })
 
-      // Get Unix timestamp for 1st of next month
-      const now = new Date()
-      const firstOfNextMonth = new Date(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        1
-      )
-      const billingAnchor = Math.floor(firstOfNextMonth.getTime() / 1000)
-
-      // Update customer's default payment method
-      await stripe.customers.update(customerId, {
-        invoice_settings: {
-          default_payment_method: paymentMethodId,
-        },
-      })
-
-      // Parse students from metadata
-      const students = JSON.parse(metadata.students || '[]')
-
-      // Build subscription items based on students
-      const subscriptionItems = students.map((student: Student) => {
-        const { price, discount, isSiblingDiscount } =
-          calculateStudentPrice(student)
-
-        return {
-          price_data: {
-            currency: 'usd',
-            unit_amount: price * 100, // Amount in cents
-            recurring: { interval: 'month' },
-            product: process.env.STRIPE_PRODUCT_ID!, // Use your existing product ID
-          },
-          quantity: 1,
-          metadata: {
-            studentId: student.id,
-            studentName: student.name,
-            discount: discount.toString(),
-            isSiblingDiscount: isSiblingDiscount.toString(),
-          },
+          logPaymentEvent('subscription_created', {
+            id: subscription.id,
+            status: subscription.status,
+            customer: subscription.customer,
+            startDate: new Date(subscription.billing_cycle_anchor * 1000),
+            items: subscription.items.data.map((item) => ({
+              studentName: item.metadata.studentName,
+              monthlyRate: item.metadata.calculatedRate,
+            })),
+          })
+        } catch (error) {
+          console.error('Error in setup_intent.succeeded handler:', error)
+          const failedSetupIntent = event.data.object as Stripe.SetupIntent
+          logPaymentEvent('subscription_creation_failed', {
+            error: (error as Error).message,
+            customer: failedSetupIntent.customer,
+            setupIntentId: failedSetupIntent.id,
+          })
         }
-      })
+        break
 
-      // Create the subscription with subscription items
-      console.log(`Creating subscription for customer ${customerId}`)
-      const subscription = await stripe.subscriptions.create({
-        customer: customerId,
-        default_payment_method: paymentMethodId,
-        items: subscriptionItems,
-        billing_cycle_anchor: billingAnchor, // Start billing on 1st of next month
-        proration_behavior: 'none', // No partial charges
-        metadata: {
-          students: metadata.students || '',
-          totalAmount: metadata.totalAmount || '',
-        },
-        collection_method: 'charge_automatically',
-      })
+      case 'customer.subscription.created':
+        try {
+          const subscription = event.data.object as Stripe.Subscription
 
-      console.log('Subscription created:', subscription.id)
+          // Update setup status
+          const setupStatus = await redis.get(
+            `payment_setup:${subscription.customer}`
+          )
+          if (setupStatus) {
+            // Fix: Handle case where setupStatus might be an object
+            const currentStatus =
+              typeof setupStatus === 'string'
+                ? JSON.parse(setupStatus)
+                : setupStatus
 
-      // Optionally, you can retrieve the upcoming invoice to get invoice details
-      const _upcomingInvoice = await stripe.invoices.retrieveUpcoming({
-        customer: customerId,
-        subscription: subscription.id,
-      })
+            await redis.set(
+              `payment_setup:${subscription.customer}`,
+              JSON.stringify({
+                ...currentStatus,
+                subscriptionId: subscription.id,
+                subscriptionActive: true,
+                timestamp: Date.now(),
+              })
+            )
+          }
+        } catch (error) {
+          console.error('Error in subscription.created handler:', error)
+        }
+        break
 
-      // console.log("Upcoming invoice retrieved:", upcomingInvoice.id);
+      case 'invoice.created':
+        // First invoice created
+        const invoice = event.data.object as Stripe.Invoice
+        console.log('Invoice created:', {
+          status: invoice.status,
+          amount: invoice.amount_due,
+          dueDate: invoice.due_date
+            ? new Date(invoice.due_date * 1000)
+            : undefined,
+        })
+        break
 
-      // Retrieve the invoice PDF URL (Note: Upcoming invoices cannot be finalized)
-      // Invoices will be generated and charged automatically at the billing cycle anchor
-    } else {
-      console.log(`Unhandled event type: ${event.type}`)
+      case 'payment_intent.created':
+        // ACH debit initiated
+        const paymentIntent = event.data.object as Stripe.PaymentIntent
+        console.log('ACH debit initiated:', {
+          status: paymentIntent.status,
+          amount: paymentIntent.amount,
+          estimatedArrival: '5-7 business days',
+        })
+        break
+
+      case 'payment_intent.processing':
+        // ACH debit in progress
+        console.log('ACH processing - funds being transferred')
+        break
+
+      case 'payment_intent.succeeded':
+        // Payment successful
+        console.log('Payment successful - subscription will activate')
+        break
+
+      case 'customer.subscription.updated':
+        // Subscription becomes active
+        const updatedSub = event.data.object as Stripe.Subscription
+        console.log('Subscription updated:', {
+          oldStatus: event.data.previous_attributes?.status,
+          newStatus: updatedSub.status,
+        })
+        break
+
+      case 'payment_method.attached':
+        try {
+          const paymentMethod = event.data.object as Stripe.PaymentMethod
+
+          // For ACH Direct Debit, bank is verified through Plaid/instant verification
+          if (paymentMethod.type === 'us_bank_account') {
+            await redis.set(
+              `bank_account:${paymentMethod.customer}`,
+              JSON.stringify({
+                customerId: paymentMethod.customer,
+                verified: true,
+                last4: paymentMethod.us_bank_account?.last4,
+                timestamp: Date.now(),
+              })
+            )
+          }
+        } catch (error) {
+          console.error('Error in payment_method.attached handler:', error)
+        }
+        break
+
+      case 'financial_connections.account.created':
+        const newFcAccount = event.data
+          .object as Stripe.FinancialConnections.Account
+        logPaymentEvent(
+          'financial_connections.account.created',
+          {
+            id: newFcAccount.id,
+            institution: newFcAccount.institution_name,
+            category: newFcAccount.category,
+            last4: newFcAccount.last4,
+            permissions: newFcAccount.permissions,
+          },
+          'New financial connection established'
+        )
+        break
+
+      case 'financial_connections.account.refreshed_balance':
+        const fcAccount = event.data
+          .object as Stripe.FinancialConnections.Account
+
+        if (fcAccount.balance_refresh?.status === 'succeeded') {
+          try {
+            const balanceResponse =
+              await stripe.financialConnections.accounts.retrieve(fcAccount.id)
+            const availableBalance =
+              balanceResponse?.balance?.cash?.available?.usd || 0
+            const customerId = (fcAccount.account_holder as any)?.customer
+
+            // Get customer to check required amount
+            const customer = await stripe.customers.retrieve(customerId)
+            const total = Number(
+              (customer as Stripe.Customer).metadata?.total || 0
+            )
+
+            // Create notification if balance is insufficient
+            if (availableBalance < total * 100) {
+              // Get customer's subscription
+              const subscriptions = await stripe.subscriptions.list({
+                customer: customerId,
+                limit: 1,
+              })
+
+              const notification: PaymentNotification = {
+                type: 'insufficient_funds_warning',
+                customerId,
+                customerName: (customer as Stripe.Customer).name || 'Unknown',
+                amount: total,
+                timestamp: Date.now(),
+                balance: availableBalance / 100,
+                studentNames: JSON.parse(
+                  (customer as Stripe.Customer).metadata?.students || '[]'
+                ).map((s: any) => s.name),
+                subscriptionId: subscriptions.data[0]?.id || 'pending',
+              }
+              await redis.lpush(
+                'payment_notifications',
+                JSON.stringify(notification)
+              )
+
+              logPaymentEvent('insufficient_funds_detected', {
+                customer: customerId,
+                required: total,
+                available: availableBalance / 100,
+              })
+            }
+          } catch (error) {
+            console.error('Error checking balance:', error)
+          }
+        }
+        break
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error('Webhook error:', error)
+    console.error('❌ Webhook handler failed:', error)
+    // Log the full error stack trace in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Detailed error:', {
+        name: (error as Error)?.name,
+        message: (error as Error)?.message,
+        stack: (error as Error)?.stack,
+      })
+    }
     return NextResponse.json(
       { error: 'Webhook handler failed' },
       { status: 500 }

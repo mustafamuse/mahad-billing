@@ -2,10 +2,9 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
+import { BASE_RATE, STUDENTS } from '@/lib/data'
 import { Student } from '@/lib/types'
-import { calculateStudentPrice } from '@/lib/utils'
 
-const BASE_RATE = 150
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-11-20.acacia',
 })
@@ -97,23 +96,58 @@ export async function GET() {
       }
     })
 
-    // Calculate basic stats
-    const totalActiveSubscriptions = activeSubscriptions.data.length
-    let totalStudents = 0
-    let monthlyRecurringRevenue = 0
-    let potentialRevenue = 0
+    // Calculate active students and revenue
+    let activeCount = 0
+    let activeRevenue = 0
 
     activeSubscriptions.data.forEach((subscription) => {
       const metadata = subscription.metadata
       const students = JSON.parse(metadata.students || '[]')
-      totalStudents += students.length
-
+      activeCount += students.length // Count actual students in active subscriptions
       students.forEach((student: Student) => {
-        const { price } = calculateStudentPrice(student)
-        monthlyRecurringRevenue += price
-        potentialRevenue += BASE_RATE
+        activeRevenue += student.monthlyRate
       })
     })
+
+    // Calculate potential revenue from ALL students at BASE_RATE
+    const potentialRevenue = STUDENTS.reduce((total) => {
+      return total + BASE_RATE // Maximum possible revenue
+    }, 0)
+
+    // Calculate actual potential revenue (with discounts)
+    const actualPotentialRevenue = STUDENTS.reduce((total, student) => {
+      return total + student.monthlyRate // Revenue if everyone enrolled with their discounts
+    }, 0)
+
+    // Calculate efficiency metrics
+    const discountImpact =
+      ((potentialRevenue - actualPotentialRevenue) / potentialRevenue) * 100
+    const revenueEfficiency = (activeRevenue / actualPotentialRevenue) * 100
+
+    // Add debug logs for calculations
+    console.log('Stats Calculations:', {
+      totalStudents: STUDENTS.length,
+      baseRate: BASE_RATE,
+      potentialRevenue: STUDENTS.length * BASE_RATE,
+      actualPotentialRevenue: STUDENTS.reduce(
+        (total, student) => total + student.monthlyRate,
+        0
+      ),
+      activeRevenue,
+      discountImpact:
+        ((potentialRevenue - actualPotentialRevenue) / potentialRevenue) * 100,
+      revenueEfficiency: (activeRevenue / actualPotentialRevenue) * 100,
+    })
+
+    // Add debug logs for student rates
+    // console.log(
+    //   'Student Rates:',
+    //   STUDENTS.map((student) => ({
+    //     name: student.name,
+    //     monthlyRate: student.monthlyRate,
+    //     hasDiscount: !!student.familyId,
+    //   }))
+    // )
 
     // Calculate payment pattern stats
     const paymentPatterns = {
@@ -203,10 +237,13 @@ export async function GET() {
         : 0
 
     return NextResponse.json({
-      totalActiveSubscriptions,
-      totalStudents,
-      monthlyRecurringRevenue,
+      totalActiveSubscriptions: activeSubscriptions.data.length,
+      totalStudents: STUDENTS.length,
+      monthlyRecurringRevenue: activeRevenue,
       potentialRevenue,
+      actualPotentialRevenue,
+      discountImpact,
+      revenueEfficiency,
       paymentPatterns,
       financialHealth: {
         revenueStability: {
@@ -218,24 +255,20 @@ export async function GET() {
           volatility: revenueVolatility,
         },
         cashFlow: {
-          currentMonth: monthlyRecurringRevenue,
-          nextMonthPrediction:
-            monthlyRecurringRevenue * (1 + (revenueVolatility || 0)),
+          currentMonth: activeRevenue,
+          nextMonthPrediction: activeRevenue * (1 + (revenueVolatility || 0)),
           predictedGrowth: (revenueVolatility || 0) * 100,
           riskFactors: [],
         },
         revenueTargets: {
-          monthlyTarget: monthlyRecurringRevenue * 1.1, // 10% growth target
+          monthlyTarget: activeRevenue * 1.1, // 10% growth target
           currentProgress: 100, // Calculate this based on your business logic
-          projectedRevenue:
-            monthlyRecurringRevenue * (1 + (revenueVolatility || 0)),
-          shortfall: Math.max(
-            0,
-            monthlyRecurringRevenue * 1.1 - monthlyRecurringRevenue
-          ),
+          projectedRevenue: activeRevenue * (1 + (revenueVolatility || 0)),
+          shortfall: Math.max(0, activeRevenue * 1.1 - activeRevenue),
           isOnTrack: true,
         },
       },
+      activeCount,
     })
   } catch (error) {
     console.error('Stats fetch error:', error)

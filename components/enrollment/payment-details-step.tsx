@@ -143,53 +143,53 @@ export function PaymentDetailsStep({
           control={form.control}
           name="termsAccepted"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-              <FormControl>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={(checked) => {
-                            if (!hasViewedTerms) {
-                              onOpenTerms()
-                              return
-                            }
-                            field.onChange(checked)
-                          }}
-                          disabled={!hasViewedTerms}
-                        />
-                      </div>
-                    </TooltipTrigger>
-                    {!hasViewedTerms && (
-                      <TooltipContent>
+            <FormItem className="flex flex-col space-y-3">
+              <div className="flex flex-row items-start space-x-3 space-y-0">
+                <FormControl>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={(checked) => {
+                              if (!hasViewedTerms) {
+                                onOpenTerms()
+                                return
+                              }
+                              field.onChange(checked)
+                            }}
+                            disabled={!hasViewedTerms}
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" sideOffset={5}>
                         <p>Please read the terms and conditions first</p>
                       </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="text-base font-normal">
+                    I agree to the{' '}
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 text-primary underline decoration-primary underline-offset-4 hover:text-primary/80"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        onOpenTerms()
+                      }}
+                    >
+                      Terms and Conditions
+                    </Button>
+                    {!hasViewedTerms && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        (click to review)
+                      </span>
                     )}
-                  </Tooltip>
-                </TooltipProvider>
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel className="text-base font-normal">
-                  I agree to the{' '}
-                  <Button
-                    variant="link"
-                    className="h-auto p-0 text-primary underline decoration-primary underline-offset-4 hover:text-primary/80"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      onOpenTerms()
-                    }}
-                  >
-                    Terms and Conditions
-                  </Button>
-                  {!hasViewedTerms && (
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      (click to review)
-                    </span>
-                  )}
-                </FormLabel>
-                <FormMessage />
+                  </FormLabel>
+                  <FormMessage />
+                </div>
               </div>
             </FormItem>
           )}

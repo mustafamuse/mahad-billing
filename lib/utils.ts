@@ -1,6 +1,8 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
+import { BASE_RATE } from './data'
+import { redis } from './redis'
 import { Student } from './types'
 
 export function cn(...inputs: ClassValue[]) {
@@ -15,10 +17,7 @@ export function getFamilyDiscount(totalFamilyMembers: number): number {
 }
 
 export function calculateTotal(students: Student[]): number {
-  return students.reduce((total, student) => {
-    const { price } = calculateStudentPrice(student)
-    return total + price
-  }, 0)
+  return students.reduce((total, student) => total + student.monthlyRate, 0)
 }
 
 export function formatCurrency(amount: number): string {
@@ -34,23 +33,10 @@ export function calculateStudentPrice(student: Student): {
   discount: number
   isSiblingDiscount: boolean
 } {
-  const basePrice = student.monthlyRate
-
-  // Calculate discount based on family info
-  let discount = 0
-  let isSiblingDiscount = false
-
-  if (student.familyId && student.totalFamilyMembers) {
-    discount = getFamilyDiscount(student.totalFamilyMembers)
-    isSiblingDiscount = true
-  }
-
-  const price = basePrice - discount
-
   return {
-    price,
-    discount,
-    isSiblingDiscount,
+    price: student.monthlyRate,
+    discount: BASE_RATE - student.monthlyRate,
+    isSiblingDiscount: !!student.familyId,
   }
 }
 
@@ -59,4 +45,49 @@ export const formatDiscountType = (type: string, amount: number) => {
     return `Fam ($${amount} off)`
   }
   return type
+}
+
+export function formatDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export async function verifyPaymentSetup(customerId: string) {
+  const [paymentSetup, bankAccount] = await Promise.all([
+    redis.get(`payment_setup:${customerId}`),
+    redis.get(`bank_account:${customerId}`),
+  ])
+
+  // Add debug logging
+  console.log('Verification Check:', {
+    customerId,
+    paymentSetup,
+    bankAccount,
+    timestamp: new Date().toISOString(),
+  })
+
+  if (!paymentSetup || !bankAccount) {
+    console.log('❌ Missing setup data:', { paymentSetup, bankAccount })
+    return false
+  }
+
+  const setup =
+    typeof paymentSetup === 'string' ? JSON.parse(paymentSetup) : paymentSetup
+
+  const bank =
+    typeof bankAccount === 'string' ? JSON.parse(bankAccount) : bankAccount
+
+  console.log('🔍 Verification Status:', {
+    setupCompleted: setup.setupCompleted,
+    subscriptionActive: setup.subscriptionActive,
+    bankVerified: bank.verified,
+    timestamp: new Date(setup.timestamp).toISOString(),
+  })
+
+  return setup.setupCompleted && setup.subscriptionActive && bank.verified
 }

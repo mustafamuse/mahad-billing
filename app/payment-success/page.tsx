@@ -1,30 +1,72 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { Suspense } from 'react'
+import { useEffect, useState } from 'react'
+import React from 'react'
 
-export default function PaymentSuccessPage() {
+import { useRouter, useSearchParams } from 'next/navigation'
+
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+
+function PaymentSuccessContent() {
+  const searchParams = useSearchParams()
   const router = useRouter()
+  const [isVerified, setIsVerified] = useState(false)
+  const setupIntentId = searchParams.get('setupIntentId')
+
+  useEffect(() => {
+    if (!setupIntentId) return
+
+    const verifySetup = async () => {
+      try {
+        const response = await fetch('/api/verify-setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ setupIntentId }),
+        })
+        const data = await response.json()
+        setIsVerified(data.success)
+      } catch (error) {
+        console.error('Verification error:', error)
+      }
+    }
+
+    verifySetup()
+  }, [setupIntentId])
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-800">
-      <div className="mx-auto w-full max-w-md rounded-lg bg-white p-8 shadow-lg dark:bg-gray-800">
-        <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
-            Tuition Payment Successful!
-          </h1>
-          <p className="mb-6 text-gray-600 dark:text-gray-300">
-            Thank you for completing your tuition payment! A confirmation email
-            has been sent to your inbox. If you have any questions, feel free to
-            contact us.
-          </p>
-          <button
-            onClick={() => router.push('/')}
-            className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
-          >
-            Back to Dashboard
-          </button>
-        </div>
+    <Card className="mx-auto max-w-lg p-6">
+      <div className="space-y-6 text-center">
+        <h1 className="text-2xl font-semibold">Payment Setup Complete!</h1>
+        <p className="text-muted-foreground">
+          {isVerified
+            ? 'Your payment method has been verified and your enrollment is complete.'
+            : 'Your payment method is being verified...'}
+        </p>
+        <Button onClick={() => router.push('/')}>Return Home</Button>
       </div>
+    </Card>
+  )
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <div className="container py-10">
+      <Suspense
+        fallback={
+          <Card className="mx-auto max-w-lg p-6">
+            <div className="space-y-6">
+              <Skeleton className="mx-auto h-8 w-3/4" />
+              <Skeleton className="mx-auto h-4 w-2/3" />
+              <Skeleton className="mx-auto h-10 w-32" />
+            </div>
+          </Card>
+        }
+      >
+        <PaymentSuccessContent />
+      </Suspense>
     </div>
   )
 }

@@ -1,0 +1,207 @@
+'use client'
+
+import {
+  Banknote,
+  BookOpen,
+  Calendar,
+  CreditCard,
+  Fingerprint,
+  Hourglass,
+  Landmark,
+  Scroll,
+  User,
+} from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { formatCurrency } from '@/lib/utils'
+
+
+interface EnrollmentDetails {
+  paymentSchedule: {
+    firstPayment: string
+    bankAccount: string
+  }
+  students: Array<{
+    name: string
+    monthlyAmount: number
+    hasDiscount: boolean
+  }>
+  paymentSummary: {
+    subtotal: number
+    discount: number
+    total: number
+  }
+  payer: {
+    name: string
+    email: string
+    phone: string
+  }
+}
+
+interface SuccessConfirmationModalProps {
+  isOpen: boolean
+  onClose: () => void
+  details: EnrollmentDetails
+  isLoading?: boolean
+}
+
+export function SuccessConfirmationModal({
+  isOpen,
+  onClose,
+  details,
+  isLoading = false,
+}: SuccessConfirmationModalProps) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-h-[95vh] w-full gap-0 overflow-y-auto p-0 sm:max-w-[600px] sm:p-6 md:max-h-none">
+        <DialogHeader className="p-6 pb-2 sm:p-0 sm:pb-0">
+          <DialogTitle className="flex items-center justify-center gap-2 text-2xl font-bold">
+            <Scroll className="h-6 w-6" />
+            <span>Enrollment Summary</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 p-6 pt-2 sm:space-y-6 sm:p-0">
+          <Card className="border-0 shadow-none sm:border sm:shadow">
+            <CardHeader className="px-0 sm:px-6">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Calendar className="h-5 w-5 text-primary" />
+                <span>Payment Schedule</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 px-0 sm:px-6">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Hourglass className="h-4 w-4" /> First Payment
+                </span>
+                <span className="font-medium">
+                  {details.paymentSchedule.firstPayment}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Fingerprint className="h-4 w-4" /> Recurring
+                </span>
+                <span className="font-medium">1st of each month</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Landmark className="h-4 w-4" /> Bank Account
+                </span>
+                <span className="font-medium">
+                  {details.paymentSchedule.bankAccount}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-none sm:border sm:shadow">
+            <CardHeader className="px-0 sm:px-6">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <BookOpen className="h-5 w-5 text-primary" />
+                <span>Enrolled Students</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-0 sm:px-6">
+              {details.students.map((student, index) => (
+                <div
+                  key={index}
+                  className="mb-2 flex items-center justify-between"
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <User className="h-4 w-4" />
+                    {student.name}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {formatCurrency(student.monthlyAmount)}/month
+                  </span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-none sm:border sm:shadow">
+            <CardHeader className="px-0 sm:px-6">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <CreditCard className="h-5 w-5 text-primary" />
+                <span>Payment Summary</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-0 sm:px-6">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Subtotal
+                  </span>
+                  <span className="font-medium">
+                    {formatCurrency(details.paymentSummary.subtotal)}
+                  </span>
+                </div>
+                {details.paymentSummary.discount > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-green-600 dark:text-green-400">
+                      Discount
+                    </span>
+                    <span className="font-medium text-green-600 dark:text-green-400">
+                      -{formatCurrency(details.paymentSummary.discount)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between border-t pt-2">
+                  <span className="flex items-center gap-2 text-lg font-bold">
+                    <Banknote className="h-5 w-5" />
+                    Total Monthly Payment
+                  </span>
+                  <span className="text-2xl font-bold text-primary">
+                    {formatCurrency(details.paymentSummary.total)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-none sm:border sm:shadow">
+            <CardHeader className="px-0 sm:px-6">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <User className="h-5 w-5 text-primary" />
+                <span>Payer Information</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-2 px-0 sm:px-6">
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Name</span>
+                <span className="font-medium">{details.payer.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Email</span>
+                <span className="font-medium">{details.payer.email}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Phone</span>
+                <span className="font-medium">{details.payer.phone}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="px-0 text-center text-sm text-muted-foreground sm:px-6">
+            A confirmation email has been sent to {details.payer.email}. If you
+            have any questions, please contact support.
+          </div>
+
+          <div className="sticky bottom-0 mt-auto border-t bg-background p-4">
+            <Button onClick={onClose} className="w-full">
+              Close
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

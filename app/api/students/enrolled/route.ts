@@ -2,34 +2,41 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
+import { parseStudentMetadata } from '@/lib/utils/parse-students'
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-11-20.acacia',
 })
 
 export async function GET() {
   try {
-    // Fetch all active subscriptions
     const subscriptions = await stripe.subscriptions.list({
-      status: 'active',
+      status: 'active', // Only get active subscriptions
       expand: ['data.customer'],
     })
 
-    // Extract enrolled student IDs from subscription metadata
-    const enrolledStudents = new Set<string>()
+    // Track enrolled student IDs
+    const enrolledStudentIds = new Set<string>()
 
     subscriptions.data.forEach((subscription) => {
       const metadata = subscription.metadata || {}
-      try {
-        const students = JSON.parse(metadata.students || '[]')
-        students.forEach((student: { id: string }) => {
-          enrolledStudents.add(student.id)
-        })
-      } catch (e) {
-        console.error('Error parsing students metadata:', e)
-      }
+      const students = parseStudentMetadata(metadata.students)
+
+      students.forEach((student) => {
+        // Add the student ID to our set
+        enrolledStudentIds.add(student.id)
+      })
     })
 
-    return NextResponse.json({ enrolledStudents: Array.from(enrolledStudents) })
+    // Log for debugging
+    console.log(
+      'Currently enrolled student IDs:',
+      Array.from(enrolledStudentIds)
+    )
+
+    return NextResponse.json({
+      enrolledStudents: Array.from(enrolledStudentIds),
+    })
   } catch (error) {
     console.error('Error fetching enrolled students:', error)
     return NextResponse.json(

@@ -82,6 +82,11 @@ const statusConfig = {
       'bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-500/30',
     icon: Ban,
   },
+  balance_pending: {
+    label: 'Balance Pending',
+    color: 'bg-yellow-100 text-yellow-700',
+    icon: Clock,
+  },
 } as const
 
 const discountConfig = {
@@ -239,15 +244,78 @@ export function SubscriptionTable() {
     if (!data) return null
 
     if (status === 'active') {
+      if (discountType === 'Family Discount') {
+        return (
+          <div className="rounded-lg bg-muted p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-medium">
+                  {data.activeWithFamilyDiscount} enrolled with family discount
+                </span>
+                <span className="ml-2 text-muted-foreground">
+                  (
+                  {(
+                    (data.activeWithFamilyDiscount / data.activeCount) *
+                    100
+                  ).toFixed(1)}
+                  % of enrolled)
+                </span>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">
+                  Total Monthly Discounts
+                </div>
+                <div className="text-lg font-medium text-blue-600 dark:text-blue-400">
+                  {formatCurrency(data.activeFamilyDiscountTotal)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Avg. {formatCurrency(data.averageActiveFamilyDiscount)} per
+                  student
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      if (discountType === 'None') {
+        return (
+          <div className="rounded-lg bg-muted p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-medium">
+                  {data.activeNoDiscountCount} enrolled at full rate
+                </span>
+                <span className="ml-2 text-muted-foreground">
+                  (
+                  {(
+                    (data.activeNoDiscountCount / data.activeCount) *
+                    100
+                  ).toFixed(1)}
+                  % of enrolled)
+                </span>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">
+                  Full Rate Revenue
+                </div>
+                <div className="text-lg font-medium">
+                  {formatCurrency(data.activeNoDiscountRevenue)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
       return (
         <div className="rounded-lg bg-muted p-4">
           <div className="flex items-center justify-between">
             <div>
-              <span className="font-medium">
-                {data.activeCount} active students
-              </span>
+              <span className="font-medium">{data.activeCount} enrolled</span>
               <span className="ml-2 text-muted-foreground">
-                out of {data.totalStudents} total students
+                ({((data.activeCount / data.totalStudents) * 100).toFixed(1)}%
+                of total)
               </span>
             </div>
             <div className="text-right">
@@ -255,7 +323,7 @@ export function SubscriptionTable() {
                 {formatCurrency(data.activeRevenue)}
               </div>
               <div className="text-xs text-muted-foreground">
-                Avg. {formatCurrency(data.averageActiveRevenue)} per
+                Avg. {formatCurrency(data.averageActiveAmount)} per
                 student/month
               </div>
             </div>
@@ -265,26 +333,106 @@ export function SubscriptionTable() {
     }
 
     if (status === 'not_enrolled') {
+      if (discountType === 'Family Discount') {
+        return (
+          <div className="rounded-lg bg-muted p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-medium">
+                  {data.notEnrolledWithFamilyDiscount} pending with family
+                  discount
+                </span>
+                <span className="ml-2 text-muted-foreground">
+                  (
+                  {(
+                    (data.notEnrolledWithFamilyDiscount /
+                      data.unenrolledCount) *
+                    100
+                  ).toFixed(1)}
+                  % of pending)
+                </span>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">
+                  Total Monthly Discounts
+                </div>
+                <div className="text-lg font-medium text-blue-600 dark:text-blue-400">
+                  {formatCurrency(data.notEnrolledFamilyDiscountTotal)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Avg.{' '}
+                  {formatCurrency(
+                    data.notEnrolledFamilyDiscountTotal /
+                      data.notEnrolledWithFamilyDiscount
+                  )}{' '}
+                  discount per student
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      if (discountType === 'None') {
+        return (
+          <div className="rounded-lg bg-muted p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-medium">
+                  {data.notEnrolledNoDiscountCount} pending at full rate
+                </span>
+                <span className="ml-2 text-muted-foreground">
+                  (
+                  {(
+                    (data.notEnrolledNoDiscountCount / data.unenrolledCount) *
+                    100
+                  ).toFixed(1)}
+                  % of pending)
+                </span>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">
+                  Full Rate Revenue
+                </div>
+                <div className="text-lg font-medium">
+                  {formatCurrency(data.notEnrolledNoDiscountRevenue)}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
       return (
         <div className="rounded-lg bg-muted p-4">
           <div className="flex items-center justify-between">
             <div>
               <span className="font-medium">
-                {data.unenrolledCount} students not enrolled
+                {data.unenrolledCount} pending enrollment
               </span>
               <span className="ml-2 text-muted-foreground">
-                out of {data.totalStudents} total students
+                (
+                {((data.unenrolledCount / data.totalStudents) * 100).toFixed(1)}
+                % of total)
               </span>
+              <div className="mt-1 text-sm text-muted-foreground">
+                Avg.{' '}
+                {formatCurrency(
+                  data.notEnrolledPotentialRevenue / data.unenrolledCount
+                )}{' '}
+                per student/month
+              </div>
             </div>
             <div className="text-right">
               <div className="text-sm text-muted-foreground">
                 Monthly Revenue Opportunity
               </div>
               <div className="text-lg font-medium text-green-600 dark:text-green-400">
-                {formatCurrency(data.potentialRevenue)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Including applicable family discounts
+                {formatCurrency(data.notEnrolledPotentialRevenue)}
+                <span className="ml-2 text-xs text-muted-foreground">
+                  ({formatCurrency(data.notEnrolledTotalDiscounts)} in
+                  discounts)
+                </span>
               </div>
             </div>
           </div>
@@ -335,61 +483,6 @@ export function SubscriptionTable() {
               </div>
               <div className="text-lg font-medium text-gray-600 dark:text-gray-400">
                 {formatCurrency(data.canceledRevenue)}
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    if (discountType === 'Family Discount') {
-      return (
-        <div className="rounded-lg bg-muted p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-medium">
-                {data.familyDiscountCount} students with family discounts
-              </span>
-              <span className="ml-2 text-muted-foreground">
-                out of {data.totalStudents} total students
-              </span>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-muted-foreground">
-                Total Monthly Discounts
-              </div>
-              <div className="text-lg font-medium text-blue-600 dark:text-blue-400">
-                {formatCurrency(data.familyDiscountTotal)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Avg. {formatCurrency(data.averageFamilyDiscount)} per student
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    if (discountType === 'None') {
-      return (
-        <div className="rounded-lg bg-muted p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-medium">
-                {data.noDiscountCount} students paying full tuition
-              </span>
-              <span className="ml-2 text-muted-foreground">
-                (
-                {((data.noDiscountCount / data.totalStudents) * 100).toFixed(1)}
-                % of total students)
-              </span>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-muted-foreground">
-                Full Rate Revenue
-              </div>
-              <div className="text-lg font-medium">
-                {formatCurrency(data.noDiscountRevenue)}
               </div>
             </div>
           </div>

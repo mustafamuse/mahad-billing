@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { useStripe } from '@stripe/react-stripe-js'
 
 interface StripePaymentFormProps {
-  onSuccess: () => void
+  onSuccess: (data: { setupIntentId: string }) => void
   onError: (error: Error) => void
   clientSecret: string
   customerName: string
@@ -30,6 +30,8 @@ export function StripePaymentForm({
       setIsProcessing(true)
 
       try {
+        // Step 1: Collect bank account
+        console.log('🏦 Starting bank account collection...')
         const { error: collectError } = await stripe.collectBankAccountForSetup(
           {
             clientSecret,
@@ -46,47 +48,49 @@ export function StripePaymentForm({
         )
 
         if (collectError) {
-          throw collectError
+          console.error('❌ Bank collection error:', collectError)
+          throw new Error(
+            collectError.message || 'Failed to collect bank account'
+          )
         }
 
-        // Confirm the SetupIntent
-        const { setupIntent, error: confirmError } = await stripe.confirmSetup({
-          clientSecret,
-          redirect: 'if_required',
-        })
+        console.log('✅ Bank account collected successfully')
+
+        // Step 2: Confirm setup
+        console.log('🔄 Confirming bank account setup...')
+        const { setupIntent, error: confirmError } =
+          await stripe.confirmUsBankAccountSetup(clientSecret)
 
         if (confirmError) {
-          throw confirmError
+          console.error('❌ Setup confirmation error:', confirmError)
+          throw new Error(
+            confirmError.message || 'Failed to confirm bank account'
+          )
         }
 
-        // Check the SetupIntent status
+        console.log('🎯 Setup confirmation response:', setupIntent)
+
+        // Step 3: Verify success
         if (setupIntent?.status === 'succeeded') {
-          onSuccess()
-        } else if (setupIntent?.status === 'requires_action') {
-          if (setupIntent.next_action?.type === 'verify_with_microdeposits') {
-            onSuccess() // Or handle differently to show verification instructions
-          } else {
-            console.error(
-              `Unexpected next_action type: ${setupIntent.next_action?.type}`
-            )
-            throw new Error('Unexpected verification step required.')
-          }
+          console.log('🎉 Setup completed successfully:', {
+            setupIntentId: setupIntent.id,
+            status: setupIntent.status,
+          })
+
+          onSuccess({ setupIntentId: setupIntent.id })
         } else {
-          console.error(`Unexpected SetupIntent status: ${setupIntent?.status}`)
-          throw new Error('Setup failed. Please try again.')
+          throw new Error(`Setup failed with status: ${setupIntent?.status}`)
         }
       } catch (error) {
-        console.error(
-          'Error during bank account collection and confirmation:',
-          error
+        console.error('❌ Payment setup failed:', error)
+        onError(
+          error instanceof Error ? error : new Error('Unknown error occurred')
         )
-        onError(error as Error)
       } finally {
         setIsProcessing(false)
       }
     }
 
-    // Automatically start the bank account collection process
     collectBankAccount()
   }, [stripe, clientSecret, customerName, customerEmail, onSuccess, onError])
 

@@ -1,7 +1,6 @@
 'use client'
 
-import * as React from 'react'
-import { useState } from 'react'
+import React, { useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -9,18 +8,21 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Elements } from '@stripe/react-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 import { useForm } from 'react-hook-form'
-import * as z from 'zod'
+import Stripe from 'stripe'
 
 import { TermsModal } from '@/components/terms-modal'
 import { toasts } from '@/components/toast/toast-utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
-import { Steps, Step } from '@/components/ui/steps'
+import {
+  enrollmentSchema,
+  enrollmentSchemaType,
+} from '@/lib/schemas/enrollment'
 import { stripeAppearance } from '@/lib/stripe-config'
 import { Student } from '@/lib/types'
-import { calculateTotal } from '@/lib/utils'
 
 import { PaymentDetailsStep } from './enrollment/payment-details-step'
+import { StepsProgress } from './enrollment/steps-progress'
 import { StudentSelectionStep } from './enrollment/student-selection-step'
 import { StripePaymentForm } from './stripe-payment-form'
 
@@ -30,36 +32,48 @@ const stripePromise = loadStripe(
 
 interface EnrollmentResponse {
   clientSecret: string
+  customerId: string
+  setupIntent: Stripe.Response<Stripe.SetupIntent>
 }
 
-// Form schema
-const formSchema = z.object({
-  students: z.array(z.string()).min(1, 'Please select at least one student'),
-  firstName: z.string().min(2, 'First name must be at least 2 characters'),
-  lastName: z.string().min(2, 'Last name must be at least 2 characters'),
-  email: z.string().email('Please enter a valid email address'),
-  phone: z.string().min(10, 'Please enter a valid phone number'),
-  termsAccepted: z.boolean().refine((val) => val === true, {
-    message: 'You must accept the terms and conditions',
-  }),
-})
-
-type FormValues = z.infer<typeof formSchema>
+const steps = [
+  {
+    id: 1,
+    label: 'Select Students',
+    description: 'Choose students to enroll',
+  },
+  {
+    id: 2,
+    label: 'Payment Details',
+    description: 'Enter bank account information',
+  },
+  {
+    id: 3,
+    label: 'Review & Confirm',
+    description: 'Verify enrollment details',
+  },
+]
 
 export function EnrollmentForm() {
-  // State management
-  const [step, setStep] = React.useState(1)
-  const [selectedStudents, setSelectedStudents] = React.useState<Student[]>([])
-  const [isProcessing, setIsProcessing] = React.useState(false)
-  const [clientSecret, setClientSecret] = React.useState<string>()
+  // Step and state management
+  const [step, setStep] = useState(1)
+  const [selectedStudents, setSelectedStudents] = useState<Student[]>([])
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [clientSecret, setClientSecret] = useState<string | undefined>()
   const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false)
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false)
 
   const router = useRouter()
 
-  // Form initialization
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+  // Utility function to reset form state
+  const resetFormState = () => {
+    setClientSecret(undefined)
+    setIsProcessing(false)
+    setStep(2)
+  }
+  // Form setup with Zod validation
+  const form = useForm<enrollmentSchemaType>({
+    resolver: zodResolver(enrollmentSchema),
     defaultValues: {
       students: [],
       firstName: '',
@@ -71,71 +85,7 @@ export function EnrollmentForm() {
     mode: 'onChange',
   })
 
-  // Form submission handler
-  const onSubmit = async (values: FormValues) => {
-    console.log('Form submission started', { values, step })
-
-    if (step === 1) {
-      console.log('Step 1 validation', { selectedStudents })
-      if (selectedStudents.length === 0) {
-        toasts.apiError({
-          title: 'No Students Selected',
-          error: new Error(
-            'Please select at least one student to proceed with enrollment.'
-          ),
-        })
-        return
-      }
-      console.log('Moving to step 2')
-      setStep(2)
-      toasts.success(
-        'Students Selected',
-        `Selected ${selectedStudents.length} student${selectedStudents.length > 1 ? 's' : ''} for enrollment.`
-      )
-      return
-    }
-
-    // Only proceed with API call if we're on step 2
-    if (step === 2) {
-      try {
-        setIsProcessing(true)
-        const promise = fetch('/api/enroll', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            total: calculateTotal(selectedStudents),
-            email: values.email,
-            firstName: values.firstName,
-            lastName: values.lastName,
-            phone: values.phone,
-            students: selectedStudents,
-          }),
-        })
-
-        await toasts.promise(promise, {
-          loading: 'Setting up your enrollment...',
-          success: 'Enrollment setup complete',
-          error: 'Failed to setup enrollment',
-        })
-
-        const response = await promise
-        if (!response.ok) {
-          throw new Error(
-            (await response.text()) || 'Failed to create SetupIntent'
-          )
-        }
-
-        const { clientSecret } = (await response.json()) as EnrollmentResponse
-        setClientSecret(clientSecret)
-        setStep(3)
-      } catch (error) {
-        toasts.apiError({ error })
-      } finally {
-        setIsProcessing(false)
-      }
-    }
-  }
-
+  // Handle terms agreement
   const handleTermsAgreement = () => {
     setHasAgreedToTerms(true)
     setIsTermsModalOpen(false)
@@ -146,78 +96,153 @@ export function EnrollmentForm() {
     })
   }
 
+  // Handle form submission
+  const handleSubmit = async (values: enrollmentSchemaType) => {
+    console.log('Form Submission Started:', { values, step })
+
+    if (step === 1) {
+      return handleStudentSelection()
+    }
+
+    if (step === 2) {
+      return await handleEnrollment(values)
+    }
+  }
+
+  // Handle Student Selection in Step 1
+  const handleStudentSelection = () => {
+    console.log('Step 1 Student Selection:', { selectedStudents })
+    if (selectedStudents.length === 0) {
+      toasts.apiError({
+        title: 'No Students Selected',
+        error: new Error(
+          'Please select at least one student to proceed with enrollment.'
+        ),
+      })
+      return
+    }
+    setStep(2)
+    toasts.success(
+      'Autopaying',
+      `${selectedStudents.length} student${selectedStudents.length > 1 ? 's' : ''}`
+    )
+  }
+
+  // Handle Enrollment in Step 2
+  const handleEnrollment = async (values: enrollmentSchemaType) => {
+    try {
+      setIsProcessing(true)
+      const requestBody = {
+        total: selectedStudents.reduce((sum, s) => sum + s.monthlyRate, 0),
+        email: values.email,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        phone: values.phone,
+        students: selectedStudents,
+      }
+      console.log('Enrollment Request:', requestBody)
+
+      const response = await fetch('/api/enroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        throw new Error(
+          (await response.text()) || 'Failed to create SetupIntent'
+        )
+      }
+
+      const { clientSecret, customerId, setupIntent } =
+        (await response.json()) as EnrollmentResponse
+      console.log(
+        'SetupIntent Client Secret:',
+        clientSecret,
+        'for customer: ',
+        customerId,
+        'with setupIntent: ',
+        setupIntent
+      )
+      setClientSecret(clientSecret)
+      setStep(3)
+    } catch (error) {
+      toasts.apiError({ error })
+      console.error('Enrollment API Error:', error)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-2 sm:space-y-8 sm:p-4">
-      <Steps className="mb-6 sm:mb-8">
-        <Step isActive={step === 1}>Select Students</Step>
-        <Step isActive={step === 2}>Payment Details</Step>
-      </Steps>
+    <div className="mx-auto max-w-3xl">
+      <StepsProgress currentStep={step} steps={steps} />
 
-      {clientSecret ? (
-        <Card className="border-0 sm:border">
-          <CardContent className="p-4 sm:p-6">
-            <Elements
-              stripe={stripePromise}
-              options={{
-                clientSecret,
-                appearance: stripeAppearance,
-                loader: 'auto',
-              }}
+      <div className="space-y-8">
+        {clientSecret ? (
+          <Card className="border-0 sm:border">
+            <CardContent className="p-4 sm:p-6">
+              <Elements
+                stripe={stripePromise}
+                options={{
+                  clientSecret,
+                  appearance: stripeAppearance,
+                  loader: 'auto',
+                }}
+              >
+                <StripePaymentForm
+                  clientSecret={clientSecret}
+                  customerName={`${form.getValues('firstName')} ${form.getValues('lastName')}`}
+                  customerEmail={form.getValues('email')}
+                  onSuccess={({ setupIntentId }) => {
+                    toasts.success(
+                      'Payment Setup Successful',
+                      'Your enrollment is complete!'
+                    )
+                    router.push(
+                      `/payment-success?setupIntentId=${setupIntentId}`
+                    )
+                  }}
+                  onError={(error) => {
+                    console.error('❌ Stripe Payment Form Error:', error)
+                    toasts.apiError({
+                      title: 'Payment Setup Failed',
+                      error: error,
+                    })
+                    resetFormState()
+                  }}
+                />
+              </Elements>
+            </CardContent>
+          </Card>
+        ) : (
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(handleSubmit)}
+              className="space-y-6 sm:space-y-8"
             >
-              <StripePaymentForm
-                clientSecret={clientSecret}
-                customerName={`${form.getValues('firstName')} ${form.getValues('lastName')}`}
-                customerEmail={form.getValues('email')}
-                onSuccess={() => {
-                  toasts.success(
-                    'Payment Setup Successful',
-                    'Your enrollment is complete! Redirecting you to the success page.'
-                  )
-                  router.push('/payment-success')
-                }}
-                onError={(error) => {
-                  toasts.apiError({
-                    title: 'Payment Setup Failed',
-                    error: new Error(
-                      'There was an issue connecting your bank account. Please try again.'
-                    ),
-                  })
-                  setClientSecret(undefined)
-                  setIsProcessing(false)
-                  setStep(2)
-                  console.error('Bank connection error:', error)
-                }}
-              />
-            </Elements>
-          </CardContent>
-        </Card>
-      ) : (
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-6 sm:space-y-8"
-          >
-            {step === 1 && (
-              <StudentSelectionStep
-                selectedStudents={selectedStudents}
-                setSelectedStudents={setSelectedStudents}
-                form={form}
-                onSubmit={onSubmit}
-              />
-            )}
+              {step === 1 && (
+                <StudentSelectionStep
+                  selectedStudents={selectedStudents}
+                  setSelectedStudents={setSelectedStudents}
+                  form={form}
+                  onSubmit={handleStudentSelection}
+                />
+              )}
 
-            {step === 2 && (
-              <PaymentDetailsStep
-                form={form}
-                isProcessing={isProcessing}
-                hasViewedTerms={hasAgreedToTerms}
-                onBack={() => setStep(1)}
-                onOpenTerms={() => setIsTermsModalOpen(true)}
-              />
-            )}
-          </form>
-        </Form>
-      )}
+              {step === 2 && (
+                <PaymentDetailsStep
+                  form={form}
+                  isProcessing={isProcessing}
+                  hasViewedTerms={hasAgreedToTerms}
+                  onBack={() => setStep(1)}
+                  onOpenTerms={() => setIsTermsModalOpen(true)}
+                />
+              )}
+            </form>
+          </Form>
+        )}
+      </div>
 
       <TermsModal
         open={isTermsModalOpen}

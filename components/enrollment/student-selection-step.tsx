@@ -39,9 +39,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { STUDENTS } from '@/lib/data'
+import { BASE_RATE, STUDENTS } from '@/lib/data'
 import { Student } from '@/lib/types'
-import { calculateTotal, calculateStudentPrice, cn } from '@/lib/utils'
+import { calculateTotal, cn } from '@/lib/utils'
 
 interface StudentSelectionStepProps {
   selectedStudents: Student[]
@@ -217,7 +217,6 @@ export function StudentSelectionStep({
 
                   <div className="space-y-3">
                     {selectedStudents.map((student) => {
-                      const { price } = calculateStudentPrice(student)
                       return (
                         <div
                           key={student.id}
@@ -231,10 +230,10 @@ export function StudentSelectionStep({
                               {student.familyId ? (
                                 <>
                                   <span className="text-xs text-muted-foreground line-through sm:text-sm">
-                                    ${student.monthlyRate}
+                                    ${BASE_RATE}
                                   </span>
                                   <span className="text-xs font-medium sm:text-sm">
-                                    ${price}
+                                    ${student.monthlyRate}
                                   </span>
                                   <Badge
                                     variant="secondary"

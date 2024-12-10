@@ -46,19 +46,7 @@ function AdminDashboard() {
       </ErrorBoundary>
 
       <div className="rounded-lg border bg-background">
-        <ErrorBoundary>
-          <Suspense
-            fallback={
-              <LoadingSpinner
-                size="lg"
-                text="Loading subscription data..."
-                className="min-h-[400px]"
-              />
-            }
-          >
-            <SubscriptionTable />
-          </Suspense>
-        </ErrorBoundary>
+        <SubscriptionTable />
       </div>
     </div>
   )

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
+import { Student } from '@/lib/types'
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2024-11-20.acacia',
 })
@@ -9,30 +11,43 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    console.log('API: Received request body:', body)
+    console.log('Creating customer:', {
+      email: body.email,
+      timestamp: new Date().toISOString(),
+    })
 
     const { total, email, firstName, lastName, phone, students } = body
 
-    // Create a Stripe Customer
-    const customer = await stripe.customers.create({
-      email: email,
+    const customerData = {
       name: `${firstName} ${lastName}`,
-      phone: phone,
+      phone,
       metadata: {
         students: JSON.stringify(students),
-        totalAmount: total.toString(),
+        total: total.toString(),
       },
-    })
+    }
 
-    console.log(`Stripe Customer Created: 
-    ID: ${customer.id}, 
-    Email: ${email}, 
-    Name: ${firstName} ${lastName}, 
-    Phone: ${phone}, 
-    Total Amount: ${total}, 
-    Students: ${students
-      .map((student: { name: string }) => student.name)
-      .join(', ')}`)
+    // Find or create a Stripe Customer
+    let customer = (await stripe.customers.list({ email: email, limit: 1 }))
+      .data[0]
+
+    if (!customer) {
+      customer = await stripe.customers.create({
+        email: email,
+        ...customerData,
+      })
+    } else {
+      customer = await stripe.customers.update(customer.id, customerData)
+    }
+
+    console.log('API: Customer created/updated:', {
+      id: customer.id,
+      email,
+      name: `${firstName} ${lastName}`,
+      phone,
+      total,
+      students: students.map((student: Student) => student.name),
+    })
 
     // Create a SetupIntent
     const setupIntent = await stripe.setupIntents.create({
@@ -40,17 +55,22 @@ export async function POST(request: Request) {
       payment_method_types: ['us_bank_account'],
       payment_method_options: {
         us_bank_account: {
-          verification_method: 'instant',
           financial_connections: {
-            permissions: ['payment_method'],
+            permissions: ['payment_method', 'balances'],
           },
         },
+      },
+      metadata: {
+        ...customerData.metadata,
+        total: total.toString(),
+        customerId: customer.id,
       },
     })
 
     return NextResponse.json({
       clientSecret: setupIntent.client_secret,
       customerId: customer.id,
+      setupIntent: setupIntent,
     })
   } catch (error) {
     console.error('Error creating SetupIntent:', error)

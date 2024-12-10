@@ -49,8 +49,12 @@ export interface DashboardSubscription {
 export interface DashboardStats {
   totalActiveSubscriptions: number
   totalStudents: number
+  activeCount: number
   monthlyRecurringRevenue: number
   potentialRevenue: number
+  actualPotentialRevenue: number
+  discountImpact: number
+  revenueEfficiency: number
   overduePayments: number
   canceledLastMonth: number
   averageRevenuePerStudent: number
@@ -138,4 +142,81 @@ export interface FinancialHealth {
     shortfall: number
     isOnTrack: boolean
   }
+}
+
+export interface StudentMetadata {
+  id: string
+  name: string
+  monthlyRate: number
+  familyId?: string
+  totalFamilyMembers?: number
+}
+
+export interface PaymentNotification {
+  type:
+    | 'payment_failed'
+    | 'payment_succeeded'
+    | 'subscription_canceled'
+    | 'insufficient_funds_warning'
+    | 'balance_refreshed'
+  subscriptionId: string
+  customerId: string
+  customerName: string
+  studentNames: string[]
+  amount: number
+  attemptCount?: number
+  nextAttempt?: number
+  timestamp: number
+  balance?: number
+}
+
+export interface PaymentSetupStatus {
+  customerId: string
+  subscriptionId: string | null
+  setupCompleted: boolean
+  bankVerified: boolean
+  subscriptionActive: boolean
+  timestamp: number
+}
+
+export interface BankAccountStatus {
+  customerId: string
+  verified: boolean
+  last4: string
+  timestamp: number
+}
+
+export interface DashboardResponse {
+  // ... existing fields ...
+  notEnrolledPotentialRevenue: number
+  notEnrolledTotalDiscounts: number
+  notEnrolledBaseRateRevenue: number
+  activeCount: number
+  unenrolledCount: number
+  // Active student metrics
+  activeWithFamilyDiscount: number
+  activeFamilyDiscountTotal: number
+  averageActiveFamilyDiscount: number
+  activeNoDiscountCount: number
+  activeNoDiscountRevenue: number
+  averageActiveAmount: number
+  // Not enrolled student metrics
+  notEnrolledWithFamilyDiscount: number
+  notEnrolledFamilyDiscountTotal: number
+  notEnrolledNoDiscountCount: number
+  notEnrolledNoDiscountRevenue: number
+  unenrolledRevenue: number
+  averageUnenrolledAmount: number
+}
+
+export interface TableStudent extends ProcessedStudent {
+  // Table-specific fields
+  selected?: boolean
+  rowNumber?: number
+  displayDiscount: string // Formatted discount string
+  displayAmount: string // Formatted amount string
+  displayStatus: string // Formatted status string
+  displayDate?: string // Formatted date string
+  statusColor: string // CSS color class for status
+  discountBadgeVariant: 'default' | 'secondary' | 'outline'
 }
