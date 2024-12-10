@@ -208,3 +208,15 @@ export interface DashboardResponse {
   unenrolledRevenue: number
   averageUnenrolledAmount: number
 }
+
+export interface TableStudent extends ProcessedStudent {
+  // Table-specific fields
+  selected?: boolean
+  rowNumber?: number
+  displayDiscount: string // Formatted discount string
+  displayAmount: string // Formatted amount string
+  displayStatus: string // Formatted status string
+  displayDate?: string // Formatted date string
+  statusColor: string // CSS color class for status
+  discountBadgeVariant: 'default' | 'secondary' | 'outline'
+}
