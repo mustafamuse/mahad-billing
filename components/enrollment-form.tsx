@@ -14,7 +14,6 @@ import { TermsModal } from '@/components/terms-modal'
 import { toasts } from '@/components/toast/toast-utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
-import { Steps, Step } from '@/components/ui/steps'
 import {
   enrollmentSchema,
   enrollmentSchemaType,
@@ -23,6 +22,7 @@ import { stripeAppearance } from '@/lib/stripe-config'
 import { Student } from '@/lib/types'
 
 import { PaymentDetailsStep } from './enrollment/payment-details-step'
+import { StepsProgress } from './enrollment/steps-progress'
 import { StudentSelectionStep } from './enrollment/student-selection-step'
 import { StripePaymentForm } from './stripe-payment-form'
 
@@ -35,6 +35,24 @@ interface EnrollmentResponse {
   customerId: string
   setupIntent: Stripe.Response<Stripe.SetupIntent>
 }
+
+const steps = [
+  {
+    id: 1,
+    label: 'Select Students',
+    description: 'Choose students to enroll',
+  },
+  {
+    id: 2,
+    label: 'Payment Details',
+    description: 'Enter bank account information',
+  },
+  {
+    id: 3,
+    label: 'Review & Confirm',
+    description: 'Verify enrollment details',
+  },
+]
 
 export function EnrollmentForm() {
   // Step and state management
@@ -157,73 +175,74 @@ export function EnrollmentForm() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-2 sm:space-y-8 sm:p-4">
-      <Steps className="mb-6 sm:mb-8">
-        <Step isActive={step === 1}>Select Students</Step>
-        <Step isActive={step === 2}>Payment Details</Step>
-      </Steps>
+    <div className="mx-auto max-w-3xl">
+      <StepsProgress currentStep={step} steps={steps} />
 
-      {clientSecret ? (
-        <Card className="border-0 sm:border">
-          <CardContent className="p-4 sm:p-6">
-            <Elements
-              stripe={stripePromise}
-              options={{
-                clientSecret,
-                appearance: stripeAppearance,
-                loader: 'auto',
-              }}
+      <div className="space-y-8">
+        {clientSecret ? (
+          <Card className="border-0 sm:border">
+            <CardContent className="p-4 sm:p-6">
+              <Elements
+                stripe={stripePromise}
+                options={{
+                  clientSecret,
+                  appearance: stripeAppearance,
+                  loader: 'auto',
+                }}
+              >
+                <StripePaymentForm
+                  clientSecret={clientSecret}
+                  customerName={`${form.getValues('firstName')} ${form.getValues('lastName')}`}
+                  customerEmail={form.getValues('email')}
+                  onSuccess={({ setupIntentId }) => {
+                    toasts.success(
+                      'Payment Setup Successful',
+                      'Your enrollment is complete!'
+                    )
+                    router.push(
+                      `/payment-success?setupIntentId=${setupIntentId}`
+                    )
+                  }}
+                  onError={(error) => {
+                    console.error('❌ Stripe Payment Form Error:', error)
+                    toasts.apiError({
+                      title: 'Payment Setup Failed',
+                      error: error,
+                    })
+                    resetFormState()
+                  }}
+                />
+              </Elements>
+            </CardContent>
+          </Card>
+        ) : (
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(handleSubmit)}
+              className="space-y-6 sm:space-y-8"
             >
-              <StripePaymentForm
-                clientSecret={clientSecret}
-                customerName={`${form.getValues('firstName')} ${form.getValues('lastName')}`}
-                customerEmail={form.getValues('email')}
-                onSuccess={({ setupIntentId }) => {
-                  toasts.success(
-                    'Payment Setup Successful',
-                    'Your enrollment is complete!'
-                  )
-                  router.push(`/payment-success?setupIntentId=${setupIntentId}`)
-                }}
-                onError={(error) => {
-                  console.error('❌ Stripe Payment Form Error:', error)
-                  toasts.apiError({
-                    title: 'Payment Setup Failed',
-                    error: error,
-                  })
-                  resetFormState()
-                }}
-              />
-            </Elements>
-          </CardContent>
-        </Card>
-      ) : (
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(handleSubmit)}
-            className="space-y-6 sm:space-y-8"
-          >
-            {step === 1 && (
-              <StudentSelectionStep
-                selectedStudents={selectedStudents}
-                setSelectedStudents={setSelectedStudents}
-                form={form}
-                onSubmit={handleStudentSelection}
-              />
-            )}
+              {step === 1 && (
+                <StudentSelectionStep
+                  selectedStudents={selectedStudents}
+                  setSelectedStudents={setSelectedStudents}
+                  form={form}
+                  onSubmit={handleStudentSelection}
+                />
+              )}
 
-            {step === 2 && (
-              <PaymentDetailsStep
-                form={form}
-                isProcessing={isProcessing}
-                hasViewedTerms={hasAgreedToTerms}
-                onBack={() => setStep(1)}
-                onOpenTerms={() => setIsTermsModalOpen(true)}
-              />
-            )}
-          </form>
-        </Form>
-      )}
+              {step === 2 && (
+                <PaymentDetailsStep
+                  form={form}
+                  isProcessing={isProcessing}
+                  hasViewedTerms={hasAgreedToTerms}
+                  onBack={() => setStep(1)}
+                  onOpenTerms={() => setIsTermsModalOpen(true)}
+                />
+              )}
+            </form>
+          </Form>
+        )}
+      </div>
 
       <TermsModal
         open={isTermsModalOpen}
