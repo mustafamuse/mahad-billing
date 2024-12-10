@@ -185,3 +185,10 @@ export interface BankAccountStatus {
   last4: string
   timestamp: number
 }
+
+export interface DashboardResponse {
+  // ... existing fields ...
+  notEnrolledPotentialRevenue: number
+  notEnrolledTotalDiscounts: number
+  notEnrolledBaseRateRevenue: number
+}

@@ -229,6 +229,21 @@ export async function GET(request: Request) {
       return cancelDate >= lastMonth && cancelDate <= now
     }).length
 
+    // Calculate potential monthly revenue for not enrolled students
+    const notEnrolledPotentialRevenue = unenrolledStudents.reduce(
+      (sum, s) => sum + s.monthlyAmount,
+      0
+    )
+
+    // Calculate total potential discounts for not enrolled students
+    const notEnrolledTotalDiscounts = unenrolledStudents.reduce(
+      (sum, s) => sum + (BASE_RATE - s.monthlyAmount),
+      0
+    )
+
+    // Calculate base rate revenue for not enrolled students
+    const notEnrolledBaseRateRevenue = unenrolledStudents.length * BASE_RATE
+
     // Apply pagination
     const start = (page - 1) * limit
     const paginatedStudents = processedStudents.slice(start, start + limit)
@@ -279,6 +294,9 @@ export async function GET(request: Request) {
         averageFamilyDiscount,
         noDiscountCount: noDiscountStudents.length,
         noDiscountRevenue,
+        notEnrolledPotentialRevenue,
+        notEnrolledTotalDiscounts,
+        notEnrolledBaseRateRevenue,
       },
       {
         headers: {

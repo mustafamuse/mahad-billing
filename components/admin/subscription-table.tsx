@@ -352,25 +352,6 @@ export function SubscriptionTable() {
     }
 
     if (status === 'not_enrolled') {
-      // Calculate total potential revenue if everyone paid base rate
-      const totalBaseRateRevenue = data?.students.length * 150 // BASE_RATE
-
-      // Calculate actual potential revenue with discounts
-      const potentialMonthlyRevenue =
-        data?.students.reduce(
-          (total, student) => total + student.monthlyAmount,
-          0
-        ) || 0
-
-      // Calculate total discounts
-      const totalDiscounts = totalBaseRateRevenue - potentialMonthlyRevenue
-
-      // Calculate average per student
-      const averageMonthlyAmount =
-        data?.students.length > 0
-          ? potentialMonthlyRevenue / data.students.length
-          : 0
-
       return (
         <div className="rounded-lg bg-muted p-4">
           <div className="flex items-center justify-between">
@@ -382,7 +363,11 @@ export function SubscriptionTable() {
                 out of {data.totalStudents} total students
               </span>
               <div className="mt-1 text-sm text-muted-foreground">
-                Avg. {formatCurrency(averageMonthlyAmount)} per student/month
+                Avg.{' '}
+                {formatCurrency(
+                  data.notEnrolledPotentialRevenue / data.unenrolledCount
+                )}{' '}
+                per student/month
               </div>
             </div>
             <div className="text-right">
@@ -390,14 +375,11 @@ export function SubscriptionTable() {
                 Monthly Revenue Opportunity
               </div>
               <div className="text-lg font-medium text-green-600 dark:text-green-400">
-                {formatCurrency(potentialMonthlyRevenue)}
+                {formatCurrency(data.notEnrolledPotentialRevenue)}
                 <span className="ml-2 text-xs text-muted-foreground">
-                  ({formatCurrency(totalDiscounts)} in discounts)
+                  ({formatCurrency(data.notEnrolledTotalDiscounts)} in
+                  discounts)
                 </span>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {((totalDiscounts / totalBaseRateRevenue) * 100).toFixed(1)}%
-                less than base rate revenue
               </div>
             </div>
           </div>
