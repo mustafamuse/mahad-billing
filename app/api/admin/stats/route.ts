@@ -140,14 +140,14 @@ export async function GET() {
     })
 
     // Add debug logs for student rates
-    console.log(
-      'Student Rates:',
-      STUDENTS.map((student) => ({
-        name: student.name,
-        monthlyRate: student.monthlyRate,
-        hasDiscount: !!student.familyId,
-      }))
-    )
+    // console.log(
+    //   'Student Rates:',
+    //   STUDENTS.map((student) => ({
+    //     name: student.name,
+    //     monthlyRate: student.monthlyRate,
+    //     hasDiscount: !!student.familyId,
+    //   }))
+    // )
 
     // Calculate payment pattern stats
     const paymentPatterns = {

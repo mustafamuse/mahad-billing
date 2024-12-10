@@ -191,4 +191,20 @@ export interface DashboardResponse {
   notEnrolledPotentialRevenue: number
   notEnrolledTotalDiscounts: number
   notEnrolledBaseRateRevenue: number
+  activeCount: number
+  unenrolledCount: number
+  // Active student metrics
+  activeWithFamilyDiscount: number
+  activeFamilyDiscountTotal: number
+  averageActiveFamilyDiscount: number
+  activeNoDiscountCount: number
+  activeNoDiscountRevenue: number
+  averageActiveAmount: number
+  // Not enrolled student metrics
+  notEnrolledWithFamilyDiscount: number
+  notEnrolledFamilyDiscountTotal: number
+  notEnrolledNoDiscountCount: number
+  notEnrolledNoDiscountRevenue: number
+  unenrolledRevenue: number
+  averageUnenrolledAmount: number
 }

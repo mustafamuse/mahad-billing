@@ -35,6 +35,7 @@ export async function GET(request: Request) {
       )
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { page, limit, status, search, discountType, sortBy, sortOrder } =
       queryResult.data
 
@@ -73,7 +74,13 @@ export async function GET(request: Request) {
       }
     })
 
-    // Process all students
+    // First get all not enrolled students before any filtering
+    const allUnenrolledStudents = STUDENTS.filter(
+      (student) => !subscribedStudentsMap.has(student.name)
+    )
+    const totalUnenrolledCount = allUnenrolledStudents.length
+
+    // Process students and apply initial filters
     let processedStudents = STUDENTS.map((student) => {
       const subscriptionData = subscribedStudentsMap.get(student.name)
 
@@ -90,11 +97,7 @@ export async function GET(request: Request) {
               name: subscriptionData.customer.name,
               email: subscriptionData.customer.email,
             }
-          : {
-              id: '',
-              name: null,
-              email: null,
-            },
+          : { id: '', name: null, email: null },
         monthlyAmount: student.monthlyRate,
         discount: {
           amount: BASE_RATE - student.monthlyRate,
@@ -114,7 +117,7 @@ export async function GET(request: Request) {
       }
     })
 
-    // Apply filters
+    // Apply search filter if any
     if (search) {
       const searchLower = search.toLowerCase()
       processedStudents = processedStudents.filter((student) =>
@@ -122,6 +125,7 @@ export async function GET(request: Request) {
       )
     }
 
+    // Apply status filter
     if (status && status !== 'all') {
       processedStudents = processedStudents.filter((student) =>
         status === 'not_enrolled'
@@ -130,45 +134,7 @@ export async function GET(request: Request) {
       )
     }
 
-    if (discountType && discountType !== 'all') {
-      processedStudents = processedStudents.filter(
-        (student) => student.discount.type === discountType
-      )
-    }
-
-    // Apply sorting
-    if (sortBy) {
-      processedStudents.sort((a, b) => {
-        switch (sortBy) {
-          case 'amount':
-            if (a.status === 'not_enrolled' && b.status !== 'not_enrolled')
-              return 1
-            if (a.status !== 'not_enrolled' && b.status === 'not_enrolled')
-              return -1
-            return sortOrder === 'desc'
-              ? b.monthlyAmount - a.monthlyAmount
-              : a.monthlyAmount - b.monthlyAmount
-          case 'name':
-            return sortOrder === 'desc'
-              ? b.name.localeCompare(a.name)
-              : a.name.localeCompare(b.name)
-          case 'status':
-            return sortOrder === 'desc'
-              ? b.status.localeCompare(a.status)
-              : a.status.localeCompare(b.status)
-          case 'discount':
-            if (a.discount.amount === 0 && b.discount.amount > 0) return 1
-            if (a.discount.amount > 0 && b.discount.amount === 0) return -1
-            return sortOrder === 'desc'
-              ? b.discount.amount - a.discount.amount
-              : a.discount.amount - b.discount.amount
-          default:
-            return 0
-        }
-      })
-    }
-
-    // Calculate metrics
+    // Get filtered students by status
     const activeStudents = processedStudents.filter(
       (s) => s.status === 'active'
     )
@@ -181,14 +147,24 @@ export async function GET(request: Request) {
     const canceledStudents = processedStudents.filter(
       (s) => s.status === 'canceled'
     )
-    const familyDiscountStudents = processedStudents.filter(
-      (s) => s.discount.type === 'Family Discount'
-    )
-    const noDiscountStudents = processedStudents.filter(
-      (s) => s.discount.type === 'None'
-    )
 
-    // Calculate revenues
+    // Apply discount filter
+    if (discountType && discountType !== 'all') {
+      processedStudents = processedStudents.filter(
+        (student) => student.discount.type === discountType
+      )
+    }
+
+    // Calculate metrics
+    const activeCount = activeStudents.length
+    const notEnrolledWithFamilyDiscount = unenrolledStudents.filter(
+      (s) => s.discount.type === 'Family Discount'
+    ).length
+    const notEnrolledFamilyDiscountTotal = unenrolledStudents
+      .filter((s) => s.discount.type === 'Family Discount')
+      .reduce((sum, s) => sum + s.discount.amount, 0)
+
+    // Calculate base metrics
     const activeRevenue = activeStudents.reduce(
       (sum, s) => sum + s.monthlyAmount,
       0
@@ -201,24 +177,61 @@ export async function GET(request: Request) {
       (sum, s) => sum + s.monthlyAmount,
       0
     )
-    const familyDiscountTotal = familyDiscountStudents.reduce(
-      (sum, s) => sum + s.discount.amount,
+
+    // Calculate averages
+    const averageActiveAmount =
+      activeCount > 0 ? activeRevenue / activeCount : 0
+    const averagePastDueAmount =
+      pastDueStudents.length > 0 ? pastDueRevenue / pastDueStudents.length : 0
+
+    // Calculate family discount metrics
+    const activeWithFamilyDiscount = activeStudents.filter(
+      (s) => s.discount.type === 'Family Discount'
+    ).length
+    const activeFamilyDiscountTotal = activeStudents
+      .filter((s) => s.discount.type === 'Family Discount')
+      .reduce((sum, s) => sum + s.discount.amount, 0)
+    const averageActiveFamilyDiscount =
+      activeWithFamilyDiscount > 0
+        ? activeFamilyDiscountTotal / activeWithFamilyDiscount
+        : 0
+
+    // Calculate no discount metrics
+    const activeNoDiscountCount = activeStudents.filter(
+      (s) => s.discount.type === 'None'
+    ).length
+    const activeNoDiscountRevenue = activeStudents
+      .filter((s) => s.discount.type === 'None')
+      .reduce((sum, s) => sum + s.monthlyAmount, 0)
+
+    // Calculate not enrolled metrics
+    const notEnrolledNoDiscountCount = unenrolledStudents.filter(
+      (s) => s.discount.type === 'None'
+    ).length
+    const notEnrolledNoDiscountRevenue = unenrolledStudents
+      .filter((s) => s.discount.type === 'None')
+      .reduce((sum, s) => sum + s.monthlyAmount, 0)
+
+    // Calculate revenue metrics
+    const potentialRevenue = STUDENTS.length * BASE_RATE
+    const actualRevenue = activeRevenue
+    const totalDiscounts = STUDENTS.reduce(
+      (total, student) => total + (BASE_RATE - student.monthlyRate),
       0
     )
-    const noDiscountRevenue = noDiscountStudents.reduce(
+    const revenueEfficiency = (actualRevenue / potentialRevenue) * 100
+    const discountImpact = (totalDiscounts / potentialRevenue) * 100
+
+    // Calculate not enrolled revenue metrics
+    const notEnrolledPotentialRevenue = unenrolledStudents.reduce(
       (sum, s) => sum + s.monthlyAmount,
       0
     )
-
-    // Calculate averages
-    const averageActiveRevenue =
-      activeStudents.length > 0 ? activeRevenue / activeStudents.length : 0
-    const averagePastDueAmount =
-      pastDueStudents.length > 0 ? pastDueRevenue / pastDueStudents.length : 0
-    const averageFamilyDiscount =
-      familyDiscountStudents.length > 0
-        ? familyDiscountTotal / familyDiscountStudents.length
-        : 0
+    const notEnrolledTotalDiscounts = unenrolledStudents.reduce(
+      (sum, s) => sum + (BASE_RATE - s.monthlyAmount),
+      0
+    )
+    const notEnrolledBaseRateRevenue = unenrolledStudents.length * BASE_RATE
 
     // Calculate canceled metrics
     const now = new Date()
@@ -229,43 +242,11 @@ export async function GET(request: Request) {
       return cancelDate >= lastMonth && cancelDate <= now
     }).length
 
-    // Calculate potential monthly revenue for not enrolled students
-    const notEnrolledPotentialRevenue = unenrolledStudents.reduce(
-      (sum, s) => sum + s.monthlyAmount,
-      0
-    )
-
-    // Calculate total potential discounts for not enrolled students
-    const notEnrolledTotalDiscounts = unenrolledStudents.reduce(
-      (sum, s) => sum + (BASE_RATE - s.monthlyAmount),
-      0
-    )
-
-    // Calculate base rate revenue for not enrolled students
-    const notEnrolledBaseRateRevenue = unenrolledStudents.length * BASE_RATE
-
     // Apply pagination
     const start = (page - 1) * limit
     const paginatedStudents = processedStudents.slice(start, start + limit)
     const hasMore = start + limit < processedStudents.length
     const nextCursor = hasMore ? processedStudents[start + limit - 1].id : null
-
-    // Calculate potential revenue if everyone paid full price (BASE_RATE)
-    const potentialRevenue = STUDENTS.length * BASE_RATE
-
-    // Calculate actual revenue we're getting (with discounts)
-    const actualRevenue = activeRevenue
-
-    // Calculate total discounts (difference between potential and what they would pay)
-    const totalDiscounts = STUDENTS.reduce((total, student) => {
-      return total + (BASE_RATE - student.monthlyRate)
-    }, 0)
-
-    // Calculate revenue efficiency (what percentage of BASE_RATE we're collecting)
-    const revenueEfficiency = (actualRevenue / potentialRevenue) * 100
-
-    // Calculate discount impact percentage
-    const discountImpact = (totalDiscounts / potentialRevenue) * 100
 
     return NextResponse.json(
       {
@@ -274,29 +255,38 @@ export async function GET(request: Request) {
         nextCursor,
         totalStudents: STUDENTS.length,
         filteredCount: processedStudents.length,
-        activeCount: activeStudents.length,
+        // Base counts
+        activeCount,
+        unenrolledCount: totalUnenrolledCount,
+        // Active metrics
         activeRevenue,
+        averageActiveAmount,
+        activeWithFamilyDiscount,
+        activeFamilyDiscountTotal,
+        averageActiveFamilyDiscount,
+        activeNoDiscountCount,
+        activeNoDiscountRevenue,
+        // Not enrolled metrics
+        notEnrolledWithFamilyDiscount,
+        notEnrolledFamilyDiscountTotal,
+        notEnrolledNoDiscountCount,
+        notEnrolledNoDiscountRevenue,
+        // Revenue metrics
         potentialRevenue,
         actualRevenue,
         totalDiscounts,
         discountImpact,
         revenueEfficiency,
-        averageActiveRevenue,
-        unenrolledCount: unenrolledStudents.length,
+        notEnrolledPotentialRevenue,
+        notEnrolledTotalDiscounts,
+        notEnrolledBaseRateRevenue,
+        // Other metrics
         pastDueCount: pastDueStudents.length,
         pastDueRevenue,
         averagePastDueAmount,
         canceledCount: canceledStudents.length,
         canceledRevenue,
         lastMonthCanceled,
-        familyDiscountCount: familyDiscountStudents.length,
-        familyDiscountTotal,
-        averageFamilyDiscount,
-        noDiscountCount: noDiscountStudents.length,
-        noDiscountRevenue,
-        notEnrolledPotentialRevenue,
-        notEnrolledTotalDiscounts,
-        notEnrolledBaseRateRevenue,
       },
       {
         headers: {

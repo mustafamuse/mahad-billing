@@ -9,7 +9,6 @@ import { BASE_RATE } from '@/lib/data'
 import { redis } from '@/lib/redis'
 import { Student, PaymentNotification } from '@/lib/types'
 
-
 export const dynamic = 'force-dynamic'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
