@@ -89,5 +89,5 @@ export async function verifyPaymentSetup(customerId: string) {
     timestamp: new Date(setup.timestamp).toISOString(),
   })
 
-  return setup.setupCompleted && setup.subscriptionActive && bank.verified
+  return setup.setupCompleted && bank.verified
 }
