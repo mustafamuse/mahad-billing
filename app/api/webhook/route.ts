@@ -27,6 +27,7 @@ function logPaymentEvent(type: string, data: any, metadata?: string) {
 }
 
 export async function POST(request: Request) {
+  debugger
   const headersList = headers()
   console.log('\n🔔 Webhook Request Headers:', {
     'stripe-signature': headersList.get('stripe-signature'),
@@ -60,127 +61,51 @@ export async function POST(request: Request) {
     }
 
     await redis.set(eventKey, 'processed', { ex: 86400 }) // 86400 seconds = 24 hours
-
+    debugger
     switch (event.type) {
-      // case 'setup_intent.succeeded':
-      //   try {
-      //     const setupIntent = event.data.object as Stripe.SetupIntent
-
-      //     // Initial setup status
-      //     await redis.set(
-      //       `payment_setup:${setupIntent.customer}`,
-      //       JSON.stringify({
-      //         customerId: setupIntent.customer,
-      //         subscriptionId: null,
-      //         setupCompleted: true,
-      //         bankVerified: true,
-      //         subscriptionActive: false,
-      //         timestamp: Date.now(),
-      //       })
-      //     )
-
-      //     // Parse students from metadata
-      //     const students = JSON.parse(setupIntent.metadata?.students || '[]')
-
-      //     // Get Unix timestamp for 1st of next month
-      //     const now = new Date()
-      //     const firstOfNextMonth = new Date(
-      //       now.getFullYear(),
-      //       now.getMonth() + 1,
-      //       1
-      //     )
-      //     const billingAnchor = Math.floor(firstOfNextMonth.getTime() / 1000)
-
-      //     // Create subscription with dynamic prices for each student
-      //     const subscription = await stripe.subscriptions.create({
-      //       customer: setupIntent.customer as string,
-      //       default_payment_method: setupIntent.payment_method as string,
-      //       items: students.map((student: Student) => ({
-      //         price_data: {
-      //           currency: 'usd',
-      //           unit_amount: student.monthlyRate * 100, // Use pre-calculated rate
-      //           recurring: { interval: 'month' },
-      //           product: process.env.STRIPE_PRODUCT_ID!,
-      //         },
-      //         quantity: 1,
-      //         metadata: {
-      //           studentId: student.id,
-      //           studentName: student.name,
-      //           familyId: student.familyId || null,
-      //           baseRate: BASE_RATE,
-      //           monthlyRate: student.monthlyRate,
-      //           discount: BASE_RATE - student.monthlyRate,
-      //         },
-      //       })),
-      //       billing_cycle_anchor: billingAnchor,
-      //       proration_behavior: 'none',
-      //       metadata: setupIntent.metadata,
-      //       collection_method: 'charge_automatically',
-      //       payment_settings: {
-      //         payment_method_types: ['us_bank_account'],
-      //         save_default_payment_method: 'on_subscription',
-      //       },
-      //     })
-
-      //     logPaymentEvent('subscription_created', {
-      //       id: subscription.id,
-      //       status: subscription.status,
-      //       customer: subscription.customer,
-      //       startDate: new Date(subscription.billing_cycle_anchor * 1000),
-      //       items: subscription.items.data.map((item) => ({
-      //         studentName: item.metadata.studentName,
-      //         monthlyRate: item.metadata.calculatedRate,
-      //       })),
-      //     })
-      //   } catch (error) {
-      //     await redis.del(eventKey)
-
-      //     console.error('Error in setup_intent.succeeded handler:', error)
-      //     const failedSetupIntent = event.data.object as Stripe.SetupIntent
-      //     logPaymentEvent('subscription_creation_failed', {
-      //       error: (error as Error).message,
-      //       customer: failedSetupIntent.customer,
-      //       setupIntentId: failedSetupIntent.id,
-      //     })
-      //   }
-      //   break
-
-      case 'customer.subscription.created':
+      case 'invoice.payment_succeeded':
         try {
-          const subscription = event.data.object as Stripe.Subscription
+          console.log('You subscription is active')
+          const invoice = event.data.object as Stripe.Invoice
+          const subscriptionId = invoice.subscription
+          if (subscriptionId) {
+            const subscription = await stripe.subscriptions.retrieve(
+              subscriptionId.toString()
+            )
 
-          const redisKey = `payment_setup:${subscription.customer}`
-
-          await redis.set(
-            redisKey,
-            JSON.stringify({
-              subscriptionId: subscription.id,
-              setupCompleted: true, // Initial setup, still awaiting payment verification
-              bankVerified: true, // Awaiting bank verification if applicable
-              subscriptionActive: subscription.status === 'active',
-              timestamp: Date.now(),
-            })
-          )
-          // Update setup status
-          const setupStatus = await redis.get(
-            `payment_setup:${subscription.customer}`
-          )
-          if (setupStatus) {
-            // Fix: Handle case where setupStatus might be an object
-            const currentStatus =
-              typeof setupStatus === 'string'
-                ? JSON.parse(setupStatus)
-                : setupStatus
+            const redisKey = `payment_setup:${subscription.customer}`
 
             await redis.set(
-              `payment_setup:${subscription.customer}`,
+              redisKey,
               JSON.stringify({
-                ...currentStatus,
                 subscriptionId: subscription.id,
-                subscriptionActive: true,
+                setupCompleted: true, // Initial setup, still awaiting payment verification
+                bankVerified: true, // Awaiting bank verification if applicable
+                subscriptionActive: subscription.status === 'active',
                 timestamp: Date.now(),
               })
             )
+            // Update setup status
+            const setupStatus = await redis.get(
+              `payment_setup:${subscription.customer}`
+            )
+            if (setupStatus) {
+              // Fix: Handle case where setupStatus might be an object
+              const currentStatus =
+                typeof setupStatus === 'string'
+                  ? JSON.parse(setupStatus)
+                  : setupStatus
+
+              await redis.set(
+                `payment_setup:${subscription.customer}`,
+                JSON.stringify({
+                  ...currentStatus,
+                  subscriptionId: subscription.id,
+                  subscriptionActive: true,
+                  timestamp: Date.now(),
+                })
+              )
+            }
           }
         } catch (error) {
           await redis.del(eventKey)
@@ -188,17 +113,10 @@ export async function POST(request: Request) {
         }
         break
 
-      case 'customer.subscription.updated':
-        // Subscription becomes active
-        const updatedSub = event.data.object as Stripe.Subscription
-        console.log('Subscription updated:', {
-          oldStatus: event.data.previous_attributes?.status,
-          newStatus: updatedSub.status,
-        })
-        break
-
       case 'invoice.payment_failed':
         try {
+          debugger
+          console.log('We have ')
           //TODO: Add notification here
 
           // Extract the invoice object from the event

@@ -8,7 +8,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 export async function POST(request: Request) {
-  debugger
   try {
     const { setupIntentId } = await request.json()
 
@@ -135,7 +134,9 @@ export async function POST(request: Request) {
         timestamp: Date.now(),
       })
     )
-
+    console.log(
+      'We have initiated the payment, we will confirm when the subscription is active'
+    )
     console.log('✅ Subscription created successfully:', {
       subscriptionId: subscription.id,
       status: subscription.status,
