@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useRef } from 'react'
 import { useEffect, useState } from 'react'
 import React from 'react'
 
@@ -15,25 +15,39 @@ function PaymentSuccessContent() {
   const router = useRouter()
   const [isVerified, setIsVerified] = useState(false)
   const setupIntentId = searchParams.get('setupIntentId')
+  const hasCalledAPI = useRef(false)
 
   useEffect(() => {
-    if (!setupIntentId) return
+    if (!setupIntentId || hasCalledAPI.current) return
 
-    const verifySetup = async () => {
+    const processSubscriptionAndVerify = async () => {
       try {
-        const response = await fetch('/api/verify-setup', {
+        hasCalledAPI.current = true
+        // Call the subscription API
+        const subscriptionResponse = await fetch('/api/create-subscription', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ setupIntentId }),
         })
-        const data = await response.json()
-        setIsVerified(data.success)
+        const subscriptionData = await subscriptionResponse.json()
+
+        if (!subscriptionData.success) {
+          console.error('Subscription creation failed:', subscriptionData.error)
+          setIsVerified(false)
+          return
+        }
+        // Set the verification result
+        setIsVerified(true)
       } catch (error) {
-        console.error('Verification error:', error)
+        console.error(
+          'Error during subscription and verification process:',
+          error
+        )
+        setIsVerified(false)
       }
     }
 
-    verifySetup()
+    processSubscriptionAndVerify()
   }, [setupIntentId])
 
   return (
