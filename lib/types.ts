@@ -182,7 +182,24 @@ export interface PaymentSetupStatus {
 export interface BankAccountStatus {
   customerId: string
   verified: boolean
-  last4: string
+  last4: string | null
+  bankName: string | null
+  accountType: 'checking' | 'savings' | null
+  accountHolderType: 'company' | 'individual' | null
+  routingNumber: string | null
+  statusDetails: {
+    blocked?: {
+      network_code: string | null
+      reason:
+        | 'bank_account_closed'
+        | 'bank_account_frozen'
+        | 'bank_account_invalid_details'
+        | 'bank_account_restricted'
+        | 'bank_account_unusable'
+        | 'debit_not_authorized'
+        | null
+    }
+  } | null
   timestamp: number
 }
 
@@ -219,4 +236,15 @@ export interface TableStudent extends ProcessedStudent {
   displayDate?: string // Formatted date string
   statusColor: string // CSS color class for status
   discountBadgeVariant: 'default' | 'secondary' | 'outline'
+}
+
+export interface SubscriptionPaymentStatus {
+  subscriptionId: string
+  setupCompleted: boolean
+  subscriptionActive: boolean
+  bankVerified: boolean
+  lastPaymentStatus: 'succeeded' | 'failed' | 'pending'
+  lastPaymentDate: string
+  currentPeriodEnd: string
+  timestamp: number
 }
