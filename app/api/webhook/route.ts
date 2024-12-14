@@ -5,9 +5,7 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
-import { BASE_RATE } from '@/lib/data'
 import { redis } from '@/lib/redis'
-import { Student, PaymentNotification } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
