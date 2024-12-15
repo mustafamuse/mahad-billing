@@ -98,9 +98,35 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
     // Retrieve the subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(subscriptionId)
 
+    // Read Redis data for payment setup
     const redisKey = `payment_setup:${customerId}`
     const existingData = await getRedisKey(redisKey)
-    const bankVerified = existingData?.bankVerified || false
+    console.log('🔍 Redis Data for Payment Setup:', { redisKey, existingData })
+
+    // Read Redis data for bank account
+    const bankAccountKey = `bank_account:${customerId}`
+    const bankAccountData = await getRedisKey(bankAccountKey)
+    console.log('🔍 Redis Data for Bank Account:', {
+      bankAccountKey,
+      bankAccountData,
+    })
+
+    // Determine bankVerified status
+    let bankVerified = existingData?.bankVerified || false
+
+    // Fallback check for bank verification
+    if (!bankVerified) {
+      console.log('🔍 Performing Fallback Check for Bank Verification...')
+      if (bankAccountData?.verified) {
+        bankVerified = true // Update bankVerified based on fallback data
+        console.log('✅ Bank verification confirmed via fallback check.')
+      } else {
+        console.log('⚠️ Bank verification fallback check failed.')
+      }
+    }
+
+    // Log the computed `bankVerified` value
+    console.log('🔍 Computed Bank Verified Status:', { bankVerified })
 
     // Extract the invoice object to get the payment date
     const invoice = event.data.object as Stripe.Invoice // Cast to Stripe.Invoice
@@ -122,7 +148,7 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
       subscriptionId,
       setupCompleted: true,
       subscriptionActive: subscription.status === 'active',
-      bankVerified,
+      bankVerified, // Final computed bankVerified status
       lastPaymentStatus: 'succeeded',
       lastPaymentDate,
       currentPeriodEnd: new Date(
@@ -131,7 +157,8 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
       timestamp: Date.now(),
     }
 
-    await setRedisKey(redisKey, paymentSetupData, 86400)
+    // Save the updated payment setup data to Redis
+    await setRedisKey(redisKey, paymentSetupData, 86400) // TTL: 1 day
     logEvent('Processed Invoice Payment Succeeded', event.id, paymentSetupData)
 
     return NextResponse.json({ received: true })
@@ -230,7 +257,11 @@ async function handlePaymentMethodAttached(event: Stripe.Event) {
       }
 
       const redisKey = `bank_account:${customerId}`
-      await setRedisKey(redisKey, bankAccountData, 86400)
+      console.log('🔍 Saving Bank Account Data to Redis:', {
+        redisKey,
+        bankAccountData,
+      })
+      await setRedisKey(redisKey, bankAccountData, 86400) // Save with a TTL of 1 day
       logEvent('Processed Bank Account Attached', event.id, bankAccountData)
     }
 
