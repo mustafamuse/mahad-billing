@@ -1,6 +1,8 @@
-import { EnrollmentForm } from '@/components/enrollment-form'
-import { Footer } from '@/components/footer'
-import { Header } from '@/components/header'
+import React from 'react'
+
+import { EnrollmentForm } from '../components/enrollment-form'
+import { Footer } from '../components/footer'
+import { Header } from '../components/header'
 
 export default function Home() {
   return (

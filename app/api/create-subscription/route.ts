@@ -157,17 +157,39 @@ async function createSubscription({
   paymentMethodId: string
   students: any[]
 }): Promise<Stripe.Subscription> {
+  // Calculate the total amount (validate server-side)
+  const totalAmount = students.reduce(
+    (sum, student) => sum + student.monthlyRate * 100,
+    0
+  )
+
+  if (!students.length || totalAmount <= 0) {
+    throw new Error('No valid students selected or total amount is invalid.')
+  }
+
+  console.log('Creating Subscription with:', {
+    customerId,
+    paymentMethodId,
+    students,
+    totalAmount,
+    metadata: {
+      students: JSON.stringify(students),
+      totalAmount: (totalAmount / 100).toFixed(2),
+    },
+  })
+
+  // Step 1: Set billing cycle anchor to the first day of the next month
   const firstDayOfNextMonth = new Date()
   firstDayOfNextMonth.setMonth(firstDayOfNextMonth.getMonth() + 1)
   firstDayOfNextMonth.setDate(1)
   firstDayOfNextMonth.setHours(0, 0, 0, 0)
-
   const billingCycleAnchor = Math.floor(firstDayOfNextMonth.getTime() / 1000)
 
-  return stripe.subscriptions.create({
+  // Step 2: Create subscription with `billing_cycle_anchor`
+  const subscription = await stripe.subscriptions.create({
     customer: customerId,
     default_payment_method: paymentMethodId,
-    items: students.map((student: any) => ({
+    items: students.map((student) => ({
       price_data: {
         currency: 'usd',
         unit_amount: student.monthlyRate * 100, // Convert to cents
@@ -186,15 +208,23 @@ async function createSubscription({
         ).toString(),
       },
     })),
-    billing_cycle_anchor: billingCycleAnchor, // Align billing to the 1st of the next month
-    proration_behavior: 'none', // Avoid prorated charges
-    metadata: { initiatedBy: 'API' },
+    billing_cycle_anchor: billingCycleAnchor, // Align future invoices to the 1st of the month
+    proration_behavior: 'none',
+    metadata: {
+      students: JSON.stringify(students), // Centralized students metadata
+      totalAmount: (totalAmount / 100).toFixed(2), // Store as dollars
+      initiatedBy: 'API',
+    },
     collection_method: 'charge_automatically',
     payment_settings: {
       payment_method_types: ['us_bank_account'],
       save_default_payment_method: 'on_subscription',
     },
   })
+
+  console.log('Subscription Created Successfully:', subscription)
+
+  return subscription
 }
 
 async function updateSubscriptionInRedis(

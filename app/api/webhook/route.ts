@@ -95,70 +95,32 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   }
 
   try {
-    // Retrieve the subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+    const invoice = event.data.object as Stripe.Invoice
 
-    // Read Redis data for payment setup
+    const firstPaymentDate = invoice.status_transitions?.paid_at
+      ? new Date(invoice.status_transitions.paid_at * 1000).toISOString()
+      : new Date().toISOString()
+
+    // Update Redis with first payment details
     const redisKey = `payment_setup:${customerId}`
     const existingData = await getRedisKey(redisKey)
-    console.log('🔍 Redis Data for Payment Setup:', { redisKey, existingData })
 
-    // Read Redis data for bank account
-    const bankAccountKey = `bank_account:${customerId}`
-    const bankAccountData = await getRedisKey(bankAccountKey)
-    console.log('🔍 Redis Data for Bank Account:', {
-      bankAccountKey,
-      bankAccountData,
-    })
-
-    // Determine bankVerified status
-    let bankVerified = existingData?.bankVerified || false
-
-    // Fallback check for bank verification
-    if (!bankVerified) {
-      console.log('🔍 Performing Fallback Check for Bank Verification...')
-      if (bankAccountData?.verified) {
-        bankVerified = true // Update bankVerified based on fallback data
-        console.log('✅ Bank verification confirmed via fallback check.')
-      } else {
-        console.log('⚠️ Bank verification fallback check failed.')
-      }
-    }
-
-    // Log the computed `bankVerified` value
-    console.log('🔍 Computed Bank Verified Status:', { bankVerified })
-
-    // Extract the invoice object to get the payment date
-    const invoice = event.data.object as Stripe.Invoice // Cast to Stripe.Invoice
-    const lastPaymentDate = (() => {
-      if (invoice.status_transitions?.paid_at) {
-        return new Date(invoice.status_transitions.paid_at * 1000).toISOString()
-      }
-      if (invoice.created) {
-        return new Date(invoice.created * 1000).toISOString()
-      }
-      console.warn('⚠️ Missing timestamps for invoice', {
-        invoiceId: invoice.id,
-      })
-      return new Date().toISOString()
-    })()
-
-    // Create the payment setup data
-    const paymentSetupData: SubscriptionPaymentStatus = {
+    const paymentSetupData = {
+      ...existingData,
       subscriptionId,
       setupCompleted: true,
       subscriptionActive: subscription.status === 'active',
-      bankVerified, // Final computed bankVerified status
+      firstPaymentDate,
       lastPaymentStatus: 'succeeded',
-      lastPaymentDate,
+      lastPaymentDate: firstPaymentDate,
       currentPeriodEnd: new Date(
         subscription.current_period_end * 1000
       ).toISOString(),
       timestamp: Date.now(),
     }
 
-    // Save the updated payment setup data to Redis
-    await setRedisKey(redisKey, paymentSetupData, 86400) // TTL: 1 day
+    await setRedisKey(redisKey, paymentSetupData, 86400)
     logEvent('Processed Invoice Payment Succeeded', event.id, paymentSetupData)
 
     return NextResponse.json({ received: true })
