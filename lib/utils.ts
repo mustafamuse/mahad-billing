@@ -57,6 +57,20 @@ export function formatDate(timestamp: number): string {
     minute: '2-digit',
   })
 }
+export function getBillingCycleAnchor(dayOfMonth: number = 1): number {
+  // Get the current date and move to the next month
+  const targetDate = new Date()
+  targetDate.setMonth(targetDate.getMonth() + 1)
+
+  // Set the desired day of the month (default to 1st if no day is provided)
+  targetDate.setDate(dayOfMonth)
+
+  // Reset the time to midnight
+  targetDate.setHours(0, 0, 0, 0)
+
+  // Return Unix timestamp
+  return Math.floor(targetDate.getTime() / 1000)
+}
 
 export async function verifyPaymentSetup(customerId: string) {
   const [paymentSetup, bankAccount] = await Promise.all([

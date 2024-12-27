@@ -71,6 +71,14 @@ export async function POST(request: Request) {
         return handleInvoicePaymentFailed(event)
       case 'payment_method.attached':
         return handlePaymentMethodAttached(event)
+      case 'payment_intent.succeeded':
+        return handlePaymentIntentSucceeded(event)
+      case 'payment_intent.processing':
+        return handlePaymentIntentProcessing(event)
+      case 'payment_intent.payment_failed':
+        return handlePaymentIntentFailed(event)
+      case 'payment_intent.canceled':
+        return handlePaymentIntentCanceled(event)
       default:
         logEvent('Unhandled Event Type', event.id, { eventType: event.type })
         return NextResponse.json({ received: true })
@@ -230,6 +238,125 @@ async function handlePaymentMethodAttached(event: Stripe.Event) {
     return NextResponse.json({ received: true })
   } catch (error) {
     handleError('Payment Method Attached', event.id, error)
+    throw error
+  }
+}
+
+async function handlePaymentIntentSucceeded(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
+  const customerId = paymentIntent.customer as string
+  const amount = paymentIntent.amount
+  const metadata = paymentIntent.metadata
+
+  try {
+    // Log success and update the database
+    logEvent('Payment Intent Succeeded', event.id, { customerId, amount })
+
+    const paymentData = {
+      customerId,
+      amount: amount / 100, // Convert to dollars
+      chargeType: metadata.chargeType,
+      students: metadata.students ? JSON.parse(metadata.students) : [],
+      status: 'succeeded',
+      timestamp: new Date().toISOString(),
+    }
+
+    // Save payment details to Redis or database
+    const redisKey = `one_time_charge:${paymentIntent.id}`
+    await setRedisKey(redisKey, paymentData, 86400) // TTL: 1 day
+
+    // Notify the customer (optional)
+    // sendEmail(customerId, 'Your payment was successful', paymentData)
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Payment Intent Succeeded', event.id, error)
+    throw error
+  }
+}
+
+async function handlePaymentIntentProcessing(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
+  const customerId = paymentIntent.customer as string
+
+  try {
+    logEvent('Payment Intent Processing', event.id, { customerId })
+
+    const processingData = {
+      customerId,
+      amount: paymentIntent.amount / 100,
+      status: 'processing',
+      timestamp: new Date().toISOString(),
+    }
+
+    // Save processing details to Redis or database
+    const redisKey = `one_time_charge:${paymentIntent.id}`
+    await setRedisKey(redisKey, processingData, 86400)
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Payment Intent Processing', event.id, error)
+    throw error
+  }
+}
+
+async function handlePaymentIntentFailed(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
+  const customerId = paymentIntent.customer as string
+  const lastPaymentError = paymentIntent.last_payment_error?.message
+
+  try {
+    logEvent('Payment Intent Failed', event.id, {
+      customerId,
+      error: lastPaymentError,
+    })
+
+    const failedData = {
+      customerId,
+      amount: paymentIntent.amount / 100,
+      status: 'failed',
+      error: lastPaymentError || 'Unknown error',
+      timestamp: new Date().toISOString(),
+    }
+
+    // Save failed payment details to Redis or database
+    const redisKey = `one_time_charge:${paymentIntent.id}`
+    await setRedisKey(redisKey, failedData, 86400)
+
+    // Notify the customer of the failure
+    // sendEmail(customerId, 'Your payment failed', failedData)
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Payment Intent Failed', event.id, error)
+    throw error
+  }
+}
+
+async function handlePaymentIntentCanceled(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
+  const customerId = paymentIntent.customer as string
+
+  try {
+    logEvent('Payment Intent Canceled', event.id, { customerId })
+
+    const canceledData = {
+      customerId,
+      amount: paymentIntent.amount / 100,
+      status: 'canceled',
+      timestamp: new Date().toISOString(),
+    }
+
+    // Save canceled payment details to Redis or database
+    const redisKey = `one_time_charge:${paymentIntent.id}`
+    await setRedisKey(redisKey, canceledData, 86400)
+
+    // Optionally notify the customer of the cancellation
+    // sendEmail(customerId, 'Your payment was canceled', canceledData)
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Payment Intent Canceled', event.id, error)
     throw error
   }
 }

@@ -37,7 +37,7 @@ export default function PaymentSuccessContent() {
         const subscriptionResponse = await fetch('/api/create-subscription', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ setupIntentId }),
+          body: JSON.stringify({ setupIntentId, oneTimeCharge: true }), // Explicitly set oneTimeCharge to true
         })
 
         const subscriptionData = await subscriptionResponse.json()
