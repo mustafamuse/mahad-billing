@@ -168,17 +168,18 @@ async function processOneTimeCharge(
   paymentMethodId: string,
   students: any[]
 ) {
+  logEvent('Starting One-Time Charge Processing', customerId, { students })
+
   try {
     const oneTimeChargeAmount = students.reduce(
-      (sum, student) => sum + student.monthlyRate * 100, // Convert to cents
+      (sum, student) => sum + student.monthlyRate * 100,
       0
     )
 
     if (oneTimeChargeAmount > 0) {
-      logEvent('Processing One-Time Charge', oneTimeChargeAmount, {
-        customerId,
+      logEvent('Processing One-Time Charge', customerId, {
+        amount: oneTimeChargeAmount,
       })
-
       // Create a PaymentIntent for the one-time charge
       const paymentIntent = await stripe.paymentIntents.create({
         customer: customerId,
@@ -190,6 +191,7 @@ async function processOneTimeCharge(
         metadata: {
           chargeType: 'One-time fee',
           students: JSON.stringify(students),
+          createdBy: 'Subscription API',
         },
         automatic_payment_methods: {
           enabled: true,
@@ -202,18 +204,22 @@ async function processOneTimeCharge(
         status: paymentIntent.status,
       })
 
-      // If the payment intent is still processing
       if (paymentIntent.status === 'processing') {
         logEvent('One-Time Charge Processing', paymentIntent.id, {
           amount: oneTimeChargeAmount,
         })
       }
     } else {
-      logEvent('No valid amount for One-Time Charge', {})
+      logEvent('No valid amount for One-Time Charge', customerId)
     }
   } catch (error) {
     console.error('Error creating one-time charge:', error)
-    throw error // Log and allow calling function to handle the error
+    logEvent('One-Time Charge Failed', customerId, {
+      error: error.message,
+    })
+    throw error
+  } finally {
+    logEvent('Completed One-Time Charge Processing', customerId)
   }
 }
 

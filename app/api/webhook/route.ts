@@ -249,28 +249,30 @@ async function handlePaymentIntentSucceeded(event: Stripe.Event) {
   const metadata = paymentIntent.metadata
 
   try {
-    // Log success and update the database
     logEvent('Payment Intent Succeeded', event.id, { customerId, amount })
 
     const paymentData = {
       customerId,
-      amount: amount / 100, // Convert to dollars
+      amount: amount / 100,
       chargeType: metadata.chargeType,
       students: metadata.students ? JSON.parse(metadata.students) : [],
       status: 'succeeded',
       timestamp: new Date().toISOString(),
     }
 
-    // Save payment details to Redis or database
+    // Save payment details to Redis
     const redisKey = `one_time_charge:${paymentIntent.id}`
-    await setRedisKey(redisKey, paymentData, 86400) // TTL: 1 day
+    await setRedisKey(redisKey, paymentData, 86400)
 
+    logEvent('One-Time Charge Saved to Redis', redisKey, paymentData)
     // Notify the customer (optional)
     // sendEmail(customerId, 'Your payment was successful', paymentData)
-
     return NextResponse.json({ received: true })
   } catch (error) {
     handleError('Payment Intent Succeeded', event.id, error)
+    logEvent('Error Handling Payment Intent Succeeded', event.id, {
+      error: error.message,
+    })
     throw error
   }
 }
