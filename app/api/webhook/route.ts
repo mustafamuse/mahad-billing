@@ -22,9 +22,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: Request) {
-  let event: Stripe.Event | null = null // Assign a default value
+  let event: Stripe.Event | null = null
 
-  // 1. Validate environment variables
   if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
     console.error(
       '❌ Missing Stripe API key or Webhook secret in environment variables'
@@ -36,7 +35,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    // 2. Validate request and signature
     const payload = await request.text()
     const headersList = headers()
     const signature = headersList.get('stripe-signature')
@@ -49,11 +47,9 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verify and construct the event
     event = stripe.webhooks.constructEvent(payload, signature, webhookSecret)
     logEvent('Received', event.id, { eventType: event.type })
 
-    // 3. Check for duplicate events
     const eventKey = `stripe_event:${event.id}`
     const isDuplicate = await getRedisKey(eventKey)
     if (isDuplicate) {
@@ -61,9 +57,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true })
     }
 
-    await setRedisKey(eventKey, 'processed', 86400) // TTL: 1 day
+    await setRedisKey(eventKey, 'processed', 86400)
 
-    // 4. Handle event
     switch (event.type) {
       case 'invoice.payment_succeeded':
         return handleInvoicePaymentSucceeded(event)
@@ -110,7 +105,6 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
       ? new Date(invoice.status_transitions.paid_at * 1000).toISOString()
       : new Date().toISOString()
 
-    // Update Redis with first payment details
     const redisKey = `payment_setup:${customerId}`
     const existingData = await getRedisKey(redisKey)
 
@@ -129,6 +123,15 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
     }
 
     await setRedisKey(redisKey, paymentSetupData, 86400)
+
+    // Clear previous failed payments if resolved
+    const failedPaymentKey = `failed_payment:${customerId}`
+    const failedPaymentData = await getRedisKey(failedPaymentKey)
+    if (failedPaymentData) {
+      console.log('✅ Resolved previous failed payment:', failedPaymentData)
+      await setRedisKey(failedPaymentKey, null, 0) // Clear the failed payment record
+    }
+
     logEvent('Processed Invoice Payment Succeeded', event.id, paymentSetupData)
 
     return NextResponse.json({ received: true })
@@ -149,36 +152,23 @@ async function handleInvoicePaymentFailed(event: Stripe.Event) {
   }
 
   try {
-    // Retrieve the subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-
     const redisKey = `payment_setup:${customerId}`
     const existingData = await getRedisKey(redisKey)
     const bankVerified = existingData?.bankVerified || false
 
-    // Extract the invoice object to get the last payment date
-    const invoice = event.data.object as Stripe.Invoice // Cast to Stripe.Invoice
-    const lastPaymentDate = (() => {
-      if (invoice.status_transitions?.finalized_at) {
-        return new Date(
-          invoice.status_transitions.finalized_at * 1000
-        ).toISOString()
-      }
-      if (invoice.created) {
-        return new Date(invoice.created * 1000).toISOString()
-      }
-      console.warn('⚠️ Missing timestamps for invoice', {
-        invoiceId: invoice.id,
-      })
-      return new Date().toISOString()
-    })()
+    const invoice = event.data.object as Stripe.Invoice
 
-    // Create the payment setup data
+    const lastPaymentDate = invoice.status_transitions?.finalized_at
+      ? new Date(invoice.status_transitions.finalized_at * 1000).toISOString()
+      : new Date().toISOString()
+
     const paymentSetupData: SubscriptionPaymentStatus = {
       subscriptionId,
       setupCompleted: false,
       subscriptionActive: subscription.status === 'active',
       bankVerified,
+
       lastPaymentStatus: 'failed',
       lastPaymentDate,
       currentPeriodEnd: new Date(
@@ -188,6 +178,17 @@ async function handleInvoicePaymentFailed(event: Stripe.Event) {
     }
 
     await setRedisKey(redisKey, paymentSetupData, 86400)
+
+    // Save failed payment for retry
+    const failedPaymentKey = `failed_payment:${customerId}`
+    const failedPaymentData = {
+      customerId,
+      paymentIntentId: invoice.payment_intent,
+      amount: invoice.total,
+      timestamp: Date.now(),
+    }
+    await setRedisKey(failedPaymentKey, failedPaymentData, 7 * 86400)
+
     logEvent('Processed Invoice Payment Failed', event.id, paymentSetupData)
 
     return NextResponse.json({ received: true })
@@ -227,17 +228,48 @@ async function handlePaymentMethodAttached(event: Stripe.Event) {
       }
 
       const redisKey = `bank_account:${customerId}`
-      console.log('🔍 Saving Bank Account Data to Redis:', {
-        redisKey,
-        bankAccountData,
-      })
-      await setRedisKey(redisKey, bankAccountData, 86400) // Save with a TTL of 1 day
+      await setRedisKey(redisKey, bankAccountData, 86400)
+
+      // Retry failed payments, if any
+      const failedPaymentKey = `failed_payment:${customerId}`
+      const failedPaymentData = await getRedisKey(failedPaymentKey)
+      if (failedPaymentData) {
+        console.log('🔄 Retrying failed payment:', failedPaymentData)
+        await retryFailedPayment(failedPaymentData)
+      }
+
       logEvent('Processed Bank Account Attached', event.id, bankAccountData)
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
     handleError('Payment Method Attached', event.id, error)
+    throw error
+  }
+}
+
+async function retryFailedPayment(failedPaymentData: any) {
+  const { paymentIntentId, amount, customerId } = failedPaymentData
+
+  try {
+    console.log('🔄 Retrying payment for PaymentIntent:', paymentIntentId) // Logging it for traceability
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      customer: customerId,
+      amount,
+      currency: 'usd',
+      confirm: true,
+    })
+
+    console.log('✅ Payment retried successfully:', paymentIntent.id)
+    const redisKey = `failed_payment:${customerId}`
+    await setRedisKey(redisKey, null, 0) // Immediate expiration of the failed payment record
+  } catch (error) {
+    console.error(
+      '❌ Failed to retry payment for PaymentIntent:',
+      paymentIntentId,
+      error.message
+    )
     throw error
   }
 }
@@ -251,22 +283,40 @@ async function handlePaymentIntentSucceeded(event: Stripe.Event) {
   try {
     logEvent('Payment Intent Succeeded', event.id, { customerId, amount })
 
+    const redisKey = `one_time_charge:${paymentIntent.id}`
+    const existingChargeData = await getRedisKey(redisKey)
+
+    // If the charge is already marked as 'succeeded', avoid duplicate processing
+    if (existingChargeData && existingChargeData.status === 'succeeded') {
+      logEvent('Duplicate PaymentIntent Succeeded Event Detected', redisKey, {
+        customerId,
+        paymentIntentId: paymentIntent.id,
+      })
+      return NextResponse.json({ received: true })
+    }
+
+    // Prepare payment data for Redis
     const paymentData = {
       customerId,
-      amount: amount / 100,
+      amount: amount / 100, // Convert to dollars
       chargeType: metadata.chargeType,
       students: metadata.students ? JSON.parse(metadata.students) : [],
       status: 'succeeded',
       timestamp: new Date().toISOString(),
     }
 
-    // Save payment details to Redis
-    const redisKey = `one_time_charge:${paymentIntent.id}`
-    await setRedisKey(redisKey, paymentData, 86400)
+    // Update Redis with succeeded payment status
+    await setRedisKey(redisKey, paymentData, 86400) // TTL: 1 day
 
-    logEvent('One-Time Charge Saved to Redis', redisKey, paymentData)
+    logEvent(
+      'One-Time Charge Marked as Succeeded in Redis',
+      redisKey,
+      paymentData
+    )
+
     // Notify the customer (optional)
-    // sendEmail(customerId, 'Your payment was successful', paymentData)
+    // sendEmail(customerId, 'Your payment was successful', paymentData);
+
     return NextResponse.json({ received: true })
   } catch (error) {
     handleError('Payment Intent Succeeded', event.id, error)

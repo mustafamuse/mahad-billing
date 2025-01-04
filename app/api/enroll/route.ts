@@ -67,6 +67,8 @@ export async function POST(request: Request) {
       },
     })
 
+    console.log('🛠️ Debug: Created SetupIntent:', setupIntent)
+
     return NextResponse.json({
       clientSecret: setupIntent.client_secret,
       customerId: customer.id,

@@ -3,14 +3,18 @@ import { toast } from './index'
 interface ApiErrorOptions {
   title?: string
   error: Error | unknown
+  description?: string // Optional extra message
   duration?: number
 }
 
 export const toasts = {
-  apiError: ({ title = 'Error', error, duration = 5000 }: ApiErrorOptions) => {
+  apiError: ({
+    title = 'Error',
+    description,
+    duration = 5000,
+  }: ApiErrorOptions) => {
     return toast.error(title, {
-      description:
-        error instanceof Error ? error.message : 'An unexpected error occurred',
+      description,
       duration,
     })
   },
