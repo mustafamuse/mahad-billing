@@ -340,13 +340,25 @@ async function createSubscription({
     throw new Error('Invalid student data retrieved from Redis.')
   }
 
+  // Modify specific student rate (e.g., Mustafa Muse -> $1)
+  const modifiedStudents = students.map((student) => {
+    if (student.name === 'Mustafa Muse') {
+      console.log(`Overriding rate for Mustafa Muse to $1.`)
+      return {
+        ...student,
+        monthlyRate: 1, // Set the rate to $1
+      }
+    }
+    return student
+  })
+
   // Calculate total subscription amount
-  const totalAmount = students.reduce(
-    (sum, student) => sum + student.monthlyRate * 100,
+  const totalAmount = modifiedStudents.reduce(
+    (sum, student) => sum + student.monthlyRate * 100, // Stripe accepts cents
     0
   )
 
-  if (!students.length || totalAmount <= 0) {
+  if (!modifiedStudents.length || totalAmount <= 0) {
     throw new Error('No valid students selected or total amount is invalid.')
   }
 
@@ -358,7 +370,7 @@ async function createSubscription({
     subscription = await stripe.subscriptions.create({
       customer: customerId,
       default_payment_method: paymentMethodId,
-      items: students.map((student) => ({
+      items: modifiedStudents.map((student) => ({
         price_data: {
           currency: 'usd',
           unit_amount: student.monthlyRate * 100,
