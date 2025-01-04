@@ -277,7 +277,9 @@ async function createSubscription({
       parsedMetadata = JSON.parse(metadataFromRedis)
     } catch (error) {
       console.error(`❌ Failed to parse Redis metadata:`, metadataFromRedis)
-      throw new Error(`Failed to parse metadata from Redis: ${error.message}`)
+      throw new Error(
+        `Failed to parse metadata from Redis: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   } else if (typeof metadataFromRedis === 'object') {
     // If metadataFromRedis is already an object, use it directly
@@ -320,7 +322,7 @@ async function createSubscription({
         studentsFromRedis
       )
       throw new Error(
-        `Failed to parse student data from Redis: ${error.message}`
+        `Failed to parse student data from Redis: ${error instanceof Error ? error.message : String(error)}`
       )
     }
   } else if (typeof studentsFromRedis === 'object') {

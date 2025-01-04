@@ -268,7 +268,7 @@ async function retryFailedPayment(failedPaymentData: any) {
     console.error(
       '❌ Failed to retry payment for PaymentIntent:',
       paymentIntentId,
-      error.message
+      error instanceof Error ? error.message : String(error)
     )
     throw error
   }
@@ -321,7 +321,7 @@ async function handlePaymentIntentSucceeded(event: Stripe.Event) {
   } catch (error) {
     handleError('Payment Intent Succeeded', event.id, error)
     logEvent('Error Handling Payment Intent Succeeded', event.id, {
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
     })
     throw error
   }

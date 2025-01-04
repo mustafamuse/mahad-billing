@@ -13,14 +13,14 @@ export async function GET() {
     // Step 1: Fetch all active subscriptions using pagination
     let hasMore = true
     let startingAfter: string | undefined = undefined
-
     while (hasMore) {
-      const response = await stripe.subscriptions.list({
-        status: 'active',
-        expand: ['data.customer', 'data.items', 'data.latest_invoice'],
-        limit: 100, // Stripe's max limit per page
-        starting_after: startingAfter,
-      })
+      const response: Stripe.Response<Stripe.ApiList<Stripe.Subscription>> =
+        await stripe.subscriptions.list({
+          status: 'active',
+          expand: ['data.customer', 'data.items', 'data.latest_invoice'],
+          limit: 100, // Stripe's max limit per page
+          starting_after: startingAfter,
+        })
 
       subscriptions.push(...response.data)
       hasMore = response.has_more

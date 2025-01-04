@@ -101,7 +101,7 @@ export async function GET() {
             studentsFromRedis
           )
           throw new Error(
-            `Failed to parse student data from Redis: ${error.message}`
+            `Failed to parse student data from Redis: ${error instanceof Error ? error.message : String(error)}`
           )
         }
       } else if (typeof studentsFromRedis === 'object') {
