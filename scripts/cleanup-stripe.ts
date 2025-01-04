@@ -1,5 +1,5 @@
 import { config } from 'dotenv'
-import prompts from 'prompts'
+import prompts from 'prompts' // FIX: Use default import for prompts
 import Stripe from 'stripe'
 
 // Load environment variables from .env.local
@@ -143,7 +143,8 @@ async function cleanupStripe() {
 
     // Step 4: Void or delete open invoices
     for (const invoice of invoices.data) {
-      if (['draft', 'open'].includes(invoice.status)) {
+      if (['draft', 'open'].includes(invoice.status ?? '')) {
+        // FIX: Handle null status
         console.log(`🟡 Voiding invoice: ${invoice.id}`)
         await safeStripeOperation(
           () => stripe.invoices.voidInvoice(invoice.id),
@@ -151,7 +152,9 @@ async function cleanupStripe() {
         )
       } else {
         console.log(
-          `Skipping invoice ${invoice.id} (status: ${invoice.status || 'unknown'})`
+          `Skipping invoice ${invoice.id} (status: ${
+            invoice.status || 'unknown'
+          })`
         )
       }
     }
