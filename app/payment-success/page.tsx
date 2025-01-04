@@ -33,22 +33,17 @@ export default function PaymentSuccessContent() {
         setIsLoading(true)
         setHasFailed(false)
 
-        // Call the subscription API
         const subscriptionResponse = await fetch('/api/create-subscription', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ setupIntentId, oneTimeCharge: true }), // Explicitly set oneTimeCharge to true
+          body: JSON.stringify({ setupIntentId, oneTimeCharge: false }),
         })
 
-        const subscriptionData = await subscriptionResponse.json()
-
-        if (!subscriptionResponse.ok || !subscriptionData.success) {
-          console.error(
-            'Subscription creation failed:',
-            subscriptionData.error || 'Unknown error'
-          )
+        if (!subscriptionResponse.ok) {
+          const errorText = await subscriptionResponse.text()
+          console.error('Subscription API returned an error:', errorText)
           setStatusMessage(
-            subscriptionData.error ??
+            errorText ||
               'Failed to verify your payment method. Please try again.'
           )
           setHasFailed(true)
@@ -56,7 +51,33 @@ export default function PaymentSuccessContent() {
           return
         }
 
-        // If successful, update the verification status
+        let subscriptionData
+        try {
+          subscriptionData = await subscriptionResponse.json()
+        } catch (jsonError) {
+          console.error('Failed to parse JSON response:', jsonError)
+          setStatusMessage(
+            'An unexpected error occurred. Please try again later.'
+          )
+          setHasFailed(true)
+          setIsVerified(false)
+          return
+        }
+
+        if (!subscriptionData.success) {
+          console.error(
+            'Subscription creation failed:',
+            subscriptionData.error || 'Unknown error'
+          )
+          setStatusMessage(
+            subscriptionData.error ||
+              'Failed to verify your payment method. Please try again.'
+          )
+          setHasFailed(true)
+          setIsVerified(false)
+          return
+        }
+
         setStatusMessage(
           'Your payment method has been verified and your enrollment is complete.'
         )

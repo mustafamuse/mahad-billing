@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
+import { redis } from '@/lib/redis'
 import { Student } from '@/lib/types'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -11,31 +12,59 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    console.log('Creating customer:', {
-      email: body.email,
-      timestamp: new Date().toISOString(),
-    })
-
     const { total, email, firstName, lastName, phone, students } = body
 
+    // 1️⃣ Create a unique key for storing the student data
+    const redisKey = `students:${email}`
+
+    // 2️⃣ Save the student data in Redis
+    const stringifiedStudents = JSON.stringify(students)
+    console.log('✅ Saving to Redis:', stringifiedStudents) // Debug before saving
+    await redis.set(redisKey, stringifiedStudents, { ex: 86400 }) // TTL = 1 day
+
+    console.log('✅ Students saved to Redis with key:', redisKey)
+
+    // 3️⃣ Retrieve students from Redis to verify data storage
+    // 3️⃣ Retrieve students from Redis to verify data storage
+    const storedStudents = await redis.get(redisKey)
+    console.log('✅ Retrieved from Redis:', storedStudents) // Debug after retrieving
+
+    // Check if storedStudents is null or undefined
+    if (!storedStudents) {
+      throw new Error(
+        `Failed to retrieve students from Redis for key: ${redisKey}`
+      )
+    }
+
+    // Ensure storedStudents is in the correct format
+    let parsedStudents: Student[]
+    if (typeof storedStudents === 'string') {
+      // If it's a string, parse it
+      parsedStudents = JSON.parse(storedStudents) as Student[]
+    } else if (Array.isArray(storedStudents)) {
+      // If it's already an array, assign it directly
+      parsedStudents = storedStudents as Student[]
+    } else {
+      // If it's neither a string nor an array, throw an error
+      throw new Error(`Unexpected data format in Redis for key: ${redisKey}.`)
+    }
+
+    console.log('✅ Parsed students from Redis:', parsedStudents)
+
+    // 4️⃣ Modify metadata to include only the reference key
     const customerData = {
       name: `${firstName} ${lastName}`,
       phone,
       metadata: {
-        students: JSON.stringify(students),
+        studentKey: redisKey, // Reference key for external data
         total: total.toString(),
       },
     }
 
-    // Find or create a Stripe Customer
-    let customer = (await stripe.customers.list({ email: email, limit: 1 }))
-      .data[0]
-
+    // 5️⃣ Find or create a Stripe Customer
+    let customer = (await stripe.customers.list({ email, limit: 1 })).data[0]
     if (!customer) {
-      customer = await stripe.customers.create({
-        email: email,
-        ...customerData,
-      })
+      customer = await stripe.customers.create({ email, ...customerData })
     } else {
       customer = await stripe.customers.update(customer.id, customerData)
     }
@@ -46,10 +75,10 @@ export async function POST(request: Request) {
       name: `${firstName} ${lastName}`,
       phone,
       total,
-      students: students.map((student: Student) => student.name),
+      students: parsedStudents.map((student) => student.name), // Retrieved from Redis
     })
 
-    // Create a SetupIntent
+    // 6️⃣ Create a SetupIntent with minimal metadata
     const setupIntent = await stripe.setupIntents.create({
       customer: customer.id,
       payment_method_types: ['us_bank_account'],
@@ -61,13 +90,34 @@ export async function POST(request: Request) {
         },
       },
       metadata: {
-        ...customerData.metadata,
+        studentKey: redisKey, // Reference to external data
         total: total.toString(),
         customerId: customer.id,
       },
     })
 
-    console.log('🛠️ Debug: Created SetupIntent:', setupIntent)
+    // Save metadata to Redis for later retrieval
+    // Save metadata to Redis for later retrieval
+    const setupIntentMetadataKey = `setup_intent_metadata:${customer.id}`
+    const setupIntentMetadata = {
+      studentKey: redisKey,
+      total: total.toString(),
+      customerId: customer.id,
+    }
+    console.log(
+      `Saving metadata to Redis with key: ${setupIntentMetadataKey}`,
+      setupIntentMetadata
+    )
+
+    await redis.set(
+      setupIntentMetadataKey,
+      JSON.stringify(setupIntentMetadata),
+      { ex: 86400 } // TTL: 1 day
+    )
+
+    console.log(
+      `✅ Saved setup intent metadata to Redis with key: ${setupIntentMetadataKey}`
+    )
 
     return NextResponse.json({
       clientSecret: setupIntent.client_secret,

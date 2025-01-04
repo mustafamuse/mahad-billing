@@ -1,5 +1,4 @@
 import { Student } from './types'
-import { getFamilyDiscount } from './utils'
 
 // ---------------------------------------
 // Configuration & Constants
@@ -10,8 +9,8 @@ export const BASE_RATE = 150
 // Family Groups Data
 // ---------------------------------------
 const FAMILY_GROUPS = {
-  'family-sh-dayib': {
-    members: ['Abdullahi Dayib Ahmed', 'Majda Sh Dayib', 'Najla Sh Dayib'],
+  'family-dayib': {
+    members: ['Abdullahi Dayib', 'Majda Dayib', 'Najla Dayib'],
   },
   'family-haibah': {
     members: [
@@ -28,7 +27,7 @@ const FAMILY_GROUPS = {
     members: ['Aisha Haji', 'Yasmin Haji'],
   },
   'family-abdisamad': {
-    members: ['Mohamed Abdisamad', 'Sudays Abdisamad'],
+    members: ['Mohamed Abdisamad', 'Sudays Abdisamad', 'Liban Abdisamad'],
   },
   'family-yusuf': {
     members: ['Adnan Yussuf', 'Anwar Yusuf'],
@@ -36,13 +35,98 @@ const FAMILY_GROUPS = {
 }
 
 // ---------------------------------------
+// Class Assignments
+// ---------------------------------------
+const CLASS_ASSIGNMENTS = {
+  'irshad-1': [
+    'Abdiladif Haibah',
+    'Abdishakur Haibah',
+    'Abdiwahab Haibah',
+    'Abdoul Barry',
+    'Abdullahi Dayib',
+    'Amina Guled',
+    'Anzal Omar',
+    'Fatima Ahmed',
+    'Fatima Haibah',
+    'Haarun Abdirahim Mohamed',
+    'Hafsa Hassan',
+    'Hamza Hired',
+    'Hamza Mohamed Hassan',
+    'Hoda Abdullahi',
+    'Khalid Ismail',
+    'Majda Dayib',
+    'Najla Dayib',
+    'Samiro Mohamed',
+    'Zihaam Nor',
+    'Mustafa Muse',
+  ],
+  'irshad-2': [
+    'Aaliyah Ismail',
+    'Abdulkadir Mohamud',
+    'Abdulmalik Mohamud',
+    'Adnan Yussuf',
+    'Ahmed Adan',
+    'Aisha Dahir',
+    'Aisha Elmoge',
+    'Aisha Haji',
+    'Amal Isse',
+    'Anwar Yusuf',
+    'Ayan Hassan',
+    'Bilal Gani',
+    'Deeqa Jama',
+    'Gani Gani',
+    'Hafsa Abdulmalik',
+    'Hannan Abdi',
+    'Hirse Omar',
+    'Ikhlas Hassan',
+    'Ilwad Hassan',
+    'Khadija Ali-Daar',
+    'Liban Abdisamad',
+    'Lujayn Ahmed',
+    'Maryam Ali',
+    'Mohamed Abdisamad',
+    'Mohamed Farah',
+    'Nadira Haji',
+    'Nassra Mohsin',
+    'Nasteho Mowlid Abdiqadir',
+    'Rahma Abdullahi',
+    'Rahma Dek',
+    'Rahma Yusuf',
+    'Sagal Mohamud',
+    'Salma Dayib',
+    'Salma Farah',
+    'Salman Isse',
+    'Samira Moalim',
+    'Shamis Mohamud',
+    'Shuayb Isse',
+    'Sudays Abdisamad',
+    'Sumaya Hassan',
+    'Sumaya Moalim',
+    'Sumaya Omar',
+    'Ugbad Dek',
+    'Yasmin Haji',
+    'Zamzam Farah',
+  ],
+  'abubakar-1': [
+    'Hamse Hassen',
+    'Rania Hussein',
+    'Halima Mume',
+    'Salma Omar',
+    'Hodo Ahmed',
+    'Rahma Farah',
+    'Najma Adeys',
+    'Darartu Elemo',
+    'Ikram Abdulkadir',
+    'Sagal Dahir',
+    'Samiro Bong',
+    'Salahu-Din Hussein',
+  ],
+}
+
+// ---------------------------------------
 // Helper Functions
 // ---------------------------------------
 
-/**
- * Retrieves family information for a given student name.
- * Returns the familyId and totalFamilyMembers if found, otherwise null.
- */
 function getFamilyInfo(name: string) {
   for (const [familyId, family] of Object.entries(FAMILY_GROUPS)) {
     if (family.members.includes(name)) {
@@ -55,17 +139,11 @@ function getFamilyInfo(name: string) {
   return null
 }
 
-/**
- * Extracts the last name from a full name string.
- */
 function getLastName(fullName: string): string {
   const parts = fullName.trim().split(' ')
   return parts[parts.length - 1].toLowerCase()
 }
 
-/**
- * Sorts an array of names alphabetically by their last name.
- */
 function sortByLastName(names: string[]): string[] {
   return names.sort((a, b) => {
     const aLast = getLastName(a)
@@ -74,93 +152,42 @@ function sortByLastName(names: string[]): string[] {
   })
 }
 
+function getClassName(name: string): string | null {
+  for (const [className, students] of Object.entries(CLASS_ASSIGNMENTS)) {
+    if (students.includes(name)) {
+      return className
+    }
+  }
+  return null
+}
+
+function calculateDiscount(siblings: number): number {
+  if (siblings >= 3) return 50
+  if (siblings === 2) return 30
+  if (siblings === 1) return 20
+  return 0
+}
+
 // ---------------------------------------
 // Student Data
 // ---------------------------------------
-const NAMES = [
-  'Aisha Elmoge',
-  'Maryam Ali',
-  'Shamis Mohamud',
-  'Salma Farah',
-  'Adnan Yussuf',
-  'Hannan Abdi',
-  'Salman Isse',
-  'Samira Moalim',
-  'Aaliyah Ismail',
-  'Bilal Gani',
-  'Fatima Haibah',
-  'Hoda Abdullahi',
-  'Hamza Hired',
-  'Anzal Omar',
-  'Amina Guled',
-  'Zihaam Nor',
-  'Nasteho Mowlid Abdiqadir',
-  'Sumaya Omar',
-  'Mohamed Abdisamad',
-  'Abdishakur Haibah',
-  'Ayan Hassan',
-  'Rahma Yusuf',
-  'Aisha Dahir',
-  'Rahma Abdullahi',
-  'Samiro Mohamed',
-  'Amal Isse', // no familyId
-  'Salma Dayib',
-  'Shuayb Isse',
-  'Ilwad Hassan',
-  'Ikhlas Hassan',
-  'Sudays Abdisamad',
-  'Aisha Haji',
-  'Gani Gani',
-  'Abdullahi Dayib Ahmed',
-  'Rahma Dek',
-  'Yasmin Haji',
-  'Sagal Mohamud',
-  'Ugbad Dek',
-  'Zamzam Farah',
-  'Anwar Yusuf',
-  'Mohamed Farah',
-  'Sumaya Moalim',
-  'Khadija Ali-Daar',
-  'Nadira Haji', // no familyId
-  'Hirse Omar',
-  'Sumaya Hassan',
-  'Lujayn Ahmed',
-  'Deeqa Jama',
-  'Fatima Ahmed',
-  'Ahmed Adan',
-  'Haarun Abdirahim Mohamed',
-  'Abdulkadir Mohamud',
-  'Hafsa Hassan',
-  'Abdiwahab Haibah',
-  'Abdiladif Haibah',
-  'Abdulmalik Mohamud',
-  'Khalid Ismail',
-  'Hamza Mohamed Hassan',
-  'Abdoul Barry',
-  'Nassra Mohsin',
-  'Hafsa Abdulmalik',
-]
-
-// ---------------------------------------
-// Generate the Final STUDENTS Array
-// ---------------------------------------
-const sortedNames = sortByLastName(NAMES)
+const sortedNames = sortByLastName(Object.values(CLASS_ASSIGNMENTS).flat())
 
 export const STUDENTS: Student[] = sortedNames.map((name, index) => {
   const familyInfo = getFamilyInfo(name)
-
-  // Calculate the monthly rate with family discount if applicable
-  const monthlyRate = familyInfo
-    ? BASE_RATE - getFamilyDiscount(familyInfo.totalFamilyMembers)
-    : BASE_RATE
+  const className = getClassName(name) || 'unassigned'
+  const siblingsCount = familyInfo ? familyInfo.totalFamilyMembers - 1 : 0 // Exclude the student
+  const discount = calculateDiscount(siblingsCount)
 
   return {
     id: (index + 1).toString(),
     name,
-    monthlyRate,
+    className,
+    monthlyRate: BASE_RATE - discount,
     ...(familyInfo && {
       familyId: familyInfo.familyId,
       totalFamilyMembers: familyInfo.totalFamilyMembers,
     }),
+    siblings: siblingsCount, // Optional, if sibling count is needed per student
   }
 })
