@@ -37,7 +37,7 @@ export default function ApplicantDetails() {
   const studentName = watch('studentName')
   const siblingCount = watch('siblingCount') || 0
   const monthlyRate = watch('monthlyRate') || 0
-  const payer = watch('payer') || 'self'
+  const payer = watch('payer')
 
   // Handle student selection
   const handleSelectStudent = async (student: Student) => {
@@ -176,10 +176,7 @@ export default function ApplicantDetails() {
           Who will be paying for the program?{' '}
           <span className="text-red-500">*</span>
         </Label>
-        <RadioGroup
-          defaultValue={payer}
-          onValueChange={(value) => setValue('payer', value)}
-        >
+        <RadioGroup onValueChange={(value) => setValue('payer', value)}>
           <div className="flex items-center space-x-2">
             <RadioGroupItem value="self" id="self" />
             <Label htmlFor="self">Self</Label>

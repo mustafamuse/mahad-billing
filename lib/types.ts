@@ -6,6 +6,8 @@ export interface Student {
   monthlyRate: number
   familyId?: string
   totalFamilyMembers?: number
+  siblings?: number
+  className?: string
 }
 
 export interface EnrollmentFormData {
