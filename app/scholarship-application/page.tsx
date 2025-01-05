@@ -2,8 +2,12 @@
 
 import { useState } from 'react'
 
+import dynamic from 'next/dynamic'
+
+
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
+import ReactDOM from 'react-dom/client'
 import { FormProvider, useForm } from 'react-hook-form'
 
 import { toasts } from '@/components/toast/toast-utils'
@@ -295,35 +299,32 @@ export default function ScholarshipApplication() {
         'Generating your scholarship document...'
       )
 
-      // Log the formatted data
-      console.log('Final Form Submission:', formattedData)
-
       // Store the form data in localStorage
       localStorage.setItem('scholarshipData', JSON.stringify(formattedData))
 
-      // Wait for 2 seconds
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      // Open PDF directly in a new tab and remove stored data after
-      const pdfWindow = window.open('', '_blank')
-      if (pdfWindow) {
-        pdfWindow.location.href = `/scholarship-application/pdf`
-
-        // Clean up localStorage after PDF is opened
-        setTimeout(() => {
-          localStorage.removeItem('scholarshipData')
-        }, 1000)
-      }
-
-      // Show success toast
-      toasts.success(
-        'Document Ready',
-        'Your scholarship application has been generated successfully.'
-      )
-
       // Set submitted state to show confirmation
       setIsSubmitted(true)
-    } catch (error: any) {
+
+      // Create and mount PDF component once
+      const ScholarshipPDF = dynamic(() => import('./pdf-preview'), {
+        ssr: false,
+      })
+
+      // Create a container that will be removed
+      const container = document.createElement('div')
+      container.style.display = 'none' // Make sure it's hidden
+      document.body.appendChild(container)
+
+      const root = ReactDOM.createRoot(container)
+      root.render(<ScholarshipPDF data={formattedData} />)
+
+      // Clean up after PDF generation and email are handled
+      setTimeout(() => {
+        root.unmount() // Properly unmount the React component
+        document.body.removeChild(container)
+        localStorage.removeItem('scholarshipData')
+      }, 5000) // Increased timeout to ensure PDF generation and email are complete
+    } catch (error) {
       console.error('Form submission failed:', error)
       toasts.error(
         'Submission Failed',

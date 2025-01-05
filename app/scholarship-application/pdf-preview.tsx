@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 
 import {
   Document,
@@ -248,11 +248,10 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
         <Text style={styles.paragraph}>
           My current financial situation is as follows:{' '}
           {formatMultilineText(needJustification)}
-          {goalSupport
-            ? ` This scholarship would help by ${formatMultilineText(goalSupport)}.`
-            : ''}
-          {commitment ? ` ${formatMultilineText(commitment)}` : ''}
-          {additionalInfo ? `\n\n${formatMultilineText(additionalInfo)}` : ''}
+          {goalSupport &&
+            ` This scholarship would help by ${formatMultilineText(goalSupport)}`}
+          {commitment && ` ${formatMultilineText(commitment)}`}
+          {additionalInfo && ` ${formatMultilineText(additionalInfo)}`}
         </Text>
 
         <Text style={styles.paragraph}>
@@ -288,7 +287,6 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
   )
 
   // Use usePDF hook to generate PDF
-  console.log('Initializing usePDF hook')
   const [instance] = usePDF({ document: MyDocument })
 
   // Memoize sendEmailWithPDF to fix useEffect dependency
@@ -372,30 +370,19 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
     [data]
   )
 
+  // Add a ref to store the blob URL
+  const blobUrlRef = useRef<string | null>(null)
+
   // Handle PDF generation and email sending
   useEffect(() => {
-    console.log('PDF generation effect triggered', {
-      hasBlob: !!instance.blob,
-      hasUrl: !!instance.url,
-      loading: instance.loading,
-      error: instance.error,
-    })
-
-    if (instance.loading) {
-      console.log('PDF is still generating...')
-      return
-    }
-
-    if (instance.error) {
-      console.error('PDF generation error:', instance.error)
-      return
-    }
-
-    if (instance.blob) {
+    if (instance.blob && instance.url) {
       console.log('PDF blob generated successfully', {
         blobSize: instance.blob.size,
         blobType: instance.blob.type,
       })
+
+      // Store the blob URL
+      blobUrlRef.current = instance.url
 
       // Send email
       console.log('Initiating email process with blob')
@@ -403,86 +390,79 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
         .then(() => console.log('Email process completed'))
         .catch((error) => console.error('Email process failed:', error))
 
-      // Open PDF in new tab
-      if (instance.url) {
-        console.log('Attempting to open PDF in new tab:', {
-          url: instance.url.substring(0, 50) + '...', // Log first 50 chars of URL
-        })
-        const printWindow = window.open(instance.url)
-        if (printWindow) {
-          console.log('Print window opened successfully')
-          printWindow.print()
-        } else {
-          console.warn('Failed to open print window - popup might be blocked')
-        }
-      } else {
-        console.warn('URL not available for PDF preview')
+      // Show toast with preview link when PDF is ready
+      toast.success('PDF Generated', {
+        description: (
+          <div className="flex flex-col gap-2">
+            <p>Your application has been generated successfully.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Create a new blob URL that will persist
+                const newBlob = new Blob([instance.blob], {
+                  type: 'application/pdf',
+                })
+                const blobUrl = URL.createObjectURL(newBlob)
+                window.open(blobUrl, '_blank')
+
+                // Clean up the blob URL after 10 minutes
+                setTimeout(() => {
+                  URL.revokeObjectURL(blobUrl)
+                }, 600000) // 10 minutes
+              }}
+              className="mt-2"
+            >
+              Preview PDF
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Note: Preview link expires in 10 minutes
+            </p>
+          </div>
+        ),
+        duration: 10000, // Show toast for 10 seconds
+      })
+    }
+
+    // Cleanup function
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current)
+        blobUrlRef.current = null
       }
     }
-  }, [
-    instance.blob,
-    instance.url,
-    instance.loading,
-    instance.error,
-    sendEmailWithPDF,
-  ])
+  }, [instance.blob, instance.url, sendEmailWithPDF])
 
   return (
-    <div className="flex flex-col items-center justify-center p-8">
-      <h1 className="mb-8 text-2xl font-bold">
-        Scholarship Application Letter
-      </h1>
+    <div className="min-h-screen bg-white p-8">
+      <div className="mx-auto max-w-4xl">
+        {/* Show loading state */}
+        {instance.loading && (
+          <div className="text-center text-lg">
+            Generating your scholarship application...
+          </div>
+        )}
 
-      <Button
-        onClick={async () => {
-          console.log('Manual test: Sending test email...')
-          try {
-            const response = await fetch('/api/test-email')
-            const data = await response.json()
-            console.log('Test email response:', data)
-          } catch (error) {
-            console.error('Test email failed:', error)
-          }
-        }}
-        className="mb-4"
-      >
-        Test Email Connection
-      </Button>
+        {/* Show any errors */}
+        {instance.error && (
+          <div className="text-center text-lg text-red-500">
+            Error generating PDF: {instance.error.message}
+          </div>
+        )}
 
-      {/* Hidden download link for generating PDF */}
-      <div className="hidden">
-        <PDFDownloadLink
-          document={MyDocument}
-          fileName={`scholarship-application-${data['Applicant Details'].studentName.toLowerCase().replace(/\s+/g, '-')}.pdf`}
-        >
-          {({ loading, error }) => {
-            console.log('PDFDownloadLink state:', { loading, error })
-            if (loading) {
-              console.log('PDFDownloadLink is loading')
-            }
-            if (error) {
-              console.error('PDFDownloadLink error:', error)
-            }
-            return null
-          }}
-        </PDFDownloadLink>
+        {/* Hidden download link for generating PDF */}
+        <div className="hidden">
+          <PDFDownloadLink
+            document={MyDocument}
+            fileName={`scholarship-application-${data['Applicant Details'].studentName.toLowerCase().replace(/\s+/g, '-')}.pdf`}
+          >
+            {({ loading, error }) => {
+              console.log('PDFDownloadLink state:', { loading, error })
+              return null
+            }}
+          </PDFDownloadLink>
+        </div>
       </div>
-
-      {/* Show loading state */}
-      {instance.loading && (
-        <div>
-          {console.log('Showing loading state')}
-          Generating your scholarship application...
-        </div>
-      )}
-
-      {/* Show any errors */}
-      {instance.error && (
-        <div className="text-red-500">
-          {console.error('Showing error state:', instance.error)}
-          Error generating PDF: {instance.error.message}
-        </div>
-      )}
     </div>
   )
 }

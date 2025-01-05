@@ -27,11 +27,15 @@ export async function POST(req: Request) {
       isValidBuffer: Buffer.isBuffer(pdfBuffer),
     })
 
+    console.log('Sending email to:', {
+      adminEmail: 'umpp101@gmail.com',
+      applicantEmail: email,
+    })
+
     console.log('Sending email via Resend...')
     const result = await resend.emails.send({
       from: 'onboarding@resend.dev',
-      to: ['umpp101@gmail.com'],
-      cc: [email],
+      to: ['umpp101@gmail.com', email],
       subject: `Mahad Scholarship Application - ${studentName}`,
       text: `${studentName} has submitted their Mahad scholarship application.`,
       attachments: [
@@ -42,7 +46,7 @@ export async function POST(req: Request) {
       ],
     })
 
-    console.log('Resend response:', result)
+    console.log('Email sent to both addresses:', result)
     return NextResponse.json({ success: true, result })
   } catch (error) {
     console.error('Email sending failed:', {

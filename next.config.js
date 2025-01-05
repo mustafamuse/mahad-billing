@@ -7,8 +7,18 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value:
-              "default-src 'self'; img-src 'self' blob: data:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' blob:;",
+            value: [
+              "default-src 'self'",
+              "img-src 'self' blob: data:",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' 'wasm-unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "connect-src 'self' blob: data:",
+              "worker-src 'self' blob:",
+              "child-src 'self' blob:",
+              "frame-src 'self' blob:",
+              // Allow data URIs in general
+              "media-src 'self' blob: data:",
+            ].join('; '),
           },
         ],
       },
