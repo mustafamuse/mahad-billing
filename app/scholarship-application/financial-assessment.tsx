@@ -158,6 +158,7 @@ export default function FinancialAssessment() {
             )}
           </div>
 
+          {/* FAFSA Question */}
           <div className="space-y-4">
             <Label>
               Do you qualify for FAFSA? <span className="text-red-500">*</span>
@@ -182,6 +183,7 @@ export default function FinancialAssessment() {
             )}
           </div>
 
+          {/* FAFSA Explanation */}
           {qualifiesForFafsa === 'no' && (
             <div>
               <Label htmlFor="fafsaExplanation">

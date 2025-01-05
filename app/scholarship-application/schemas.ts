@@ -59,10 +59,7 @@ export const financialAssessmentSchema = z
     collegeYear: z
       .union([z.enum(COLLEGE_YEARS), z.string().length(0)])
       .optional(),
-    qualifiesForFafsa: z.enum(['yes', 'no'], {
-      required_error: 'Please indicate if you qualify for FAFSA',
-      invalid_type_error: 'Please indicate if you qualify for FAFSA',
-    }),
+    qualifiesForFafsa: z.enum(['yes', 'no']).optional(),
     fafsaExplanation: z.string().optional(),
     householdSize: z
       .string({
@@ -141,14 +138,14 @@ export const financialAssessmentSchema = z
   )
   .refine(
     (data) => {
-      if (data.qualifiesForFafsa === 'no') {
-        return !!data.fafsaExplanation
+      if (data.educationStatus === 'college') {
+        return data.qualifiesForFafsa !== undefined
       }
       return true
     },
     {
-      message: "Please explain why you don't qualify for FAFSA",
-      path: ['fafsaExplanation'],
+      message: 'Please indicate if you qualify for FAFSA',
+      path: ['qualifiesForFafsa'],
     }
   )
   .refine(

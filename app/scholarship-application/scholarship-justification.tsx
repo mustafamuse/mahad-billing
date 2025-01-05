@@ -11,7 +11,16 @@ export default function ScholarshipJustification() {
   const {
     register,
     formState: { errors },
+    setValue,
   } = useFormContext()
+
+  const handleInputChange =
+    (field: string) => (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setValue(field, e.target.value, {
+        shouldValidate: true,
+        shouldDirty: true,
+      })
+    }
 
   return (
     <div className="space-y-8">
@@ -29,6 +38,7 @@ export default function ScholarshipJustification() {
           <Textarea
             id="needJustification"
             {...register('needJustification')}
+            onChange={handleInputChange('needJustification')}
             rows={5}
             placeholder="Describe your financial need..."
             className={cn(errors.needJustification && 'border-red-500')}
