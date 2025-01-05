@@ -10,7 +10,11 @@ export const PRICE_OVERRIDES: PriceOverride[] = [
     monthlyRate: 1,
     reason: 'Special rate',
   },
-  // Add more overrides as needed
+  {
+    name: 'No one',
+    monthlyRate: 1,
+    reason: 'Special rate',
+  },
 ]
 
 export function getOverriddenPrice(studentName: string): number | null {

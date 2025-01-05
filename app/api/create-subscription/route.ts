@@ -18,6 +18,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 export async function POST(request: Request) {
+  let lockKey: string | null = null
+
   try {
     let requestBody: any
     try {
@@ -31,6 +33,7 @@ export async function POST(request: Request) {
     }
 
     const { setupIntentId, oneTimeCharge } = requestBody || {}
+
     // Parse and validate the request body
     if (!setupIntentId || typeof oneTimeCharge !== 'boolean') {
       return NextResponse.json(
@@ -38,6 +41,26 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+
+    // Add Redis lock to prevent concurrent requests
+    lockKey = `subscription_lock:${setupIntentId}`
+    const lock = await getRedisKey(lockKey)
+    if (lock) {
+      return NextResponse.json({
+        message: 'Subscription creation in progress.',
+        status: 'pending',
+      })
+    }
+
+    // Set lock with status
+    await setRedisKey(
+      lockKey,
+      {
+        status: 'processing',
+        timestamp: new Date().toISOString(),
+      },
+      300
+    ) // 5 minute lock
 
     // Step 1: Retrieve the setup intent
     const setupIntent = await stripe.setupIntents.retrieve(setupIntentId)
@@ -94,14 +117,27 @@ export async function POST(request: Request) {
       )
     }
 
-    // Step 7: Create subscription
+    // Step 7: Create subscription with idempotency
+    const idempotencyKey = `sub_${setupIntentId}`
     const subscription = await createSubscription({
       customerId,
       paymentMethodId,
+      idempotencyKey,
     })
 
     // Step 8: Update Redis with subscription details
     await updateSubscriptionInRedis(customerId, subscription)
+
+    // Step 9: Update subscription status in Redis
+    await setRedisKey(
+      `subscription_status:${setupIntentId}`,
+      {
+        status: 'completed',
+        subscriptionId: subscription.id,
+        updatedAt: new Date().toISOString(),
+      },
+      86400
+    )
 
     logEvent('Subscription Created Successfully', subscription.id, {
       subscriptionId: subscription.id,
@@ -115,12 +151,16 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Error in Subscription Handler:', error)
-
     await handleSubscriptionError(error, request)
     return NextResponse.json(
       { error: 'Failed to create subscription.' },
       { status: 500 }
     )
+  } finally {
+    // Always clear the lock if it was set
+    if (lockKey) {
+      await setRedisKey(lockKey, null, 0)
+    }
   }
 }
 
@@ -249,9 +289,11 @@ async function processOneTimeCharge(
 async function createSubscription({
   customerId,
   paymentMethodId,
+  idempotencyKey,
 }: {
   customerId: string
   paymentMethodId: string
+  idempotencyKey: string
 }): Promise<Stripe.Subscription> {
   const setupIntentMetadataKey = `setup_intent_metadata:${customerId}`
 
@@ -342,25 +384,13 @@ async function createSubscription({
     throw new Error('Invalid student data retrieved from Redis.')
   }
 
-  // Modify specific student rate (e.g., Mustafa Muse -> $1)
-  const modifiedStudents = students.map((student) => {
-    if (student.name === 'Mustafa Muse') {
-      console.log(`Overriding rate for Mustafa Muse to $1.`)
-      return {
-        ...student,
-        monthlyRate: 1, // Set the rate to $1
-      }
-    }
-    return student
-  })
-
   // Calculate total subscription amount
-  const totalAmount = modifiedStudents.reduce(
+  const totalAmount = students.reduce(
     (sum, student) => sum + student.monthlyRate * 100, // Stripe accepts cents
     0
   )
 
-  if (!modifiedStudents.length || totalAmount <= 0) {
+  if (!students.length || totalAmount <= 0) {
     throw new Error('No valid students selected or total amount is invalid.')
   }
 
@@ -369,32 +399,37 @@ async function createSubscription({
   // Create the subscription in Stripe
   let subscription
   try {
-    subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      default_payment_method: paymentMethodId,
-      items: modifiedStudents.map((student) => ({
-        price_data: {
-          currency: 'usd',
-          unit_amount: student.monthlyRate * 100,
-          recurring: { interval: 'month' },
-          product: process.env.STRIPE_PRODUCT_ID!,
-        },
-        quantity: 1,
+    subscription = await stripe.subscriptions.create(
+      {
+        customer: customerId,
+        default_payment_method: paymentMethodId,
+        items: students.map((student) => ({
+          price_data: {
+            currency: 'usd',
+            unit_amount: student.monthlyRate * 100,
+            recurring: { interval: 'month' },
+            product: process.env.STRIPE_PRODUCT_ID!,
+          },
+          quantity: 1,
+          metadata: {
+            studentId: student.id,
+            studentName: student.name,
+          },
+        })),
+        proration_behavior: 'none',
         metadata: {
-          studentId: student.id,
-          studentName: student.name,
+          studentKey, // Keep the reference key for tracking
         },
-      })),
-      proration_behavior: 'none',
-      metadata: {
-        studentKey, // Keep the reference key for tracking
+        collection_method: 'charge_automatically',
+        payment_settings: {
+          payment_method_types: ['us_bank_account'],
+          save_default_payment_method: 'on_subscription',
+        },
       },
-      collection_method: 'charge_automatically',
-      payment_settings: {
-        payment_method_types: ['us_bank_account'],
-        save_default_payment_method: 'on_subscription',
-      },
-    })
+      {
+        idempotencyKey,
+      }
+    )
   } catch (error) {
     console.error('❌ Error creating subscription in Stripe:', error)
     throw new Error('Failed to create subscription in Stripe.')

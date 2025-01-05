@@ -74,6 +74,9 @@ export async function POST(request: Request) {
         return handlePaymentIntentFailed(event)
       case 'payment_intent.canceled':
         return handlePaymentIntentCanceled(event)
+      case 'setup_intent.succeeded':
+        // Webhook might also trigger subscription creation
+        return handleSetupIntentSucceeded(event)
       default:
         logEvent('Unhandled Event Type', event.id, { eventType: event.type })
         return NextResponse.json({ received: true })
@@ -409,6 +412,59 @@ async function handlePaymentIntentCanceled(event: Stripe.Event) {
     return NextResponse.json({ received: true })
   } catch (error) {
     handleError('Payment Intent Canceled', event.id, error)
+    throw error
+  }
+}
+
+async function handleSetupIntentSucceeded(event: Stripe.Event) {
+  const setupIntent = event.data.object as Stripe.SetupIntent
+  const eventId = event.id
+
+  // Check if we've processed this event before
+  const eventKey = `webhook_event:${eventId}`
+  const processed = await getRedisKey(eventKey)
+  if (processed) {
+    return NextResponse.json({ received: true })
+  }
+
+  try {
+    // Mark event as being processed
+    await setRedisKey(
+      eventKey,
+      {
+        type: 'setup_intent.succeeded',
+        status: 'processing',
+        timestamp: new Date().toISOString(),
+      },
+      86400
+    )
+
+    // Update setup intent status
+    const setupKey = `setup_intent:${setupIntent.id}`
+    await setRedisKey(
+      setupKey,
+      {
+        status: 'succeeded',
+        processedAt: new Date().toISOString(),
+        eventId,
+      },
+      86400
+    )
+
+    // Mark event as completed
+    await setRedisKey(
+      eventKey,
+      {
+        type: 'setup_intent.succeeded',
+        status: 'completed',
+        processedAt: new Date().toISOString(),
+      },
+      86400
+    )
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    console.error('Webhook processing failed:', error)
     throw error
   }
 }

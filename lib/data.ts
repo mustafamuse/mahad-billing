@@ -62,6 +62,7 @@ const CLASS_ASSIGNMENTS = {
     'Mustafa Muse',
   ],
   'irshad-2': [
+    'No one',
     'Aaliyah Ismail',
     'Abdulkadir Mohamud',
     'Abdulmalik Mohamud',
