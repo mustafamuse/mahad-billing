@@ -10,13 +10,12 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "img-src 'self' blob: data:",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' 'wasm-unsafe-eval'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' 'wasm-unsafe-eval' https://js.stripe.com",
               "style-src 'self' 'unsafe-inline'",
-              "connect-src 'self' blob: data:",
+              "connect-src 'self' blob: data: https://api.stripe.com",
               "worker-src 'self' blob:",
               "child-src 'self' blob:",
-              "frame-src 'self' blob:",
-              // Allow data URIs in general
+              "frame-src 'self' blob: https://js.stripe.com https://hooks.stripe.com",
               "media-src 'self' blob: data:",
             ].join('; '),
           },
