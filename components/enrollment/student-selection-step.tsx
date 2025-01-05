@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { useEffect, useState } from 'react'
 
 import { Check, ChevronsUpDown, Search, X, AlertCircle } from 'lucide-react'
 import { UseFormReturn } from 'react-hook-form'
@@ -65,26 +66,30 @@ export function StudentSelectionStep({
   form,
   onSubmit,
 }: StudentSelectionStepProps) {
-  const [open, setOpen] = React.useState(false)
-  const [enrolledStudents, setEnrolledStudents] = React.useState<Set<string>>(
+  const [open, setOpen] = useState(false)
+  const [enrolledStudents, setEnrolledStudents] = useState<Set<string>>(
     new Set()
   )
-  const [isLoading, setIsLoading] = React.useState(true)
+  const [isLoading, setIsLoading] = useState(true)
+  const [_error, setError] = useState<string | null>(null)
 
-  // Fetch enrolled students
-  React.useEffect(() => {
+  useEffect(() => {
     async function fetchEnrolledStudents() {
       try {
-        const response = await fetch('/api/students/enrolled')
+        const response = await fetch('/api/students/enrolled', {
+          cache: 'no-store', // Ensure the request is always fresh
+        })
         if (!response.ok) throw new Error('Failed to fetch enrolled students')
         const { enrolledStudents } = await response.json()
         setEnrolledStudents(new Set(enrolledStudents))
       } catch (error) {
         console.error('Error fetching enrolled students:', error)
+        setError('Failed to load enrolled students. Please try again later.')
       } finally {
         setIsLoading(false)
       }
     }
+
     fetchEnrolledStudents()
   }, [])
 
