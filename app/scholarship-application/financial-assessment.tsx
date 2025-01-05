@@ -352,24 +352,6 @@ export default function FinancialAssessment() {
           </div>
         )}
       </div>
-
-      {/* Financial Situation */}
-      <div>
-        <Label htmlFor="financialSituation">
-          Please describe your financial situation{' '}
-          <span className="text-red-500">*</span>
-        </Label>
-        <Textarea
-          id="financialSituation"
-          {...register('financialSituation')}
-          className={cn(errors.financialSituation && 'border-red-500')}
-        />
-        {errors.financialSituation && (
-          <p className="mt-1 text-sm text-red-500">
-            {errors.financialSituation.message as string}
-          </p>
-        )}
-      </div>
     </div>
   )
 }

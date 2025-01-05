@@ -107,11 +107,6 @@ export const financialAssessmentSchema = z
       invalid_type_error: 'Please indicate if you are employed',
     }),
     monthlyIncome: z.number().nullable().default(null),
-    financialSituation: z
-      .string({
-        required_error: 'Please describe your financial situation',
-      })
-      .min(1, 'Please describe your financial situation'),
   })
   .refine(
     (data) => {

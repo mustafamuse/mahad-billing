@@ -38,7 +38,6 @@ interface ScholarshipPDFProps {
       livingExplanation?: string
       isEmployed: string
       monthlyIncome?: number
-      financialSituation: string
     }
     'Scholarship Justification': {
       needJustification: string
@@ -136,7 +135,6 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
     livingExplanation,
     isEmployed,
     monthlyIncome,
-    financialSituation,
   } = data['Financial Assessment']
 
   const { needJustification, goalSupport, commitment, additionalInfo } =
@@ -217,12 +215,12 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
           <Text style={styles.date}>{dateStr}</Text>
         </View>
 
-        <Text style={styles.salutation}>Dear Scholarship Committee,</Text>
+        <Text style={styles.salutation}>Dear Mahad,</Text>
 
         <Text style={styles.paragraph}>
-          My name is {studentName}, and I am applying for your scholarship
-          program. I am enrolled in the {className} class and seek to further my
-          education.
+          My name is {studentName}, and I am applying for the financial
+          scholarship program. I am enrolled in the {className} class and seek
+          to further my islamic education.
         </Text>
 
         <Text style={styles.paragraph}>
@@ -238,7 +236,6 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
 
         <Text style={styles.paragraph}>
           My current financial situation is as follows:{' '}
-          {formatMultilineText(financialSituation)}.{' '}
           {formatMultilineText(needJustification)}
           {goalSupport
             ? ` This scholarship would help by ${formatMultilineText(goalSupport)}.`

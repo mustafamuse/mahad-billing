@@ -30,22 +30,22 @@ import ScholarshipJustification from './scholarship-justification'
 
 const steps = [
   {
-    title: 'Applicant Details',
+    title: 'Student Details',
     component: ApplicantDetails,
     schema: applicantDetailsSchema,
   },
   {
-    title: 'Financial Assessment',
+    title: 'Background Information',
     component: FinancialAssessment,
     schema: financialAssessmentSchema,
   },
   {
-    title: 'Scholarship Justification & Goals',
+    title: 'Application Purpose',
     component: ScholarshipJustification,
     schema: scholarshipJustificationSchema,
   },
   {
-    title: 'Acknowledgement & Agreement',
+    title: 'Terms and Agreement',
     component: AcknowledgementAgreement,
     schema: acknowledgementSchema,
   },
@@ -83,7 +83,6 @@ export default function ScholarshipApplication() {
       livingExplanation: '',
       isEmployed: undefined,
       monthlyIncome: null,
-      financialSituation: '',
       termsAgreed: false,
     },
   })
@@ -121,7 +120,6 @@ export default function ScholarshipApplication() {
         'livingExplanation',
         'isEmployed',
         'monthlyIncome',
-        'financialSituation',
       ],
       2: ['needJustification', 'goalSupport', 'commitment'],
       3: ['termsAgreed'],
@@ -161,7 +159,6 @@ export default function ScholarshipApplication() {
           livingExplanation: formData.livingExplanation,
           isEmployed: formData.isEmployed,
           monthlyIncome: formData.monthlyIncome,
-          financialSituation: formData.financialSituation,
         })
       }
 
@@ -209,7 +206,6 @@ export default function ScholarshipApplication() {
           'livingExplanation',
           'isEmployed',
           'monthlyIncome',
-          'financialSituation',
         ]),
         trigger(['needJustification', 'goalSupport', 'commitment']),
         trigger(['termsAgreed']),
@@ -279,7 +275,6 @@ export default function ScholarshipApplication() {
           ...(formData.isEmployed === 'yes' && {
             monthlyIncome: formData.monthlyIncome,
           }),
-          financialSituation: formData.financialSituation,
         },
         'Scholarship Justification': {
           needJustification: formData.needJustification,
