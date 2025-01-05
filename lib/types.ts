@@ -8,6 +8,7 @@ export interface Student {
   totalFamilyMembers?: number
   siblings?: number
   className?: string
+  hasCustomRate?: boolean
 }
 
 export interface EnrollmentFormData {
@@ -249,4 +250,13 @@ export interface SubscriptionPaymentStatus {
   lastPaymentDate: string
   currentPeriodEnd: string
   timestamp: number
+}
+
+interface _SubscriptionStatus {
+  setupIntentId: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  subscriptionId?: string
+  error?: string
+  createdAt: string
+  updatedAt: string
 }

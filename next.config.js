@@ -43,7 +43,7 @@ const nextConfig = {
     }
     return config
   },
-  ompiler: {
+  compiler: {
     removeConsole: true,
   },
 }
