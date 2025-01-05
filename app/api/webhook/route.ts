@@ -1,11 +1,17 @@
-// /api/webhook.js
-
 import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
-import { redis } from '@/lib/redis'
+import { SubscriptionPaymentStatus, BankAccountStatus } from '@/lib/types'
+
+import {
+  extractIdsFromEvent,
+  getRedisKey,
+  setRedisKey,
+} from '../../../lib/utils'
+import { logEvent } from '../../../lib/utils'
+import { handleError } from '../../../lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,192 +21,394 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-// Update the logging helper to be more detailed
-function logPaymentEvent(type: string, data: any, metadata?: string) {
-  console.log(`\n=== STRIPE WEBHOOK EVENT: ${type} ===`)
-  console.log(`Timestamp: ${new Date().toISOString()}`)
-  console.log('Data:', JSON.stringify(data, null, 2))
-  if (metadata) console.log('Metadata:', metadata)
-  console.log('=====================================\n')
-}
-
 export async function POST(request: Request) {
-  debugger
-  const headersList = headers()
-  console.log('\n🔔 Webhook Request Headers:', {
-    'stripe-signature': headersList.get('stripe-signature'),
-    'content-type': headersList.get('content-type'),
-  })
+  let event: Stripe.Event | null = null
+
+  if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error(
+      '❌ Missing Stripe API key or Webhook secret in environment variables'
+    )
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    )
+  }
 
   try {
     const payload = await request.text()
-    const signature = request.headers.get('stripe-signature')!
+    const headersList = headers()
+    const signature = headersList.get('stripe-signature')
 
-    let event: Stripe.Event
-
-    try {
-      event = stripe.webhooks.constructEvent(payload, signature, webhookSecret)
-      logPaymentEvent(event.type, event.data.object)
-    } catch (err) {
-      console.error('❌ Webhook signature verification failed:', err)
+    if (!signature) {
+      console.warn('⚠️ Missing stripe-signature header')
       return NextResponse.json(
-        { error: 'Webhook signature verification failed' },
+        { error: 'Missing stripe-signature header' },
         { status: 400 }
       )
     }
 
-    const eventId = event.id
-    const eventKey = `stripe_event:${eventId}`
+    event = stripe.webhooks.constructEvent(payload, signature, webhookSecret)
+    logEvent('Received', event.id, { eventType: event.type })
 
-    const exists = await redis.get(eventKey)
-    if (exists) {
-      console.warn(`🚨 Duplicate webhook detected: ${eventId}`)
+    const eventKey = `stripe_event:${event.id}`
+    const isDuplicate = await getRedisKey(eventKey)
+    if (isDuplicate) {
+      console.warn(`🚨 Duplicate webhook detected: ${event.id}`)
       return NextResponse.json({ received: true })
     }
 
-    await redis.set(eventKey, 'processed', { ex: 86400 }) // 86400 seconds = 24 hours
-    debugger
+    await setRedisKey(eventKey, 'processed', 86400)
+
     switch (event.type) {
       case 'invoice.payment_succeeded':
-        try {
-          console.log('You subscription is active')
-          const invoice = event.data.object as Stripe.Invoice
-          const subscriptionId = invoice.subscription
-          if (subscriptionId) {
-            const subscription = await stripe.subscriptions.retrieve(
-              subscriptionId.toString()
-            )
-
-            const redisKey = `payment_setup:${subscription.customer}`
-
-            await redis.set(
-              redisKey,
-              JSON.stringify({
-                subscriptionId: subscription.id,
-                setupCompleted: true, // Initial setup, still awaiting payment verification
-                bankVerified: true, // Awaiting bank verification if applicable
-                subscriptionActive: subscription.status === 'active',
-                timestamp: Date.now(),
-              })
-            )
-            // Update setup status
-            const setupStatus = await redis.get(
-              `payment_setup:${subscription.customer}`
-            )
-            if (setupStatus) {
-              // Fix: Handle case where setupStatus might be an object
-              const currentStatus =
-                typeof setupStatus === 'string'
-                  ? JSON.parse(setupStatus)
-                  : setupStatus
-
-              await redis.set(
-                `payment_setup:${subscription.customer}`,
-                JSON.stringify({
-                  ...currentStatus,
-                  subscriptionId: subscription.id,
-                  subscriptionActive: true,
-                  timestamp: Date.now(),
-                })
-              )
-            }
-          }
-        } catch (error) {
-          await redis.del(eventKey)
-          console.error('Error in subscription.created handler:', error)
-        }
-        break
-
+        return handleInvoicePaymentSucceeded(event)
       case 'invoice.payment_failed':
-        try {
-          debugger
-          console.log('We have ')
-          //TODO: Add notification here
-
-          // Extract the invoice object from the event
-          const invoice = event.data.object as Stripe.Invoice
-
-          // Extract relevant information
-          const customerId = invoice.customer // The customer ID related to the failed payment
-          const subscriptionId = invoice.subscription // The subscription ID
-
-          const redisKey = `payment_setup:${customerId}`
-
-          // Check if the Redis key already exists
-          const existingData = await redis.get(redisKey)
-
-          if (existingData) {
-            const existingSubscription =
-              typeof existingData === 'string'
-                ? JSON.parse(existingData).subscriptionId
-                : existingData
-
-            // Check if the subscriptionId in Redis matches the incoming subscriptionId
-            if (existingSubscription.subscriptionId === subscriptionId) {
-              // If it's the same subscription, we update the data
-              console.log('Subscription matches, updating Redis data')
-
-              // Overwrite with the updated data
-              await redis.set(
-                redisKey,
-                JSON.stringify({
-                  subscriptionId: subscriptionId,
-                  setupCompleted: false, // Initial setup, still awaiting payment verification
-                  bankVerified: false, // Awaiting bank verification if applicable
-                  subscriptionActive: false, // Subscription is not active as payment failed
-                  timestamp: Date.now(),
-                })
-              )
-
-              console.log('Subscription data saved or updated in Redis')
-            } else {
-              // If the subscription ID doesn't match, ignore the event (no update)
-              console.log('Different subscription ID, ignoring event')
-            }
-          }
-        } catch (error) {
-          await redis.del(eventKey)
-          console.error('Error in subscription.created handler:', error)
-        }
-        break
-
+        return handleInvoicePaymentFailed(event)
       case 'payment_method.attached':
-        try {
-          const paymentMethod = event.data.object as Stripe.PaymentMethod
+        return handlePaymentMethodAttached(event)
+      case 'payment_intent.succeeded':
+        return handlePaymentIntentSucceeded(event)
+      case 'payment_intent.processing':
+        return handlePaymentIntentProcessing(event)
+      case 'payment_intent.payment_failed':
+        return handlePaymentIntentFailed(event)
+      case 'payment_intent.canceled':
+        return handlePaymentIntentCanceled(event)
+      default:
+        logEvent('Unhandled Event Type', event.id, { eventType: event.type })
+        return NextResponse.json({ received: true })
+    }
+  } catch (error) {
+    handleError('Webhook Handling', event?.id ?? 'unknown', error)
+    return NextResponse.json(
+      { error: 'Webhook processing failed' },
+      { status: 400 }
+    )
+  }
+}
 
-          // For ACH Direct Debit, bank is verified through Plaid/instant verification
-          if (paymentMethod.type === 'us_bank_account') {
-            await redis.set(
-              `bank_account:${paymentMethod.customer}`,
-              JSON.stringify({
-                customerId: paymentMethod.customer,
-                verified: true,
-                last4: paymentMethod.us_bank_account?.last4,
-                timestamp: Date.now(),
-              })
-            )
-          }
-        } catch (error) {
-          await redis.del(eventKey)
-          console.error('Error in payment_method.attached handler:', error)
-        }
-        break
+async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
+  const { subscriptionId, customerId } = extractIdsFromEvent(event)
+
+  if (!subscriptionId || !customerId) {
+    console.warn('⚠️ Missing subscription or customer ID', {
+      eventId: event.id,
+    })
+    return NextResponse.json({ received: true })
+  }
+
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+    const invoice = event.data.object as Stripe.Invoice
+
+    const firstPaymentDate = invoice.status_transitions?.paid_at
+      ? new Date(invoice.status_transitions.paid_at * 1000).toISOString()
+      : new Date().toISOString()
+
+    const redisKey = `payment_setup:${customerId}`
+    const existingData = await getRedisKey(redisKey)
+
+    const paymentSetupData = {
+      ...existingData,
+      subscriptionId,
+      setupCompleted: true,
+      subscriptionActive: subscription.status === 'active',
+      firstPaymentDate,
+      lastPaymentStatus: 'succeeded',
+      lastPaymentDate: firstPaymentDate,
+      currentPeriodEnd: new Date(
+        subscription.current_period_end * 1000
+      ).toISOString(),
+      timestamp: Date.now(),
+    }
+
+    await setRedisKey(redisKey, paymentSetupData, 86400)
+
+    // Clear previous failed payments if resolved
+    const failedPaymentKey = `failed_payment:${customerId}`
+    const failedPaymentData = await getRedisKey(failedPaymentKey)
+    if (failedPaymentData) {
+      console.log('✅ Resolved previous failed payment:', failedPaymentData)
+      await setRedisKey(failedPaymentKey, null, 0) // Clear the failed payment record
+    }
+
+    logEvent('Processed Invoice Payment Succeeded', event.id, paymentSetupData)
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Invoice Payment Succeeded', event.id, error)
+    throw error
+  }
+}
+
+async function handleInvoicePaymentFailed(event: Stripe.Event) {
+  const { subscriptionId, customerId } = extractIdsFromEvent(event)
+
+  if (!subscriptionId || !customerId) {
+    console.warn('⚠️ Missing subscription or customer ID', {
+      eventId: event.id,
+    })
+    return NextResponse.json({ received: true })
+  }
+
+  try {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+    const redisKey = `payment_setup:${customerId}`
+    const existingData = await getRedisKey(redisKey)
+    const bankVerified = existingData?.bankVerified || false
+
+    const invoice = event.data.object as Stripe.Invoice
+
+    const lastPaymentDate = invoice.status_transitions?.finalized_at
+      ? new Date(invoice.status_transitions.finalized_at * 1000).toISOString()
+      : new Date().toISOString()
+
+    const paymentSetupData: SubscriptionPaymentStatus = {
+      subscriptionId,
+      setupCompleted: false,
+      subscriptionActive: subscription.status === 'active',
+      bankVerified,
+
+      lastPaymentStatus: 'failed',
+      lastPaymentDate,
+      currentPeriodEnd: new Date(
+        subscription.current_period_end * 1000
+      ).toISOString(),
+      timestamp: Date.now(),
+    }
+
+    await setRedisKey(redisKey, paymentSetupData, 86400)
+
+    // Save failed payment for retry
+    const failedPaymentKey = `failed_payment:${customerId}`
+    const failedPaymentData = {
+      customerId,
+      paymentIntentId: invoice.payment_intent,
+      amount: invoice.total,
+      timestamp: Date.now(),
+    }
+    await setRedisKey(failedPaymentKey, failedPaymentData, 7 * 86400)
+
+    logEvent('Processed Invoice Payment Failed', event.id, paymentSetupData)
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Invoice Payment Failed', event.id, error)
+    throw error
+  }
+}
+
+async function handlePaymentMethodAttached(event: Stripe.Event) {
+  const { customerId } = extractIdsFromEvent(event)
+
+  if (!customerId) {
+    console.warn('⚠️ Missing customer ID', { eventId: event.id })
+    return NextResponse.json({ received: true })
+  }
+
+  try {
+    const paymentMethod = event.data.object as Stripe.PaymentMethod
+
+    if (
+      paymentMethod.type === 'us_bank_account' &&
+      paymentMethod.us_bank_account
+    ) {
+      const usBankAccount = paymentMethod.us_bank_account
+
+      const bankAccountData: BankAccountStatus = {
+        customerId,
+        verified: Boolean(usBankAccount.financial_connections_account),
+        last4: usBankAccount.last4,
+        bankName: usBankAccount.bank_name,
+        accountType: usBankAccount.account_type,
+        accountHolderType: usBankAccount.account_holder_type,
+        routingNumber: usBankAccount.routing_number,
+        statusDetails: usBankAccount.status_details,
+        timestamp: Date.now(),
+      }
+
+      const redisKey = `bank_account:${customerId}`
+      await setRedisKey(redisKey, bankAccountData, 86400)
+
+      // Retry failed payments, if any
+      const failedPaymentKey = `failed_payment:${customerId}`
+      const failedPaymentData = await getRedisKey(failedPaymentKey)
+      if (failedPaymentData) {
+        console.log('🔄 Retrying failed payment:', failedPaymentData)
+        await retryFailedPayment(failedPaymentData)
+      }
+
+      logEvent('Processed Bank Account Attached', event.id, bankAccountData)
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error('❌ Webhook handler failed:', error)
-    // Log the full error stack trace in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Detailed error:', {
-        name: (error as Error)?.name,
-        message: (error as Error)?.message,
-        stack: (error as Error)?.stack,
-      })
-    }
-    return NextResponse.json(
-      { error: 'Webhook handler failed' },
-      { status: 500 }
+    handleError('Payment Method Attached', event.id, error)
+    throw error
+  }
+}
+
+async function retryFailedPayment(failedPaymentData: any) {
+  const { paymentIntentId, amount, customerId } = failedPaymentData
+
+  try {
+    console.log('🔄 Retrying payment for PaymentIntent:', paymentIntentId) // Logging it for traceability
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      customer: customerId,
+      amount,
+      currency: 'usd',
+      confirm: true,
+    })
+
+    console.log('✅ Payment retried successfully:', paymentIntent.id)
+    const redisKey = `failed_payment:${customerId}`
+    await setRedisKey(redisKey, null, 0) // Immediate expiration of the failed payment record
+  } catch (error) {
+    console.error(
+      '❌ Failed to retry payment for PaymentIntent:',
+      paymentIntentId,
+      error instanceof Error ? error.message : String(error)
     )
+    throw error
+  }
+}
+
+async function handlePaymentIntentSucceeded(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
+  const customerId = paymentIntent.customer as string
+  const amount = paymentIntent.amount
+  const metadata = paymentIntent.metadata
+
+  try {
+    logEvent('Payment Intent Succeeded', event.id, { customerId, amount })
+
+    const redisKey = `one_time_charge:${paymentIntent.id}`
+    const existingChargeData = await getRedisKey(redisKey)
+
+    // If the charge is already marked as 'succeeded', avoid duplicate processing
+    if (existingChargeData && existingChargeData.status === 'succeeded') {
+      logEvent('Duplicate PaymentIntent Succeeded Event Detected', redisKey, {
+        customerId,
+        paymentIntentId: paymentIntent.id,
+      })
+      return NextResponse.json({ received: true })
+    }
+
+    // Prepare payment data for Redis
+    const paymentData = {
+      customerId,
+      amount: amount / 100, // Convert to dollars
+      chargeType: metadata.chargeType,
+      students: metadata.students ? JSON.parse(metadata.students) : [],
+      status: 'succeeded',
+      timestamp: new Date().toISOString(),
+    }
+
+    // Update Redis with succeeded payment status
+    await setRedisKey(redisKey, paymentData, 86400) // TTL: 1 day
+
+    logEvent(
+      'One-Time Charge Marked as Succeeded in Redis',
+      redisKey,
+      paymentData
+    )
+
+    // Notify the customer (optional)
+    // sendEmail(customerId, 'Your payment was successful', paymentData);
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Payment Intent Succeeded', event.id, error)
+    logEvent('Error Handling Payment Intent Succeeded', event.id, {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw error
+  }
+}
+
+async function handlePaymentIntentProcessing(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
+  const customerId = paymentIntent.customer as string
+
+  try {
+    logEvent('Payment Intent Processing', event.id, { customerId })
+
+    const processingData = {
+      customerId,
+      amount: paymentIntent.amount / 100,
+      status: 'processing',
+      timestamp: new Date().toISOString(),
+    }
+
+    // Save processing details to Redis or database
+    const redisKey = `one_time_charge:${paymentIntent.id}`
+    await setRedisKey(redisKey, processingData, 86400)
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Payment Intent Processing', event.id, error)
+    throw error
+  }
+}
+
+async function handlePaymentIntentFailed(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
+  const customerId = paymentIntent.customer as string
+  const lastPaymentError = paymentIntent.last_payment_error?.message
+
+  try {
+    logEvent('Payment Intent Failed', event.id, {
+      customerId,
+      error: lastPaymentError,
+    })
+
+    const failedData = {
+      customerId,
+      amount: paymentIntent.amount / 100,
+      status: 'failed',
+      error: lastPaymentError || 'Unknown error',
+      timestamp: new Date().toISOString(),
+    }
+
+    // Save failed payment details to Redis or database
+    const redisKey = `one_time_charge:${paymentIntent.id}`
+    await setRedisKey(redisKey, failedData, 86400)
+
+    // Notify the customer of the failure
+    // sendEmail(customerId, 'Your payment failed', failedData)
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Payment Intent Failed', event.id, error)
+    throw error
+  }
+}
+
+async function handlePaymentIntentCanceled(event: Stripe.Event) {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
+  const customerId = paymentIntent.customer as string
+
+  try {
+    logEvent('Payment Intent Canceled', event.id, { customerId })
+
+    const canceledData = {
+      customerId,
+      amount: paymentIntent.amount / 100,
+      status: 'canceled',
+      timestamp: new Date().toISOString(),
+    }
+
+    // Save canceled payment details to Redis or database
+    const redisKey = `one_time_charge:${paymentIntent.id}`
+    await setRedisKey(redisKey, canceledData, 86400)
+
+    // Optionally notify the customer of the cancellation
+    // sendEmail(customerId, 'Your payment was canceled', canceledData)
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    handleError('Payment Intent Canceled', event.id, error)
+    throw error
   }
 }

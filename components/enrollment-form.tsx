@@ -195,10 +195,6 @@ export function EnrollmentForm() {
                   customerName={`${form.getValues('firstName')} ${form.getValues('lastName')}`}
                   customerEmail={form.getValues('email')}
                   onSuccess={({ setupIntentId }) => {
-                    toasts.success(
-                      'Payment Setup Successful',
-                      'Your enrollment is complete!'
-                    )
                     router.push(
                       `/payment-success?setupIntentId=${setupIntentId}`
                     )

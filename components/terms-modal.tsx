@@ -102,7 +102,10 @@ export function TermsModal({ open, onOpenChange, onAgree }: TermsModalProps) {
             <p>
               If a payment fails, we will attempt to process it again within 3
               business days. Multiple failed payments may result in late fees
-              and/or suspension of services.
+              and/or suspension of services. You will be held liable for paying
+              any fees or penalties resulting from failed payments, including
+              but not limited to late fees, bank fees, and/or administrative
+              charges.
             </p>
 
             <h3 className="text-base font-semibold text-foreground">
@@ -110,7 +113,8 @@ export function TermsModal({ open, onOpenChange, onAgree }: TermsModalProps) {
             </h3>
             <p>
               Refunds are processed on a case-by-case basis. Please contact our
-              administration office for refund requests.
+              administration office for refund requests. Note that no refunds
+              will be provided after the first weekend of the billing cycle.
             </p>
 
             <h3 className="text-base font-semibold text-foreground">
