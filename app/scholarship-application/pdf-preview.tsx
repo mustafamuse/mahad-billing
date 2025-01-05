@@ -2,19 +2,37 @@
 
 import { useEffect, useCallback, useRef } from 'react'
 
+import dynamic from 'next/dynamic'
+
 import {
   Document,
   Page,
   Text,
   View,
   StyleSheet,
-  PDFDownloadLink,
   usePDF,
 } from '@react-pdf/renderer'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+
+// Add dynamic import with no SSR for PDF generation
+
+// Import PDF components with no SSR to avoid hydration issues
+const _PDFViewer = dynamic(
+  () => import('@react-pdf/renderer').then((mod) => mod.PDFViewer),
+  {
+    ssr: false,
+  }
+)
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
+  {
+    ssr: false,
+  }
+)
 
 interface ScholarshipPDFProps {
   data: {

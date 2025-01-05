@@ -8,13 +8,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-11-20.acacia',
 })
 
+// Add force-dynamic to ensure this route is always dynamic
+export const dynamic = 'force-dynamic'
+
+// Add proper caching headers
 export async function GET() {
   try {
     // Attempt to fetch cached enrolled students
     const cachedEnrolledStudents = await redis.get('enrolled_students')
     if (cachedEnrolledStudents) {
       try {
-        // If cached data is already an array, use it directly
         const parsedCachedData =
           typeof cachedEnrolledStudents === 'string'
             ? JSON.parse(cachedEnrolledStudents)
@@ -22,19 +25,18 @@ export async function GET() {
 
         if (Array.isArray(parsedCachedData)) {
           console.log('Returning cached enrolled students:', parsedCachedData)
-          return NextResponse.json({ enrolledStudents: parsedCachedData })
-        } else {
-          console.warn(
-            'Cached data is not an array. Fetching fresh data from Stripe and Redis.'
+          return NextResponse.json(
+            { enrolledStudents: parsedCachedData },
+            {
+              headers: {
+                'Cache-Control':
+                  'public, s-maxage=60, stale-while-revalidate=30',
+              },
+            }
           )
         }
       } catch (error) {
-        console.error(
-          'Error parsing cached enrolled students:',
-          cachedEnrolledStudents,
-          error
-        )
-        // Proceed to fetch fresh data if the cache is invalid
+        console.error('Error parsing cached enrolled students:', error)
       }
     }
 

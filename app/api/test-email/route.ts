@@ -2,30 +2,34 @@ import { NextResponse } from 'next/server'
 
 import { Resend } from 'resend'
 
+export const runtime = 'edge'
+
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function GET() {
   try {
-    console.log('Testing Resend connection...')
-    console.log('API Key exists:', !!process.env.RESEND_API_KEY)
+    if (!process.env.RESEND_API_KEY) {
+      return NextResponse.json(
+        { error: 'Resend API key not configured' },
+        { status: 500 }
+      )
+    }
 
-    const result = await resend.emails.send({
-      from: 'onboarding@resend.dev',
-      to: ['umpp101@gmail.com'],
+    const data = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+      to: process.env.ADMIN_EMAIL || 'umpp101@gmail.com',
       subject: 'Test Email',
-      text: 'This is a test email to verify Resend is working.',
+      text: 'This is a test email to verify Resend configuration',
     })
 
-    console.log('Test email result:', result)
-    return NextResponse.json({ success: true, result })
+    return NextResponse.json({
+      message: 'Test email sent successfully',
+      data,
+    })
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
-    console.error('Test email failed:', error)
     return NextResponse.json(
-      {
-        success: false,
-        error:
-          error instanceof Error ? error.message : 'An unknown error occurred',
-      },
+      { error: 'Failed to send test email' },
       { status: 500 }
     )
   }
