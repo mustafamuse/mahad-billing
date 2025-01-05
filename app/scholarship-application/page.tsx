@@ -49,7 +49,7 @@ export default function ScholarshipApplication() {
   const [currentStep, setCurrentStep] = useState(0)
 
   const methods = useForm<ScholarshipApplicationData>({
-    mode: 'onChange',
+    mode: 'onTouched',
     resolver: zodResolver(steps[currentStep].schema),
     defaultValues: {
       studentName: '',
