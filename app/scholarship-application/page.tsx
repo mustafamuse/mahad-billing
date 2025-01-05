@@ -8,7 +8,13 @@ import { FormProvider, useForm } from 'react-hook-form'
 
 import { toasts } from '@/components/toast/toast-utils'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card'
 
 import AcknowledgementAgreement from './acknowledgement-agreement'
 import ApplicantDetails from './applicant-details'
@@ -47,6 +53,7 @@ const steps = [
 
 export default function ScholarshipApplication() {
   const [currentStep, setCurrentStep] = useState(0)
+  const [isSubmitted, setIsSubmitted] = useState(false)
 
   const methods = useForm<ScholarshipApplicationData>({
     mode: 'onTouched',
@@ -174,45 +181,46 @@ export default function ScholarshipApplication() {
     }
   }
 
-  const onSubmit = async (_data: ScholarshipApplicationData) => {
+  const onSubmit = async () => {
     try {
-      // Validate all steps in sequence
-      const isApplicantDetailsValid = await trigger([
-        'studentName',
-        'className',
-        'email',
-        'phone',
-        'payer',
-        'payerRelation',
-        'payerName',
-        'payerPhone',
+      const validationResults = await Promise.all([
+        trigger([
+          'studentName',
+          'className',
+          'email',
+          'phone',
+          'payer',
+          'payerRelation',
+          'payerName',
+          'payerPhone',
+        ]),
+        trigger([
+          'educationStatus',
+          'schoolName',
+          'schoolYear',
+          'collegeName',
+          'collegeYear',
+          'qualifiesForFafsa',
+          'fafsaExplanation',
+          'householdSize',
+          'dependents',
+          'adultsInHousehold',
+          'livesWithBothParents',
+          'livingExplanation',
+          'isEmployed',
+          'monthlyIncome',
+          'financialSituation',
+        ]),
+        trigger(['needJustification', 'goalSupport', 'commitment']),
+        trigger(['termsAgreed']),
       ])
 
-      const isFinancialAssessmentValid = await trigger([
-        'educationStatus',
-        'schoolName',
-        'schoolYear',
-        'collegeName',
-        'collegeYear',
-        'qualifiesForFafsa',
-        'fafsaExplanation',
-        'householdSize',
-        'dependents',
-        'adultsInHousehold',
-        'livesWithBothParents',
-        'livingExplanation',
-        'isEmployed',
-        'monthlyIncome',
-        'financialSituation',
-      ])
-
-      const isJustificationValid = await trigger([
-        'needJustification',
-        'goalSupport',
-        'commitment',
-      ])
-
-      const isAcknowledgementValid = await trigger(['termsAgreed'])
+      const [
+        isApplicantDetailsValid,
+        isFinancialAssessmentValid,
+        isJustificationValid,
+        isAcknowledgementValid,
+      ] = validationResults
 
       if (
         !isApplicantDetailsValid ||
@@ -220,18 +228,18 @@ export default function ScholarshipApplication() {
         !isJustificationValid ||
         !isAcknowledgementValid
       ) {
-        // If any step is invalid, go to that step
-        if (!isApplicantDetailsValid) setCurrentStep(0)
-        else if (!isFinancialAssessmentValid) setCurrentStep(1)
-        else if (!isJustificationValid) setCurrentStep(2)
+        const firstInvalidStep = validationResults.findIndex(
+          (result) => !result
+        )
+        setCurrentStep(firstInvalidStep)
         return
       }
 
       // Get the complete form data
       const formData = methods.getValues()
 
-      // If all steps are valid, log the data and show success message
-      console.log('Final Form Submission:', {
+      // Format the data for PDF
+      const formattedData = {
         'Applicant Details': {
           studentName: formData.studentName,
           className: formData.className,
@@ -284,14 +292,48 @@ export default function ScholarshipApplication() {
         'Terms Agreement': {
           termsAgreed: formData.termsAgreed,
         },
-      })
+      }
 
+      // Show initial toast
       toasts.success(
-        'Application Submitted Successfully',
-        'We will review your application and get back to you soon.'
+        'Application Submitted',
+        'Generating your scholarship document...'
       )
+
+      // Log the formatted data
+      console.log('Final Form Submission:', formattedData)
+
+      // Store the form data in localStorage
+      localStorage.setItem('scholarshipData', JSON.stringify(formattedData))
+
+      // Wait for 2 seconds
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      // Open PDF directly in a new tab and remove stored data after
+      const pdfWindow = window.open('', '_blank')
+      if (pdfWindow) {
+        pdfWindow.location.href = `/scholarship-application/pdf`
+
+        // Clean up localStorage after PDF is opened
+        setTimeout(() => {
+          localStorage.removeItem('scholarshipData')
+        }, 1000)
+      }
+
+      // Show success toast
+      toasts.success(
+        'Document Ready',
+        'Your scholarship application has been generated successfully.'
+      )
+
+      // Set submitted state to show confirmation
+      setIsSubmitted(true)
     } catch (error: any) {
-      console.error('Form validation failed:', error)
+      console.error('Form submission failed:', error)
+      toasts.error(
+        'Submission Failed',
+        'Please check all fields and try again.'
+      )
     }
   }
 
@@ -303,6 +345,79 @@ export default function ScholarshipApplication() {
 
   const CurrentStepComponent = steps[currentStep].component
 
+  // If form is submitted, show confirmation message
+  if (isSubmitted) {
+    return (
+      <div className="container mx-auto px-4 py-16">
+        <Card className="mx-auto w-full max-w-2xl border-green-100 bg-white shadow-lg">
+          <CardHeader className="space-y-6 border-b border-green-100 pb-8">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              <svg
+                className="h-8 w-8 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <div className="space-y-2 text-center">
+              <CardTitle className="text-2xl font-bold text-green-600">
+                Application Submitted Successfully
+              </CardTitle>
+              <CardDescription className="text-lg text-gray-600">
+                Thank you for applying for the scholarship program
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-8 p-8">
+            <div className="rounded-lg bg-green-50/50 p-6">
+              <div className="space-y-4">
+                <p className="text-gray-700">
+                  Your application has been received and will be reviewed by the
+                  Mahad.
+                </p>
+                <div className="mt-6 rounded-md bg-white p-4 shadow-sm">
+                  <p className="text-sm font-medium text-gray-900">
+                    Next Steps:
+                  </p>
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-gray-600">
+                    <li>Application review by the Mahad Office</li>
+                    <li>Evaluation of financial need and circumstances</li>
+                    <li>Decision notification via email/in-person</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-4 text-center">
+              <p className="text-sm text-gray-600">
+                If you have any questions, please contact the Mahad Office
+                directly
+              </p>
+              <Button
+                variant="outline"
+                className="mt-4 border-green-200 hover:bg-green-50 hover:text-green-600"
+                onClick={() => {
+                  methods.reset()
+                  setIsSubmitted(false)
+                  setCurrentStep(0)
+                }}
+              >
+                Submit Another Application
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Regular form render
   return (
     <FormProvider {...methods}>
       <div className="container mx-auto px-4 py-8">
