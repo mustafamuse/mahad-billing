@@ -1,14 +1,20 @@
 'use client'
 
+import { useEffect, useCallback } from 'react'
+
 import {
   Document,
   Page,
   Text,
   View,
   StyleSheet,
-  BlobProvider,
+  PDFDownloadLink,
+  usePDF,
 } from '@react-pdf/renderer'
 import { format } from 'date-fns'
+import { toast } from 'sonner'
+
+import { Button } from '@/components/ui/button'
 
 interface ScholarshipPDFProps {
   data: {
@@ -108,6 +114,11 @@ const styles = StyleSheet.create({
 })
 
 export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
+  console.log('ScholarshipPDF component rendered with data:', {
+    studentName: data['Applicant Details'].studentName,
+    email: data['Applicant Details'].email,
+  })
+
   const {
     studentName,
     className,
@@ -276,27 +287,202 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
     </Document>
   )
 
+  // Use usePDF hook to generate PDF
+  console.log('Initializing usePDF hook')
+  const [instance] = usePDF({ document: MyDocument })
+
+  // Memoize sendEmailWithPDF to fix useEffect dependency
+  const sendEmailWithPDF = useCallback(
+    async (blob: Blob) => {
+      console.log('Starting email process', {
+        blobSize: blob.size,
+        blobType: blob.type,
+        timestamp: new Date().toISOString(),
+      })
+
+      try {
+        // Convert blob to base64
+        console.log('Converting blob to base64')
+        const base64data = await new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            console.log('Base64 conversion complete', {
+              resultLength: reader.result?.toString().length,
+            })
+            resolve(reader.result)
+          }
+          reader.onerror = (error) => {
+            console.error('Base64 conversion failed:', error)
+          }
+          reader.readAsDataURL(blob)
+        })
+
+        console.log('Preparing API request', {
+          hasBase64: !!base64data,
+          studentName: data['Applicant Details'].studentName,
+          email: data['Applicant Details'].email,
+        })
+
+        console.log('Sending request to email API')
+        const emailResponse = await fetch('/api/send-scholarship-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            pdfBlob: base64data,
+            studentName: data['Applicant Details'].studentName,
+            email: data['Applicant Details'].email,
+          }),
+        })
+
+        const responseData = await emailResponse.json()
+        console.log('Email API response received:', responseData)
+
+        if (emailResponse.ok) {
+          console.log('Email sent successfully', {
+            status: emailResponse.status,
+            responseData,
+          })
+          toast.success('Email Sent', {
+            description: 'Application has been emailed to the Mahad Office',
+          })
+        } else {
+          console.error('Email API error:', {
+            status: emailResponse.status,
+            responseData,
+            statusText: emailResponse.statusText,
+          })
+          toast.error('Email Failed', {
+            description: 'Could not send email to Mahad Office',
+          })
+        }
+      } catch (error) {
+        console.error('Email process failed:', {
+          error,
+          message: error.message,
+          stack: error.stack,
+          type: error.name,
+        })
+        toast.error('Email Failed', {
+          description: `Could not send email: ${error.message}`,
+        })
+      }
+    },
+    [data]
+  )
+
+  // Handle PDF generation and email sending
+  useEffect(() => {
+    console.log('PDF generation effect triggered', {
+      hasBlob: !!instance.blob,
+      hasUrl: !!instance.url,
+      loading: instance.loading,
+      error: instance.error,
+    })
+
+    if (instance.loading) {
+      console.log('PDF is still generating...')
+      return
+    }
+
+    if (instance.error) {
+      console.error('PDF generation error:', instance.error)
+      return
+    }
+
+    if (instance.blob) {
+      console.log('PDF blob generated successfully', {
+        blobSize: instance.blob.size,
+        blobType: instance.blob.type,
+      })
+
+      // Send email
+      console.log('Initiating email process with blob')
+      sendEmailWithPDF(instance.blob)
+        .then(() => console.log('Email process completed'))
+        .catch((error) => console.error('Email process failed:', error))
+
+      // Open PDF in new tab
+      if (instance.url) {
+        console.log('Attempting to open PDF in new tab:', {
+          url: instance.url.substring(0, 50) + '...', // Log first 50 chars of URL
+        })
+        const printWindow = window.open(instance.url)
+        if (printWindow) {
+          console.log('Print window opened successfully')
+          printWindow.print()
+        } else {
+          console.warn('Failed to open print window - popup might be blocked')
+        }
+      } else {
+        console.warn('URL not available for PDF preview')
+      }
+    }
+  }, [
+    instance.blob,
+    instance.url,
+    instance.loading,
+    instance.error,
+    sendEmailWithPDF,
+  ])
+
   return (
     <div className="flex flex-col items-center justify-center p-8">
       <h1 className="mb-8 text-2xl font-bold">
         Scholarship Application Letter
       </h1>
-      <BlobProvider document={MyDocument}>
-        {({ url, loading }) => {
-          if (loading) {
-            return null
-          }
 
-          if (url) {
-            const printWindow = window.open(url)
-            if (printWindow) {
-              printWindow.print()
-            }
+      <Button
+        onClick={async () => {
+          console.log('Manual test: Sending test email...')
+          try {
+            const response = await fetch('/api/test-email')
+            const data = await response.json()
+            console.log('Test email response:', data)
+          } catch (error) {
+            console.error('Test email failed:', error)
           }
-
-          return null
         }}
-      </BlobProvider>
+        className="mb-4"
+      >
+        Test Email Connection
+      </Button>
+
+      {/* Hidden download link for generating PDF */}
+      <div className="hidden">
+        <PDFDownloadLink
+          document={MyDocument}
+          fileName={`scholarship-application-${data['Applicant Details'].studentName.toLowerCase().replace(/\s+/g, '-')}.pdf`}
+        >
+          {({ loading, error }) => {
+            console.log('PDFDownloadLink state:', { loading, error })
+            if (loading) {
+              console.log('PDFDownloadLink is loading')
+            }
+            if (error) {
+              console.error('PDFDownloadLink error:', error)
+            }
+            return null
+          }}
+        </PDFDownloadLink>
+      </div>
+
+      {/* Show loading state */}
+      {instance.loading && (
+        <div>
+          {console.log('Showing loading state')}
+          Generating your scholarship application...
+        </div>
+      )}
+
+      {/* Show any errors */}
+      {instance.error && (
+        <div className="text-red-500">
+          {console.error('Showing error state:', instance.error)}
+          Error generating PDF: {instance.error.message}
+        </div>
+      )}
     </div>
   )
 }

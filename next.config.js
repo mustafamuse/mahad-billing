@@ -8,7 +8,7 @@ const nextConfig = {
           {
             key: 'Content-Security-Policy',
             value:
-              "frame-src 'self' js.stripe.com hooks.stripe.com; connect-src 'self' api.stripe.com;",
+              "default-src 'self'; img-src 'self' blob: data:; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' blob:;",
           },
         ],
       },
