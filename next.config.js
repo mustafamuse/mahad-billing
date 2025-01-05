@@ -43,6 +43,9 @@ const nextConfig = {
     }
     return config
   },
+  ompiler: {
+    removeConsole: true,
+  },
 }
 
 module.exports = nextConfig
