@@ -4,7 +4,6 @@ import { useState } from 'react'
 
 import dynamic from 'next/dynamic'
 
-
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import ReactDOM from 'react-dom/client'
@@ -173,8 +172,8 @@ export default function ScholarshipApplication() {
       console.log(
         `Step ${currentStep + 1} Validation Errors:`,
         Object.keys(errors)
-          .filter((key) => currentStepFields.includes(key))
-          .reduce((obj, key) => {
+          .filter((key) => currentStepFields?.includes(key))
+          .reduce<Record<string, unknown>>((obj, key) => {
             obj[key] = errors[key]
             return obj
           }, {})
@@ -326,10 +325,10 @@ export default function ScholarshipApplication() {
       }, 5000) // Increased timeout to ensure PDF generation and email are complete
     } catch (error) {
       console.error('Form submission failed:', error)
-      toasts.error(
-        'Submission Failed',
-        'Please check all fields and try again.'
-      )
+      toasts.apiError({
+        title: 'Submission Failed',
+        error: new Error('Please check all fields and try again.'),
+      })
     }
   }
 

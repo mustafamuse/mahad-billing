@@ -358,12 +358,12 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
       } catch (error) {
         console.error('Email process failed:', {
           error,
-          message: error.message,
-          stack: error.stack,
-          type: error.name,
+          message: (error as Error).message,
+          stack: (error as Error).stack,
+          type: (error as Error).name,
         })
         toast.error('Email Failed', {
-          description: `Could not send email: ${error.message}`,
+          description: `Could not send email: ${(error as Error).message}`,
         })
       }
     },
@@ -400,6 +400,7 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
               size="sm"
               onClick={() => {
                 // Create a new blob URL that will persist
+                if (!instance.blob) return
                 const newBlob = new Blob([instance.blob], {
                   type: 'application/pdf',
                 })
@@ -446,7 +447,10 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
         {/* Show any errors */}
         {instance.error && (
           <div className="text-center text-lg text-red-500">
-            Error generating PDF: {instance.error.message}
+            Error generating PDF:{' '}
+            {typeof instance.error === 'string'
+              ? instance.error
+              : JSON.stringify(instance.error)}
           </div>
         )}
 
@@ -456,6 +460,7 @@ export default function ScholarshipPDF({ data }: ScholarshipPDFProps) {
             document={MyDocument}
             fileName={`scholarship-application-${data['Applicant Details'].studentName.toLowerCase().replace(/\s+/g, '-')}.pdf`}
           >
+            {/* @ts-ignore */}
             {({ loading, error }) => {
               console.log('PDFDownloadLink state:', { loading, error })
               return null

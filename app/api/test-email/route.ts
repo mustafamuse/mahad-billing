@@ -21,7 +21,11 @@ export async function GET() {
   } catch (error) {
     console.error('Test email failed:', error)
     return NextResponse.json(
-      { success: false, error: error.message },
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : 'An unknown error occurred',
+      },
       { status: 500 }
     )
   }
