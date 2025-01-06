@@ -3,8 +3,6 @@
 
 import { useEffect, useState } from 'react'
 
-import { useRouter } from 'next/navigation'
-
 import { useStripe } from '@stripe/react-stripe-js'
 
 interface StripePaymentFormProps {
@@ -20,9 +18,9 @@ export function StripePaymentForm({
   customerName,
   customerEmail,
   onError,
+  onSuccess,
 }: StripePaymentFormProps) {
   const stripe = useStripe()
-  const router = useRouter()
   const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
@@ -30,43 +28,70 @@ export function StripePaymentForm({
 
     const collectBankAccount = async () => {
       setIsProcessing(true)
+
       try {
-        const { setupIntent, error } = await stripe.collectBankAccountForSetup({
-          clientSecret,
-          params: {
-            payment_method_type: 'us_bank_account',
-            payment_method_data: {
-              billing_details: {
-                name: customerName,
-                email: customerEmail,
+        // Step 1: Collect bank account
+        console.log('🏦 Starting bank account collection...')
+        const { error: collectError } = await stripe.collectBankAccountForSetup(
+          {
+            clientSecret,
+            params: {
+              payment_method_type: 'us_bank_account',
+              payment_method_data: {
+                billing_details: {
+                  name: customerName,
+                  email: customerEmail,
+                },
               },
             },
-          },
-        })
+          }
+        )
 
-        if (error) {
-          throw error
+        if (collectError) {
+          console.error('❌ Bank collection error:', collectError)
+          throw new Error(
+            collectError.message || 'Failed to collect bank account'
+          )
         }
 
+        console.log('✅ Bank account collected successfully')
+
+        // Step 2: Confirm setup
+        console.log('🔄 Confirming bank account setup...')
+        const { setupIntent, error: confirmError } =
+          await stripe.confirmUsBankAccountSetup(clientSecret)
+
+        if (confirmError) {
+          console.error('❌ Setup confirmation error:', confirmError)
+          throw new Error(
+            confirmError.message || 'Failed to confirm bank account'
+          )
+        }
+
+        console.log('🎯 Setup confirmation response:', setupIntent)
+
+        // Step 3: Verify success
         if (setupIntent?.status === 'succeeded') {
           console.log('🎉 Setup completed successfully:', {
             setupIntentId: setupIntent.id,
             status: setupIntent.status,
           })
-          router.push(`/payment-success?setupIntentId=${setupIntent.id}`)
+          onSuccess({ setupIntentId: setupIntent.id })
         } else {
           throw new Error(`Setup failed with status: ${setupIntent?.status}`)
         }
       } catch (error) {
-        console.error('❌ Setup failed:', error)
-        onError(error as Error)
+        console.error('❌ Payment setup failed:', error)
+        onError(
+          error instanceof Error ? error : new Error('Unknown error occurred')
+        )
       } finally {
         setIsProcessing(false)
       }
     }
 
     collectBankAccount()
-  }, [stripe, clientSecret, customerName, customerEmail, onError, router])
+  }, [stripe, clientSecret, customerName, customerEmail, onSuccess, onError])
 
   return (
     <div className="space-y-8">

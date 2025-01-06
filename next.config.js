@@ -43,9 +43,9 @@ const nextConfig = {
     }
     return config
   },
-  compiler: {
-    removeConsole: true,
-  },
+  // compiler: {
+  //   removeConsole: true,
+  // },
 }
 
 module.exports = nextConfig
