@@ -24,7 +24,7 @@ export function StripePaymentForm({
   const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
-    if (!stripe || !clientSecret) return
+    if (!stripe || !clientSecret || isProcessing) return // Avoid re-processing
 
     const collectBankAccount = async () => {
       setIsProcessing(true)
@@ -86,12 +86,20 @@ export function StripePaymentForm({
           error instanceof Error ? error : new Error('Unknown error occurred')
         )
       } finally {
-        setIsProcessing(false)
+        setIsProcessing(false) // Unlock for further actions
       }
     }
 
     collectBankAccount()
-  }, [stripe, clientSecret, customerName, customerEmail, onSuccess, onError])
+  }, [
+    stripe,
+    clientSecret,
+    customerName,
+    customerEmail,
+    onSuccess,
+    onError,
+    isProcessing,
+  ])
 
   return (
     <div className="space-y-8">

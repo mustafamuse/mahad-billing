@@ -6,7 +6,6 @@ import Stripe from 'stripe'
 import { redis } from '@/lib/redis'
 
 import {
-  getRedisKey,
   handleError,
   logEvent,
   setRedisKey,
@@ -60,14 +59,20 @@ export async function POST(request: Request) {
 
     // Step 2: Check for existing subscription
     const existingSubscriptionId = await checkExistingSubscription(customerId)
+
     if (existingSubscriptionId) {
-      logEvent('Existing Subscription Found', existingSubscriptionId, {
+      logEvent('❗ Existing Subscription Found', existingSubscriptionId, {
         customerId,
       })
-      return NextResponse.json({
-        message: 'Subscription already exists.',
-        subscriptionId: existingSubscriptionId,
-      })
+
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Customer already has an active or trialing subscription.',
+          subscriptionId: existingSubscriptionId,
+        },
+        { status: 400 } // Bad Request to indicate a conflict
+      )
     }
 
     // Step 3: Verify US bank account payment method
@@ -125,14 +130,17 @@ export async function POST(request: Request) {
   async function checkExistingSubscription(
     customerId: string
   ): Promise<string | null> {
-    const redisKey = `payment_setup:${customerId}`
-    const existingData = await getRedisKey(redisKey)
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'all', // Retrieve all subscriptions, regardless of status
+    })
 
-    if (existingData && existingData.subscriptionId) {
-      return existingData.subscriptionId
-    }
+    // Check for any active or trialing subscriptions
+    const activeSubscription = subscriptions.data.find(
+      (sub) => sub.status === 'active' || sub.status === 'trialing'
+    )
 
-    return null
+    return activeSubscription ? activeSubscription.id : null
   }
 
   async function verifyUsBankAccount(
