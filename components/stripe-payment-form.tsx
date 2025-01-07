@@ -14,11 +14,11 @@ interface StripePaymentFormProps {
 }
 
 export function StripePaymentForm({
-  onSuccess,
-  onError,
   clientSecret,
   customerName,
   customerEmail,
+  onError,
+  onSuccess,
 }: StripePaymentFormProps) {
   const stripe = useStripe()
   const [isProcessing, setIsProcessing] = useState(false)
@@ -76,7 +76,6 @@ export function StripePaymentForm({
             setupIntentId: setupIntent.id,
             status: setupIntent.status,
           })
-
           onSuccess({ setupIntentId: setupIntent.id })
         } else {
           throw new Error(`Setup failed with status: ${setupIntent?.status}`)

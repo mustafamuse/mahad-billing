@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     }
 
     const { setupIntentId, oneTimeCharge } = requestBody || {}
+
     // Parse and validate the request body
     if (!setupIntentId || typeof oneTimeCharge !== 'boolean') {
       return NextResponse.json(
@@ -94,7 +95,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Step 7: Create subscription
     const subscription = await createSubscription({
       customerId,
       paymentMethodId,
@@ -115,337 +115,328 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Error in Subscription Handler:', error)
-
     await handleSubscriptionError(error, request)
     return NextResponse.json(
       { error: 'Failed to create subscription.' },
       { status: 500 }
     )
   }
-}
 
-async function checkExistingSubscription(
-  customerId: string
-): Promise<string | null> {
-  const redisKey = `payment_setup:${customerId}`
-  const existingData = await getRedisKey(redisKey)
+  async function checkExistingSubscription(
+    customerId: string
+  ): Promise<string | null> {
+    const redisKey = `payment_setup:${customerId}`
+    const existingData = await getRedisKey(redisKey)
 
-  if (existingData && existingData.subscriptionId) {
-    return existingData.subscriptionId
+    if (existingData && existingData.subscriptionId) {
+      return existingData.subscriptionId
+    }
+
+    return null
   }
 
-  return null
-}
+  async function verifyUsBankAccount(
+    customerId: string
+  ): Promise<Stripe.PaymentMethod> {
+    const paymentMethods = await stripe.paymentMethods.list({
+      customer: customerId,
+      type: 'us_bank_account',
+    })
 
-async function verifyUsBankAccount(
-  customerId: string
-): Promise<Stripe.PaymentMethod> {
-  const paymentMethods = await stripe.paymentMethods.list({
-    customer: customerId,
-    type: 'us_bank_account',
-  })
+    if (!paymentMethods.data.length) {
+      throw new Error('No US bank account payment method found for customer.')
+    }
 
-  if (!paymentMethods.data.length) {
-    throw new Error('No US bank account payment method found for customer.')
+    return paymentMethods.data[0]
   }
 
-  return paymentMethods.data[0]
-}
+  async function saveBankAccountInRedis(paymentMethod: Stripe.PaymentMethod) {
+    const redisKey = `bank_account:${paymentMethod.customer}`
+    const bankAccountData = {
+      customerId: paymentMethod.customer,
+      verified: true,
+      last4: paymentMethod.us_bank_account?.last4,
+      timestamp: Date.now(),
+    }
 
-async function saveBankAccountInRedis(paymentMethod: Stripe.PaymentMethod) {
-  const redisKey = `bank_account:${paymentMethod.customer}`
-  const bankAccountData = {
-    customerId: paymentMethod.customer,
-    verified: true,
-    last4: paymentMethod.us_bank_account?.last4,
-    timestamp: Date.now(),
+    await setRedisKey(redisKey, bankAccountData, 86400) // TTL: 1 day
+
+    logEvent(
+      'Bank Account Saved in Redis',
+      paymentMethod.customer as string,
+      bankAccountData
+    )
   }
 
-  await setRedisKey(redisKey, bankAccountData, 86400) // TTL: 1 day
+  async function saveInitialSetupState(customerId: string) {
+    const redisKey = `payment_setup:${customerId}`
+    const initialState = {
+      customerId,
+      subscriptionId: null,
+      setupCompleted: true,
+      bankVerified: true,
+      subscriptionActive: false,
+      timestamp: Date.now(),
+    }
 
-  logEvent(
-    'Bank Account Saved in Redis',
-    paymentMethod.customer as string,
-    bankAccountData
-  )
-}
+    await setRedisKey(redisKey, initialState, 86400) // TTL: 1 day
 
-async function saveInitialSetupState(customerId: string) {
-  const redisKey = `payment_setup:${customerId}`
-  const initialState = {
+    logEvent('Initial Setup State Saved in Redis', customerId, initialState)
+  }
+
+  // Process One-Time Charge (Fire-and-Forget)
+  async function processOneTimeCharge(
+    customerId: string,
+    paymentMethodId: string,
+    students: any[]
+  ) {
+    logEvent('Starting One-Time Charge Processing', customerId, { students })
+
+    try {
+      const oneTimeChargeAmount = students.reduce(
+        (sum, student) => sum + student.monthlyRate * 100,
+        0
+      )
+
+      if (oneTimeChargeAmount > 0) {
+        logEvent('Processing One-Time Charge', customerId, {
+          amount: oneTimeChargeAmount,
+        })
+        // Create a PaymentIntent for the one-time charge
+        const paymentIntent = await stripe.paymentIntents.create({
+          customer: customerId,
+          payment_method: paymentMethodId,
+          amount: oneTimeChargeAmount,
+          currency: 'usd',
+          confirm: true, // Immediately confirm the payment
+          description: `One-time upfront charge for students' December fees`,
+          metadata: {
+            chargeType: 'One-time fee',
+            students: JSON.stringify(students),
+            createdBy: 'Subscription API',
+          },
+          automatic_payment_methods: {
+            enabled: true,
+            allow_redirects: 'never',
+          },
+        })
+
+        logEvent('One-Time Charge Successful', paymentIntent.id, {
+          amount: oneTimeChargeAmount,
+          status: paymentIntent.status,
+        })
+
+        if (paymentIntent.status === 'processing') {
+          logEvent('One-Time Charge Processing', paymentIntent.id, {
+            amount: oneTimeChargeAmount,
+          })
+        }
+      } else {
+        logEvent('No valid amount for One-Time Charge', customerId)
+      }
+    } catch (error) {
+      console.error('Error creating one-time charge:', error)
+      logEvent('One-Time Charge Failed', customerId, {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    } finally {
+      logEvent('Completed One-Time Charge Processing', customerId)
+    }
+  }
+  async function createSubscription({
     customerId,
-    subscriptionId: null,
-    setupCompleted: true,
-    bankVerified: true,
-    subscriptionActive: false,
-    timestamp: Date.now(),
-  }
+    paymentMethodId,
+  }: {
+    customerId: string
+    paymentMethodId: string
+  }): Promise<Stripe.Subscription> {
+    const setupIntentMetadataKey = `setup_intent_metadata:${customerId}`
 
-  await setRedisKey(redisKey, initialState, 86400) // TTL: 1 day
+    console.log(
+      `Fetching metadata from Redis with key: ${setupIntentMetadataKey}`
+    )
 
-  logEvent('Initial Setup State Saved in Redis', customerId, initialState)
-}
+    // Fetch metadata from Redis
+    const metadataFromRedis = await redis.get(setupIntentMetadataKey)
 
-// Process One-Time Charge (Fire-and-Forget)
-async function processOneTimeCharge(
-  customerId: string,
-  paymentMethodId: string,
-  students: any[]
-) {
-  logEvent('Starting One-Time Charge Processing', customerId, { students })
+    if (!metadataFromRedis) {
+      console.error(`❌ Metadata not found for key: ${setupIntentMetadataKey}`)
+      throw new Error(
+        `Metadata not found in Redis for key: ${setupIntentMetadataKey}`
+      )
+    }
 
-  try {
-    const oneTimeChargeAmount = students.reduce(
-      (sum, student) => sum + student.monthlyRate * 100,
+    // Handle both string and object cases for metadataFromRedis
+    let parsedMetadata: {
+      studentKey: string
+      total: string
+      customerId: string
+    }
+
+    if (typeof metadataFromRedis === 'string') {
+      try {
+        parsedMetadata = JSON.parse(metadataFromRedis)
+      } catch (error) {
+        console.error(`❌ Failed to parse Redis metadata:`, metadataFromRedis)
+        throw new Error(
+          `Failed to parse metadata from Redis: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    } else if (typeof metadataFromRedis === 'object') {
+      // If metadataFromRedis is already an object, use it directly
+      parsedMetadata = metadataFromRedis as any
+    } else {
+      console.error(
+        `❌ Unexpected type for metadataFromRedis:`,
+        typeof metadataFromRedis
+      )
+      throw new Error(
+        `Unexpected type for metadataFromRedis: ${typeof metadataFromRedis}`
+      )
+    }
+
+    // Validate parsed metadata
+    const { studentKey } = parsedMetadata
+    if (!studentKey) {
+      throw new Error('Missing studentKey in metadata retrieved from Redis.')
+    }
+
+    console.log('Fetching students from Redis using key:', studentKey)
+
+    // Retrieve students from Redis
+    const studentsFromRedis = await redis.get(studentKey)
+
+    if (!studentsFromRedis) {
+      throw new Error(
+        `Failed to retrieve students from Redis with key: ${studentKey}`
+      )
+    }
+
+    // Handle both string and object cases for studentsFromRedis
+    let students: any[]
+    if (typeof studentsFromRedis === 'string') {
+      try {
+        students = JSON.parse(studentsFromRedis)
+      } catch (error) {
+        console.error(
+          `❌ Failed to parse student data from Redis:`,
+          studentsFromRedis
+        )
+        throw new Error(
+          `Failed to parse student data from Redis: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    } else if (typeof studentsFromRedis === 'object') {
+      students = studentsFromRedis as any
+    } else {
+      throw new Error(
+        `Unexpected type for studentsFromRedis: ${typeof studentsFromRedis}`
+      )
+    }
+
+    // Validate students data
+    if (
+      !students ||
+      !Array.isArray(students) ||
+      students.some((s) => !s.monthlyRate)
+    ) {
+      throw new Error('Invalid student data retrieved from Redis.')
+    }
+
+    // Calculate total subscription amount
+    const totalAmount = students.reduce(
+      (sum, student) => sum + student.monthlyRate * 100, // Stripe accepts cents
       0
     )
 
-    if (oneTimeChargeAmount > 0) {
-      logEvent('Processing One-Time Charge', customerId, {
-        amount: oneTimeChargeAmount,
-      })
-      // Create a PaymentIntent for the one-time charge
-      const paymentIntent = await stripe.paymentIntents.create({
+    if (!students.length || totalAmount <= 0) {
+      throw new Error('No valid students selected or total amount is invalid.')
+    }
+
+    console.log('📅 Creating subscription with immediate charge.')
+
+    // Create the subscription in Stripe
+    let subscription
+    try {
+      subscription = await stripe.subscriptions.create({
         customer: customerId,
-        payment_method: paymentMethodId,
-        amount: oneTimeChargeAmount,
-        currency: 'usd',
-        confirm: true, // Immediately confirm the payment
-        description: `One-time upfront charge for students' December fees`,
+        default_payment_method: paymentMethodId,
+        items: students.map((student) => ({
+          price_data: {
+            currency: 'usd',
+            unit_amount: student.monthlyRate * 100,
+            recurring: { interval: 'month' },
+            product: process.env.STRIPE_PRODUCT_ID!,
+          },
+          quantity: 1,
+          metadata: {
+            studentId: student.id,
+            studentName: student.name,
+          },
+        })),
+        proration_behavior: 'none',
         metadata: {
-          chargeType: 'One-time fee',
-          students: JSON.stringify(students),
-          createdBy: 'Subscription API',
+          studentKey, // Keep the reference key for tracking
         },
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: 'never',
+        collection_method: 'charge_automatically',
+        payment_settings: {
+          payment_method_types: ['us_bank_account'],
+          save_default_payment_method: 'on_subscription',
         },
       })
-
-      logEvent('One-Time Charge Successful', paymentIntent.id, {
-        amount: oneTimeChargeAmount,
-        status: paymentIntent.status,
-      })
-
-      if (paymentIntent.status === 'processing') {
-        logEvent('One-Time Charge Processing', paymentIntent.id, {
-          amount: oneTimeChargeAmount,
-        })
-      }
-    } else {
-      logEvent('No valid amount for One-Time Charge', customerId)
-    }
-  } catch (error) {
-    console.error('Error creating one-time charge:', error)
-    logEvent('One-Time Charge Failed', customerId, {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    throw error
-  } finally {
-    logEvent('Completed One-Time Charge Processing', customerId)
-  }
-}
-async function createSubscription({
-  customerId,
-  paymentMethodId,
-}: {
-  customerId: string
-  paymentMethodId: string
-}): Promise<Stripe.Subscription> {
-  const setupIntentMetadataKey = `setup_intent_metadata:${customerId}`
-
-  console.log(
-    `Fetching metadata from Redis with key: ${setupIntentMetadataKey}`
-  )
-
-  // Fetch metadata from Redis
-  const metadataFromRedis = await redis.get(setupIntentMetadataKey)
-
-  if (!metadataFromRedis) {
-    console.error(`❌ Metadata not found for key: ${setupIntentMetadataKey}`)
-    throw new Error(
-      `Metadata not found in Redis for key: ${setupIntentMetadataKey}`
-    )
-  }
-
-  // Handle both string and object cases for metadataFromRedis
-  let parsedMetadata: { studentKey: string; total: string; customerId: string }
-
-  if (typeof metadataFromRedis === 'string') {
-    try {
-      parsedMetadata = JSON.parse(metadataFromRedis)
     } catch (error) {
-      console.error(`❌ Failed to parse Redis metadata:`, metadataFromRedis)
-      throw new Error(
-        `Failed to parse metadata from Redis: ${error instanceof Error ? error.message : String(error)}`
-      )
+      console.error('❌ Error creating subscription in Stripe:', error)
+      throw new Error('Failed to create subscription in Stripe.')
     }
-  } else if (typeof metadataFromRedis === 'object') {
-    // If metadataFromRedis is already an object, use it directly
-    parsedMetadata = metadataFromRedis as any
-  } else {
-    console.error(
-      `❌ Unexpected type for metadataFromRedis:`,
-      typeof metadataFromRedis
-    )
-    throw new Error(
-      `Unexpected type for metadataFromRedis: ${typeof metadataFromRedis}`
-    )
+
+    console.log('🔍 Subscription created successfully:', subscription.id)
+
+    return subscription
   }
 
-  // Validate parsed metadata
-  const { studentKey } = parsedMetadata
-  if (!studentKey) {
-    throw new Error('Missing studentKey in metadata retrieved from Redis.')
-  }
-
-  console.log('Fetching students from Redis using key:', studentKey)
-
-  // Retrieve students from Redis
-  const studentsFromRedis = await redis.get(studentKey)
-
-  if (!studentsFromRedis) {
-    throw new Error(
-      `Failed to retrieve students from Redis with key: ${studentKey}`
-    )
-  }
-
-  // Handle both string and object cases for studentsFromRedis
-  let students: any[]
-  if (typeof studentsFromRedis === 'string') {
-    try {
-      students = JSON.parse(studentsFromRedis)
-    } catch (error) {
-      console.error(
-        `❌ Failed to parse student data from Redis:`,
-        studentsFromRedis
-      )
-      throw new Error(
-        `Failed to parse student data from Redis: ${error instanceof Error ? error.message : String(error)}`
-      )
-    }
-  } else if (typeof studentsFromRedis === 'object') {
-    students = studentsFromRedis as any
-  } else {
-    throw new Error(
-      `Unexpected type for studentsFromRedis: ${typeof studentsFromRedis}`
-    )
-  }
-
-  // Validate students data
-  if (
-    !students ||
-    !Array.isArray(students) ||
-    students.some((s) => !s.monthlyRate)
+  async function updateSubscriptionInRedis(
+    customerId: string,
+    subscription: Stripe.Subscription
   ) {
-    throw new Error('Invalid student data retrieved from Redis.')
-  }
-
-  // Modify specific student rate (e.g., Mustafa Muse -> $1)
-  const modifiedStudents = students.map((student) => {
-    if (student.name === 'Mustafa Muse') {
-      console.log(`Overriding rate for Mustafa Muse to $1.`)
-      return {
-        ...student,
-        monthlyRate: 1, // Set the rate to $1
-      }
+    const redisKey = `payment_setup:${customerId}`
+    const subscriptionData = {
+      customerId,
+      subscriptionId: subscription.id,
+      setupCompleted: true,
+      bankVerified: true,
+      subscriptionActive: subscription.status === 'active',
+      timestamp: Date.now(),
     }
-    return student
-  })
 
-  // Calculate total subscription amount
-  const totalAmount = modifiedStudents.reduce(
-    (sum, student) => sum + student.monthlyRate * 100, // Stripe accepts cents
-    0
-  )
+    await setRedisKey(redisKey, subscriptionData, 86400)
 
-  if (!modifiedStudents.length || totalAmount <= 0) {
-    throw new Error('No valid students selected or total amount is invalid.')
+    logEvent(
+      'Subscription Data Saved in Redis',
+      subscription.id,
+      subscriptionData
+    )
   }
 
-  console.log('📅 Creating subscription with immediate charge.')
+  async function handleSubscriptionError(error: unknown, request: Request) {
+    const { setupIntentId, customerId } = await request.json()
+    const redisKey = `payment_setup:${customerId}`
 
-  // Create the subscription in Stripe
-  let subscription
-  try {
-    subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      default_payment_method: paymentMethodId,
-      items: modifiedStudents.map((student) => ({
-        price_data: {
-          currency: 'usd',
-          unit_amount: student.monthlyRate * 100,
-          recurring: { interval: 'month' },
-          product: process.env.STRIPE_PRODUCT_ID!,
-        },
-        quantity: 1,
-        metadata: {
-          studentId: student.id,
-          studentName: student.name,
-        },
-      })),
-      proration_behavior: 'none',
-      metadata: {
-        studentKey, // Keep the reference key for tracking
-      },
-      collection_method: 'charge_automatically',
-      payment_settings: {
-        payment_method_types: ['us_bank_account'],
-        save_default_payment_method: 'on_subscription',
-      },
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error occurred.'
+
+    logEvent('Error Creating Subscription', setupIntentId, {
+      customerId,
+      errorMessage,
     })
-  } catch (error) {
-    console.error('❌ Error creating subscription in Stripe:', error)
-    throw new Error('Failed to create subscription in Stripe.')
-  }
 
-  console.log('🔍 Subscription created successfully:', subscription.id)
+    await redis.del(redisKey)
 
-  return subscription
-}
+    handleError('Subscription Creation Failed', setupIntentId, error)
 
-async function updateSubscriptionInRedis(
-  customerId: string,
-  subscription: Stripe.Subscription
-) {
-  const redisKey = `payment_setup:${customerId}`
-  const subscriptionData = {
-    customerId,
-    subscriptionId: subscription.id,
-    setupCompleted: true,
-    bankVerified: true,
-    subscriptionActive: subscription.status === 'active',
-    timestamp: Date.now(),
-  }
-
-  await setRedisKey(redisKey, subscriptionData, 86400)
-
-  logEvent(
-    'Subscription Data Saved in Redis',
-    subscription.id,
-    subscriptionData
-  )
-}
-
-async function handleSubscriptionError(error: unknown, request: Request) {
-  const { setupIntentId, customerId } = await request.json()
-  const redisKey = `payment_setup:${customerId}`
-
-  const errorMessage =
-    error instanceof Error ? error.message : 'Unknown error occurred.'
-
-  logEvent('Error Creating Subscription', setupIntentId, {
-    customerId,
-    errorMessage,
-  })
-
-  await redis.del(redisKey)
-
-  handleError('Subscription Creation Failed', setupIntentId, error)
-
-  return {
-    success: false,
-    error: errorMessage,
+    return {
+      success: false,
+      error: errorMessage,
+    }
   }
 }

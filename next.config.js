@@ -7,8 +7,17 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value:
-              "frame-src 'self' js.stripe.com hooks.stripe.com; connect-src 'self' api.stripe.com;",
+            value: [
+              "default-src 'self'",
+              "img-src 'self' blob: data:",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' 'wasm-unsafe-eval' https://js.stripe.com",
+              "style-src 'self' 'unsafe-inline'",
+              "connect-src 'self' blob: data: https://api.stripe.com",
+              "worker-src 'self' blob:",
+              "child-src 'self' blob:",
+              "frame-src 'self' blob: https://js.stripe.com https://hooks.stripe.com",
+              "media-src 'self' blob: data:",
+            ].join('; '),
           },
         ],
       },
@@ -24,6 +33,19 @@ const nextConfig = {
     KV_REST_API_READ_ONLY_TOKEN: process.env.KV_REST_API_READ_ONLY_TOKEN,
     KV_URL: process.env.KV_URL,
   },
+  experimental: {
+    esmExternals: 'loose',
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@react-pdf/renderer': '@react-pdf/renderer/lib/react-pdf.js',
+    }
+    return config
+  },
+  // compiler: {
+  //   removeConsole: true,
+  // },
 }
 
 module.exports = nextConfig

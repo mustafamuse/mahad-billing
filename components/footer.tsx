@@ -13,7 +13,7 @@ export function Footer() {
     <footer className="border-t py-6">
       <div className="container flex flex-col items-center justify-center gap-4">
         <p className="text-center text-sm leading-loose text-muted-foreground">
-          Built by <span className="font-medium">Mustafa Al-Azharī</span>
+          {/* Built by <span className="font-medium">Mustafa Al-Azharī</span> */}
         </p>
         <Button
           variant="outline"

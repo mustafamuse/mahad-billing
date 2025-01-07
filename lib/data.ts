@@ -1,3 +1,4 @@
+import { getOverriddenPrice } from './config/price-overrides'
 import { Student } from './types'
 
 // ---------------------------------------
@@ -61,6 +62,7 @@ const CLASS_ASSIGNMENTS = {
     'Mustafa Muse',
   ],
   'irshad-2': [
+    'No one',
     'Aaliyah Ismail',
     'Abdulkadir Mohamud',
     'Abdulmalik Mohamud',
@@ -119,7 +121,7 @@ const CLASS_ASSIGNMENTS = {
     'Ikram Abdulkadir',
     'Sagal Dahir',
     'Samiro Bong',
-    'Salahu-Din Hussein',
+    // 'Salahu-Din Hussein', doenst pay
   ],
 }
 
@@ -176,18 +178,23 @@ const sortedNames = sortByLastName(Object.values(CLASS_ASSIGNMENTS).flat())
 export const STUDENTS: Student[] = sortedNames.map((name, index) => {
   const familyInfo = getFamilyInfo(name)
   const className = getClassName(name) || 'unassigned'
-  const siblingsCount = familyInfo ? familyInfo.totalFamilyMembers - 1 : 0 // Exclude the student
-  const discount = calculateDiscount(siblingsCount)
+  const siblingsCount = familyInfo ? familyInfo.totalFamilyMembers - 1 : 0
+
+  // Check for price override
+  const overriddenPrice = getOverriddenPrice(name)
+  const monthlyRate =
+    overriddenPrice ?? BASE_RATE - calculateDiscount(siblingsCount)
 
   return {
     id: (index + 1).toString(),
     name,
     className,
-    monthlyRate: BASE_RATE - discount,
+    monthlyRate,
+    hasCustomRate: !!overriddenPrice,
     ...(familyInfo && {
       familyId: familyInfo.familyId,
       totalFamilyMembers: familyInfo.totalFamilyMembers,
     }),
-    siblings: siblingsCount, // Optional, if sibling count is needed per student
+    siblings: siblingsCount,
   }
 })
