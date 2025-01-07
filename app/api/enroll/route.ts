@@ -78,6 +78,7 @@ export async function POST(request: Request) {
       clientSecret: setupIntent.client_secret,
       customerId: customer.id,
       setupIntent,
+      studentKey: redisKey,
     }
 
     // Save metadata and response in Redis for idempotency

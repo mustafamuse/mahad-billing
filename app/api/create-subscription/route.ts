@@ -305,9 +305,11 @@ export async function POST(request: Request) {
     }
 
     // Validate parsed metadata
-    const { studentKey } = parsedMetadata
-    if (!studentKey) {
-      throw new Error('Missing studentKey in metadata retrieved from Redis.')
+    const { studentKey, total, customerId: metadataCustomerId } = parsedMetadata
+    if (!studentKey || !total || !metadataCustomerId) {
+      throw new Error(
+        'Missing required fields in metadata retrieved from Redis.'
+      )
     }
 
     console.log('Fetching students from Redis using key:', studentKey)
