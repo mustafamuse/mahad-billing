@@ -59,6 +59,30 @@ export async function POST(request: Request) {
       })
     }
 
+    console.log('🔍 Checking for existing SetupIntent...')
+    const existingSetupIntents = await stripe.setupIntents.list({
+      customer: customer.id,
+      limit: 1, // Assume only one active SetupIntent is relevant
+    })
+
+    const activeSetupIntent = existingSetupIntents.data.find(
+      (intent) =>
+        intent.status === 'requires_payment_method' ||
+        intent.status === 'requires_confirmation'
+    )
+
+    if (activeSetupIntent) {
+      console.log('⚠️ Found existing SetupIntent:', activeSetupIntent.id)
+      return NextResponse.json({
+        clientSecret: activeSetupIntent.client_secret,
+        customerId: customer.id,
+        setupIntent: activeSetupIntent,
+        studentKey: redisKey,
+      })
+    }
+
+    console.log('ℹ️ No active SetupIntent found. Creating a new one...')
+
     const setupIntent = await stripe.setupIntents.create({
       customer: customer.id,
       payment_method_types: ['us_bank_account'],

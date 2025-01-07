@@ -41,6 +41,16 @@ export async function POST(request: Request) {
 
     // Step 1: Retrieve the setup intent
     const setupIntent = await stripe.setupIntents.retrieve(setupIntentId)
+
+    // Validate SetupIntent status
+    if (setupIntent.status !== 'succeeded') {
+      console.error('❌ Invalid SetupIntent:', setupIntent.status)
+      return NextResponse.json(
+        { error: `Invalid SetupIntent. Status: ${setupIntent.status}` },
+        { status: 400 }
+      )
+    }
+
     if (!setupIntent.customer || !setupIntent.payment_method) {
       return NextResponse.json(
         {
@@ -61,17 +71,14 @@ export async function POST(request: Request) {
     const existingSubscriptionId = await checkExistingSubscription(customerId)
 
     if (existingSubscriptionId) {
-      logEvent('❗ Existing Subscription Found', existingSubscriptionId, {
-        customerId,
-      })
-
+      console.error('❗ Existing subscription found:', existingSubscriptionId)
       return NextResponse.json(
         {
           success: false,
-          message: 'Customer already has an active or trialing subscription.',
+          error: 'Customer already has an active or trialing subscription.',
           subscriptionId: existingSubscriptionId,
         },
-        { status: 400 } // Bad Request to indicate a conflict
+        { status: 400 }
       )
     }
 
@@ -99,6 +106,13 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
+
+    console.log('🔍 Verification Checkpoint before creating subscription:', {
+      setupIntentId: setupIntentId,
+      customerId: customerId,
+      paymentMethodId: paymentMethodId,
+      metadata: setupIntent.metadata,
+    })
 
     const subscription = await createSubscription({
       customerId,

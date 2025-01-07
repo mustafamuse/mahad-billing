@@ -30,6 +30,16 @@ export function StripePaymentForm({
       setIsProcessing(true)
 
       try {
+        console.log('🔍 Fetching SetupIntent to check status...')
+        const { setupIntent: retrievedSetupIntent } =
+          await stripe.retrieveSetupIntent(clientSecret)
+
+        if (retrievedSetupIntent?.status === 'succeeded') {
+          console.log('🎉 Setup already completed:', retrievedSetupIntent.id)
+          onSuccess({ setupIntentId: retrievedSetupIntent.id })
+          return // Skip further processing
+        }
+
         // Step 1: Collect bank account
         console.log('🏦 Starting bank account collection...')
         const { error: collectError } = await stripe.collectBankAccountForSetup(
