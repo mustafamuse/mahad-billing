@@ -36,13 +36,41 @@ export function InputField({
     <FormField
       control={form.control}
       name={name}
-      render={({ field }) => (
+      render={({ field, fieldState }) => (
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <Input type={type} placeholder={placeholder} {...field} />
+            <Input
+              type={type}
+              placeholder={placeholder}
+              value={field.value as string}
+              onChange={(e) => {
+                if (name === 'phone') {
+                  // Only allow digits
+                  const value = e.target.value.replace(/\D/g, '')
+
+                  // Validate length and trigger validation
+                  if (value.length > 10) {
+                    return // Don't update if more than 10 digits
+                  }
+
+                  // Format as (XXX) XXX-XXXX if we have enough digits
+                  if (value.length === 10) {
+                    const formatted = `(${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6)}`
+                    field.onChange(formatted)
+                  } else {
+                    field.onChange(value)
+                  }
+                } else {
+                  field.onChange(e)
+                }
+              }}
+              onBlur={field.onBlur}
+              name={field.name}
+              ref={field.ref}
+            />
           </FormControl>
-          <FormMessage />
+          {fieldState.isTouched && <FormMessage />}
         </FormItem>
       )}
     />
@@ -132,7 +160,7 @@ export function PayorDetailsFields({
           form={form}
           name="phone"
           label="Payor's WhatsApp Number"
-          placeholder="+1 (555) 555-5555"
+          placeholder="(612) 555-5555"
         />
       </div>
     </>

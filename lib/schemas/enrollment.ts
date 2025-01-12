@@ -25,11 +25,10 @@ export const enrollmentSchema = z.object({
     .email('Please enter a valid email address'),
   phone: z
     .string()
-    .min(14, 'Phone number must be in format (XXX) XXX-XXXX')
-    .regex(
-      /^\(\d{3}\) \d{3}-\d{4}$/,
-      'Phone number must be in format (XXX) XXX-XXXX'
-    ),
+    .min(1, "Payor's phone number is required")
+    .refine((val) => val.replace(/\D/g, '').length === 10, {
+      message: 'Phone number must be exactly 10 digits',
+    }),
   termsAccepted: z.boolean().refine((val) => val === true, {
     message: 'You must accept the terms and conditions',
   }),
