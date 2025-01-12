@@ -1,72 +1,177 @@
 'use client'
 
-import { createContext, useContext, useReducer } from 'react'
+import { createContext, useContext, useState, useCallback } from 'react'
 
+import { toasts } from '@/components/toast/toast-utils'
+import { enrollmentSchemaType } from '@/lib/schemas/enrollment'
 import { Student } from '@/lib/types'
 
 interface EnrollmentState {
+  step: number
   selectedStudents: Student[]
-  currentStep: number
-  termsAccepted: boolean
+  isProcessing: boolean
+  clientSecret?: string
+  hasAgreedToTerms: boolean
+  isTermsModalOpen: boolean
 }
 
 interface EnrollmentActions {
+  nextStep: () => void
+  previousStep: () => void
+  setStep: (step: number) => void
+  addStudent: (student: Student) => void
+  removeStudent: (studentId: string) => void
   setSelectedStudents: (students: Student[]) => void
-  setCurrentStep: (step: number) => void
-  setTermsAccepted: (accepted: boolean) => void
+  handleTermsAgreement: () => void
+  toggleTermsModal: () => void
+  handleEnrollment: (values: enrollmentSchemaType) => Promise<void>
+  resetForm: () => void
 }
 
-interface EnrollmentContextValue {
+interface EnrollmentContextType {
   state: EnrollmentState
   actions: EnrollmentActions
 }
 
-const EnrollmentContext = createContext<EnrollmentContextValue | undefined>(
+const EnrollmentContext = createContext<EnrollmentContextType | undefined>(
   undefined
 )
-
-const initialState: EnrollmentState = {
-  selectedStudents: [],
-  currentStep: 0,
-  termsAccepted: false,
-}
-
-type Action =
-  | { type: 'SET_SELECTED_STUDENTS'; payload: Student[] }
-  | { type: 'SET_CURRENT_STEP'; payload: number }
-  | { type: 'SET_TERMS_ACCEPTED'; payload: boolean }
-
-function reducer(state: EnrollmentState, action: Action): EnrollmentState {
-  switch (action.type) {
-    case 'SET_SELECTED_STUDENTS':
-      return { ...state, selectedStudents: action.payload }
-    case 'SET_CURRENT_STEP':
-      return { ...state, currentStep: action.payload }
-    case 'SET_TERMS_ACCEPTED':
-      return { ...state, termsAccepted: action.payload }
-    default:
-      return state
-  }
-}
 
 export function EnrollmentProvider({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [state, dispatch] = useReducer(reducer, initialState)
+  // State
+  const [state, setState] = useState<EnrollmentState>({
+    step: 1,
+    selectedStudents: [],
+    isProcessing: false,
+    clientSecret: undefined,
+    hasAgreedToTerms: false,
+    isTermsModalOpen: false,
+  })
 
-  const actions: EnrollmentActions = {
-    setSelectedStudents: (students) =>
-      dispatch({ type: 'SET_SELECTED_STUDENTS', payload: students }),
-    setCurrentStep: (step) =>
-      dispatch({ type: 'SET_CURRENT_STEP', payload: step }),
-    setTermsAccepted: (accepted) =>
-      dispatch({ type: 'SET_TERMS_ACCEPTED', payload: accepted }),
+  // Actions
+  const nextStep = useCallback(() => {
+    setState((prev) => ({ ...prev, step: prev.step + 1 }))
+  }, [])
+
+  const previousStep = useCallback(() => {
+    setState((prev) => ({ ...prev, step: prev.step - 1 }))
+  }, [])
+
+  const setStep = useCallback((step: number) => {
+    setState((prev) => ({ ...prev, step }))
+  }, [])
+
+  const addStudent = useCallback((student: Student) => {
+    setState((prev) => ({
+      ...prev,
+      selectedStudents: [...prev.selectedStudents, student],
+    }))
+  }, [])
+
+  const removeStudent = useCallback((studentId: string) => {
+    setState((prev) => ({
+      ...prev,
+      selectedStudents: prev.selectedStudents.filter((s) => s.id !== studentId),
+    }))
+  }, [])
+
+  const setSelectedStudents = useCallback((students: Student[]) => {
+    setState((prev) => ({ ...prev, selectedStudents: students }))
+  }, [])
+
+  const handleTermsAgreement = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      hasAgreedToTerms: true,
+      isTermsModalOpen: false,
+    }))
+  }, [])
+
+  const toggleTermsModal = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isTermsModalOpen: !prev.isTermsModalOpen,
+    }))
+  }, [])
+
+  const handleEnrollment = useCallback(
+    async (values: enrollmentSchemaType) => {
+      try {
+        setState((prev) => ({ ...prev, isProcessing: true }))
+
+        const requestBody = {
+          total: state.selectedStudents.reduce(
+            (sum, s) => sum + s.monthlyRate,
+            0
+          ),
+          email: values.email,
+          firstName: values.firstName,
+          lastName: values.lastName,
+          phone: values.phone,
+          students: state.selectedStudents,
+        }
+
+        const response = await fetch('/api/enroll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        })
+
+        if (!response.ok) {
+          throw new Error(
+            (await response.text()) || 'Failed to create SetupIntent'
+          )
+        }
+
+        const { clientSecret } = await response.json()
+        setState((prev) => ({
+          ...prev,
+          clientSecret,
+          step: 3,
+        }))
+      } catch (error) {
+        toasts.apiError({ error })
+        console.error('Enrollment API Error:', error)
+      } finally {
+        setState((prev) => ({ ...prev, isProcessing: false }))
+      }
+    },
+    [state.selectedStudents]
+  )
+
+  const resetForm = useCallback(() => {
+    setState({
+      step: 1,
+      selectedStudents: [],
+      isProcessing: false,
+      clientSecret: undefined,
+      hasAgreedToTerms: false,
+      isTermsModalOpen: false,
+    })
+  }, [])
+
+  const value = {
+    state,
+    actions: {
+      nextStep,
+      previousStep,
+      setStep,
+      addStudent,
+      removeStudent,
+      setSelectedStudents,
+      handleTermsAgreement,
+      toggleTermsModal,
+      handleEnrollment,
+      resetForm,
+    },
   }
 
   return (
-    <EnrollmentContext.Provider value={{ state, actions }}>
+    <EnrollmentContext.Provider value={value}>
       {children}
     </EnrollmentContext.Provider>
   )
@@ -74,7 +179,7 @@ export function EnrollmentProvider({
 
 export function useEnrollment() {
   const context = useContext(EnrollmentContext)
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useEnrollment must be used within an EnrollmentProvider')
   }
   return context
