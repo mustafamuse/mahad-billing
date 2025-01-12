@@ -1,12 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-import { AlertCircle, RefreshCcw } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { AlertCircle, RefreshCcw, Loader2 } from 'lucide-react'
 import { UseFormReturn } from 'react-hook-form'
 
+import { EmptySelection } from '@/components/enrollment/empty-selection'
+import { EnrollmentSummary } from '@/components/enrollment/enrollment-summary'
 import { StudentCard } from '@/components/enrollment/student-card'
 import { StudentSearchCombobox } from '@/components/enrollment/student-search-combobox'
+import { StudentListSkeleton } from '@/components/enrollment/student-skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,7 +29,6 @@ import {
 } from '@/components/ui/form'
 import { useStudentSelection } from '@/hooks/use-student-selection'
 import { STUDENTS } from '@/lib/data'
-import { calculateTotal } from '@/lib/utils'
 
 interface StudentSelectionStepProps {
   form: UseFormReturn<FormValues>
@@ -54,12 +57,37 @@ export function StudentSelectionStep({ form }: StudentSelectionStepProps) {
     isStudentSelected,
   } = useStudentSelection({ form })
 
+  const isSubmitting = form.formState.isSubmitting
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Open search with CMD/CTRL + K
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setOpen(true)
+      }
+      // Close search with ESC
+      if (e.key === 'Escape' && open) {
+        setOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [open])
+
   return (
     <Card className="border-0 sm:border">
       <CardHeader className="space-y-2 p-4 sm:p-6">
         <CardTitle className="text-xl sm:text-2xl">Select Your Name</CardTitle>
         <CardDescription className="text-sm sm:text-base">
-          Choose the students you want to enroll in the mahad autopay system
+          Choose the students you want to enroll in the mahad autopay system.
+          Press{' '}
+          <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+            <span className="text-xs">⌘</span>K
+          </kbd>{' '}
+          to search.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 p-4 sm:p-6">
@@ -112,40 +140,36 @@ export function StudentSelectionStep({ form }: StudentSelectionStepProps) {
                     role="list"
                     aria-label="Selected students"
                   >
-                    {selectedStudents.map((student) => (
-                      <StudentCard
-                        key={student.id}
-                        student={student}
-                        onRemove={handleStudentRemove}
-                      />
-                    ))}
+                    {isLoading ? (
+                      <StudentListSkeleton />
+                    ) : selectedStudents.length === 0 ? (
+                      <EmptySelection />
+                    ) : (
+                      <AnimatePresence mode="popLayout">
+                        {selectedStudents.map((student) => (
+                          <motion.div
+                            key={student.id}
+                            layout
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{
+                              type: 'spring',
+                              stiffness: 500,
+                              damping: 30,
+                            }}
+                          >
+                            <StudentCard
+                              student={student}
+                              onRemove={handleStudentRemove}
+                            />
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                    )}
                   </div>
 
-                  {selectedStudents.length > 0 && (
-                    <div className="space-y-3 border-t pt-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          Total Students Selected
-                        </span>
-                        <span className="font-medium">
-                          {selectedStudents.length}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium sm:text-base">
-                          Your Monthly Tuition Total
-                        </span>
-                        <div className="text-right">
-                          <span className="text-lg font-bold sm:text-xl">
-                            ${calculateTotal(selectedStudents)}
-                          </span>
-                          <span className="block text-xs text-muted-foreground sm:text-sm">
-                            per month
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <EnrollmentSummary selectedStudents={selectedStudents} />
                 </div>
               </FormControl>
             </FormItem>
@@ -156,10 +180,17 @@ export function StudentSelectionStep({ form }: StudentSelectionStepProps) {
         <Button
           type="submit"
           className="h-12 w-full text-base font-medium"
-          disabled={selectedStudents.length === 0}
+          disabled={selectedStudents.length === 0 || isSubmitting}
           aria-label="Continue to payment details"
         >
-          Continue to Payment Details
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            'Continue to Payment Details'
+          )}
         </Button>
       </CardFooter>
     </Card>
