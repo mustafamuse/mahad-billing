@@ -27,20 +27,13 @@ import {
   FormItem,
   FormMessage,
 } from '@/components/ui/form'
+import { useEnrollment } from '@/contexts/enrollment-context'
 import { useStudentSelection } from '@/hooks/use-student-selection'
 import { STUDENTS } from '@/lib/data'
+import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
 
 interface StudentSelectionStepProps {
-  form: UseFormReturn<FormValues>
-}
-
-interface FormValues {
-  students: string[]
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  termsAccepted: boolean
+  form: UseFormReturn<EnrollmentFormValues>
 }
 
 export function StudentSelectionStep({ form }: StudentSelectionStepProps) {
@@ -56,6 +49,10 @@ export function StudentSelectionStep({ form }: StudentSelectionStepProps) {
     isStudentEnrolled,
     isStudentSelected,
   } = useStudentSelection({ form })
+
+  const {
+    actions: { nextStep },
+  } = useEnrollment()
 
   const isSubmitting = form.formState.isSubmitting
 
@@ -76,6 +73,14 @@ export function StudentSelectionStep({ form }: StudentSelectionStepProps) {
     window.addEventListener('keydown', handleKeyPress)
     return () => window.removeEventListener('keydown', handleKeyPress)
   }, [open])
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const result = await form.trigger('students')
+    if (result) {
+      nextStep()
+    }
+  }
 
   return (
     <Card className="border-0 sm:border">
@@ -118,7 +123,7 @@ export function StudentSelectionStep({ form }: StudentSelectionStepProps) {
         <FormField
           control={form.control}
           name="students"
-          render={() => (
+          render={({ fieldState }) => (
             <FormItem>
               <FormControl>
                 <div className="space-y-4">
@@ -133,7 +138,7 @@ export function StudentSelectionStep({ form }: StudentSelectionStepProps) {
                     isStudentEnrolled={isStudentEnrolled}
                   />
 
-                  <FormMessage />
+                  {fieldState.isTouched && <FormMessage />}
 
                   <div
                     className="space-y-3"
@@ -178,10 +183,11 @@ export function StudentSelectionStep({ form }: StudentSelectionStepProps) {
       </CardContent>
       <CardFooter className="p-4 sm:p-6">
         <Button
-          type="submit"
+          type="button"
           className="h-12 w-full text-base font-medium"
           disabled={selectedStudents.length === 0 || isSubmitting}
           aria-label="Continue to payment details"
+          onClick={onSubmit}
         >
           {isSubmitting ? (
             <>

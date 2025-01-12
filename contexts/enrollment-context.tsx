@@ -2,8 +2,10 @@
 
 import { createContext, useContext, useState, useCallback } from 'react'
 
+import { UseFormReturn } from 'react-hook-form'
+
 import { toasts } from '@/components/toast/toast-utils'
-import { enrollmentSchemaType } from '@/lib/schemas/enrollment'
+import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
 import { Student } from '@/lib/types'
 
 interface EnrollmentState {
@@ -11,7 +13,7 @@ interface EnrollmentState {
   selectedStudents: Student[]
   isProcessing: boolean
   clientSecret?: string
-  hasAgreedToTerms: boolean
+  hasViewedTerms: boolean
   isTermsModalOpen: boolean
 }
 
@@ -22,9 +24,9 @@ interface EnrollmentActions {
   addStudent: (student: Student) => void
   removeStudent: (studentId: string) => void
   setSelectedStudents: (students: Student[]) => void
-  handleTermsAgreement: () => void
+  handleTermsAgreement: (form: UseFormReturn<EnrollmentFormValues>) => void
   toggleTermsModal: () => void
-  handleEnrollment: (values: enrollmentSchemaType) => Promise<void>
+  handleEnrollment: (values: EnrollmentFormValues) => Promise<void>
   resetForm: () => void
 }
 
@@ -48,13 +50,29 @@ export function EnrollmentProvider({
     selectedStudents: [],
     isProcessing: false,
     clientSecret: undefined,
-    hasAgreedToTerms: false,
+    hasViewedTerms: false,
     isTermsModalOpen: false,
   })
 
   // Actions
   const nextStep = useCallback(() => {
-    setState((prev) => ({ ...prev, step: prev.step + 1 }))
+    setState((prev) => {
+      if (prev.step === 1) {
+        console.log('Moving to Payor Details Step:', {
+          selectedStudents: prev.selectedStudents.map((s) => ({
+            id: s.id,
+            name: s.name,
+            monthlyRate: s.monthlyRate,
+          })),
+          totalStudents: prev.selectedStudents.length,
+          totalMonthlyRate: prev.selectedStudents.reduce(
+            (sum, s) => sum + s.monthlyRate,
+            0
+          ),
+        })
+      }
+      return { ...prev, step: prev.step + 1 }
+    })
   }, [])
 
   const previousStep = useCallback(() => {
@@ -83,13 +101,17 @@ export function EnrollmentProvider({
     setState((prev) => ({ ...prev, selectedStudents: students }))
   }, [])
 
-  const handleTermsAgreement = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      hasAgreedToTerms: true,
-      isTermsModalOpen: false,
-    }))
-  }, [])
+  const handleTermsAgreement = useCallback(
+    (form: UseFormReturn<EnrollmentFormValues>) => {
+      setState((prev) => ({
+        ...prev,
+        hasViewedTerms: true,
+        isTermsModalOpen: false,
+      }))
+      form.setValue('termsAccepted', true)
+    },
+    []
+  )
 
   const toggleTermsModal = useCallback(() => {
     setState((prev) => ({
@@ -99,9 +121,32 @@ export function EnrollmentProvider({
   }, [])
 
   const handleEnrollment = useCallback(
-    async (values: enrollmentSchemaType) => {
+    async (values: EnrollmentFormValues) => {
       try {
         setState((prev) => ({ ...prev, isProcessing: true }))
+
+        console.log('Submitting Enrollment:', {
+          payorDetails: {
+            firstName: values.firstName,
+            lastName: values.lastName,
+            email: values.email,
+            phone: values.phone,
+            relationship: values.relationship,
+          },
+          students: {
+            list: state.selectedStudents.map((s) => ({
+              id: s.id,
+              name: s.name,
+              monthlyRate: s.monthlyRate,
+            })),
+            count: state.selectedStudents.length,
+            totalMonthlyRate: state.selectedStudents.reduce(
+              (sum, s) => sum + s.monthlyRate,
+              0
+            ),
+          },
+          termsAccepted: values.termsAccepted,
+        })
 
         const requestBody = {
           total: state.selectedStudents.reduce(
@@ -149,7 +194,7 @@ export function EnrollmentProvider({
       selectedStudents: [],
       isProcessing: false,
       clientSecret: undefined,
-      hasAgreedToTerms: false,
+      hasViewedTerms: false,
       isTermsModalOpen: false,
     })
   }, [])

@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { Check, ChevronsUpDown, Search, AlertCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -43,6 +45,14 @@ export function StudentSearchCombobox({
   isStudentSelected,
   isStudentEnrolled,
 }: StudentSearchComboboxProps) {
+  const [searchValue, setSearchValue] = useState('')
+
+  const handleSelect = (student: Student) => {
+    onSelect(student)
+    setSearchValue('') // Clear search input after selection
+    onOpenChange(false) // Close popover after selection
+  }
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
@@ -70,6 +80,8 @@ export function StudentSearchCombobox({
             <CommandInput
               placeholder="Type a name to search..."
               className="h-12 flex-1 text-base sm:h-11 sm:text-sm"
+              value={searchValue}
+              onValueChange={setSearchValue}
             />
           </div>
           <CommandEmpty>No student found.</CommandEmpty>
@@ -86,7 +98,7 @@ export function StudentSearchCombobox({
                 return (
                   <CommandItem
                     key={student.id}
-                    onSelect={() => !isEnrolled && onSelect(student)}
+                    onSelect={() => !isEnrolled && handleSelect(student)}
                     className={cn(
                       'px-2 py-3 text-base sm:py-2 sm:text-sm',
                       isEnrolled && 'cursor-not-allowed opacity-50'

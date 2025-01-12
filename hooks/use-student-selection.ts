@@ -5,17 +5,11 @@ import { useEffect, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 
 import { useEnrollment } from '@/contexts/enrollment-context'
+import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
 import { Student } from '@/lib/types'
 
 interface UseStudentSelectionProps {
-  form: UseFormReturn<{
-    students: string[]
-    firstName: string
-    lastName: string
-    email: string
-    phone: string
-    termsAccepted: boolean
-  }>
+  form: UseFormReturn<EnrollmentFormValues>
 }
 
 export function useStudentSelection({ form }: UseStudentSelectionProps) {
@@ -66,30 +60,25 @@ export function useStudentSelection({ form }: UseStudentSelectionProps) {
     fetchEnrolledStudents()
   }, [])
 
+  // Update form value when selected students change
+  useEffect(() => {
+    form.setValue(
+      'students',
+      selectedStudents.map((s) => s.id),
+      { shouldValidate: true }
+    )
+  }, [selectedStudents, form])
+
   const handleStudentSelect = (student: Student) => {
     if (!selectedStudents.find((s) => s.id === student.id)) {
       const newStudents = [...selectedStudents, student]
       setSelectedStudents(newStudents)
-      form.setValue(
-        'students',
-        newStudents.map((s) => s.id),
-        {
-          shouldValidate: true,
-        }
-      )
     }
   }
 
   const handleStudentRemove = (studentId: string) => {
     const newStudents = selectedStudents.filter((s) => s.id !== studentId)
     setSelectedStudents(newStudents)
-    form.setValue(
-      'students',
-      newStudents.map((s) => s.id),
-      {
-        shouldValidate: true,
-      }
-    )
   }
 
   const isStudentSelected = (studentId: string) =>
