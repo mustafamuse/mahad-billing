@@ -6,6 +6,7 @@ import { type UseFormReturn } from 'react-hook-form'
 
 import { EnrollmentSummary } from '@/components/enrollment/enrollment-summary'
 import { StripePaymentForm } from '@/components/stripe-payment-form'
+import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -13,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
 import { useEnrollment } from '@/contexts/enrollment-context'
 import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
 
@@ -52,13 +54,18 @@ export function PaymentStep({ form }: PaymentStepProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Set Up Bank Account</CardTitle>
+        <CardTitle>Payment Details</CardTitle>
         <CardDescription>
-          Please provide your bank account details to complete enrollment.
+          Review your enrollment summary and set up your bank account for
+          monthly tuition payments.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <EnrollmentSummary selectedStudents={selectedStudents} />
+        <div className="rounded-lg border bg-card p-6">
+          <EnrollmentSummary selectedStudents={selectedStudents} />
+        </div>
+
+        <Separator className="my-6" />
 
         <Elements stripe={stripePromise} options={{ clientSecret }}>
           <StripePaymentForm
@@ -67,13 +74,14 @@ export function PaymentStep({ form }: PaymentStepProps) {
           />
         </Elements>
 
-        <button
+        <Button
           type="button"
           onClick={previousStep}
-          className="inline-flex h-12 w-full items-center justify-center rounded-md border border-input bg-background px-6 text-base font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          variant="outline"
+          className="w-full"
         >
           Back to Payor Details
-        </button>
+        </Button>
       </CardContent>
     </Card>
   )
