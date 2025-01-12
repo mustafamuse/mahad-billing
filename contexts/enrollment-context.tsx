@@ -123,6 +123,10 @@ export function EnrollmentProvider({
   const handleEnrollment = useCallback(
     async (values: EnrollmentFormValues) => {
       try {
+        console.log('Starting enrollment process...', {
+          values,
+          currentStep: state.step,
+        })
         setState((prev) => ({ ...prev, isProcessing: true }))
 
         console.log('Submitting Enrollment:', {
@@ -160,6 +164,8 @@ export function EnrollmentProvider({
           students: state.selectedStudents,
         }
 
+        console.log('Making API request to /api/enroll:', requestBody)
+
         const response = await fetch('/api/enroll', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -167,20 +173,26 @@ export function EnrollmentProvider({
         })
 
         if (!response.ok) {
-          throw new Error(
-            (await response.text()) || 'Failed to create SetupIntent'
-          )
+          const errorText = await response.text()
+          console.error('API Error Response:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText,
+          })
+          throw new Error(errorText || 'Failed to create SetupIntent')
         }
 
         const { clientSecret } = await response.json()
+        console.log('Successfully created SetupIntent, moving to step 3')
+
         setState((prev) => ({
           ...prev,
           clientSecret,
           step: 3,
         }))
       } catch (error) {
+        console.error('Detailed enrollment error:', error)
         toasts.apiError({ error })
-        console.error('Enrollment API Error:', error)
       } finally {
         setState((prev) => ({ ...prev, isProcessing: false }))
       }

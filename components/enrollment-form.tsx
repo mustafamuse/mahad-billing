@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { GraduationCap } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 
+import { PaymentStep } from '@/components/enrollment/payment-step'
 import { PayorDetailsStep } from '@/components/enrollment/payor-details-step'
 import { StudentSelectionStep } from '@/components/enrollment/student-selection-step'
 import { Form } from '@/components/ui/form'
@@ -54,8 +55,10 @@ export function EnrollmentForm() {
           <form onSubmit={form.handleSubmit(onSubmit)}>
             {step === 1 ? (
               <StudentSelectionStep form={form} />
-            ) : (
+            ) : step === 2 ? (
               <PayorDetailsStep form={form} />
+            ) : (
+              <PaymentStep form={form} />
             )}
           </form>
         </Form>

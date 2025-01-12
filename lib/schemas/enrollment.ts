@@ -32,6 +32,7 @@ export const enrollmentSchema = z.object({
   termsAccepted: z.boolean().refine((val) => val === true, {
     message: 'You must accept the terms and conditions',
   }),
+  setupIntentId: z.string().optional(),
 })
 
 export type EnrollmentFormValues = z.infer<typeof enrollmentSchema>

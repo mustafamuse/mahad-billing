@@ -1,110 +1,113 @@
 // StripePaymentForm.jsx
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
-import { useStripe } from '@stripe/react-stripe-js'
+import { PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
+import { type StripeError, type SetupIntent } from '@stripe/stripe-js'
+
+import { useEnrollment } from '@/contexts/enrollment-context'
+import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
 
 interface StripePaymentFormProps {
-  onSuccess: (data: { setupIntentId: string }) => void
-  onError: (error: Error) => void
-  clientSecret: string
-  customerName: string
-  customerEmail: string
+  formValues: EnrollmentFormValues
+  billingDetails: {
+    name: string
+    email: string
+  }
+}
+
+interface SetupResponse {
+  error?: StripeError
+  setupIntent?: SetupIntent
 }
 
 export function StripePaymentForm({
-  clientSecret,
-  customerName,
-  customerEmail,
-  onError,
-  onSuccess,
+  formValues,
+  billingDetails,
 }: StripePaymentFormProps) {
   const stripe = useStripe()
+  const elements = useElements()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [error, setError] = useState<string>()
+  const {
+    actions: { handleEnrollment },
+  } = useEnrollment()
 
-  useEffect(() => {
-    if (!stripe || !clientSecret) return
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
 
-    const collectBankAccount = async () => {
-      setIsProcessing(true)
-
-      try {
-        // Step 1: Collect bank account
-        console.log('🏦 Starting bank account collection...')
-        const { error: collectError } = await stripe.collectBankAccountForSetup(
-          {
-            clientSecret,
-            params: {
-              payment_method_type: 'us_bank_account',
-              payment_method_data: {
-                billing_details: {
-                  name: customerName,
-                  email: customerEmail,
-                },
-              },
-            },
-          }
-        )
-
-        if (collectError) {
-          console.error('❌ Bank collection error:', collectError)
-          throw new Error(
-            collectError.message || 'Failed to collect bank account'
-          )
-        }
-
-        console.log('✅ Bank account collected successfully')
-
-        // Step 2: Confirm setup
-        console.log('🔄 Confirming bank account setup...')
-        const { setupIntent, error: confirmError } =
-          await stripe.confirmUsBankAccountSetup(clientSecret)
-
-        if (confirmError) {
-          console.error('❌ Setup confirmation error:', confirmError)
-          throw new Error(
-            confirmError.message || 'Failed to confirm bank account'
-          )
-        }
-
-        console.log('🎯 Setup confirmation response:', setupIntent)
-
-        // Step 3: Verify success
-        if (setupIntent?.status === 'succeeded') {
-          console.log('🎉 Setup completed successfully:', {
-            setupIntentId: setupIntent.id,
-            status: setupIntent.status,
-          })
-          onSuccess({ setupIntentId: setupIntent.id })
-        } else {
-          throw new Error(`Setup failed with status: ${setupIntent?.status}`)
-        }
-      } catch (error) {
-        console.error('❌ Payment setup failed:', error)
-        onError(
-          error instanceof Error ? error : new Error('Unknown error occurred')
-        )
-      } finally {
-        setIsProcessing(false)
-      }
+    if (!stripe || !elements) {
+      return
     }
 
-    collectBankAccount()
-  }, [stripe, clientSecret, customerName, customerEmail, onSuccess, onError])
+    setIsProcessing(true)
+    setError(undefined)
+
+    try {
+      const result = (await stripe.confirmSetup({
+        elements,
+        confirmParams: {
+          payment_method_data: {
+            billing_details: billingDetails,
+          },
+          return_url: `${window.location.origin}/enrollment/success`,
+        },
+      })) as SetupResponse
+
+      if (result.error) {
+        setError(result.error.message)
+        return
+      }
+
+      if (!result.setupIntent?.id) {
+        throw new Error('Failed to create setup intent')
+      }
+
+      // Complete enrollment with the setupIntent ID
+      await handleEnrollment({
+        ...formValues,
+        setupIntentId: result.setupIntent.id,
+      })
+
+      console.log('Bank account setup successful:', result.setupIntent)
+    } catch (err) {
+      console.error('Error setting up bank account:', err)
+      setError('An unexpected error occurred. Please try again.')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
 
   return (
-    <div className="space-y-8">
-      <div className="rounded-lg bg-card p-6 text-center shadow-lg">
-        <h2 className="mb-4 text-lg font-semibold">
-          Connecting Your Bank Account
-        </h2>
-        {isProcessing && (
-          <p className="text-muted-foreground">
-            Please follow the prompts to connect your bank account...
-          </p>
-        )}
-      </div>
-    </div>
+    <form onSubmit={handleSubmit}>
+      <PaymentElement
+        options={{
+          defaultValues: {
+            billingDetails,
+          },
+          fields: {
+            billingDetails: {
+              name: 'never',
+              email: 'never',
+            },
+          },
+        }}
+      />
+
+      {error && (
+        <div className="mt-4 text-sm text-red-500" role="alert">
+          {error}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={!stripe || isProcessing}
+        className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-md bg-primary px-6 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+      >
+        {isProcessing ? 'Setting up...' : 'Set Up Bank Account'}
+      </button>
+    </form>
   )
 }

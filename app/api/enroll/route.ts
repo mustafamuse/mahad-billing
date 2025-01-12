@@ -84,6 +84,7 @@ export async function POST(request: Request) {
       payment_method_types: ['us_bank_account'],
       payment_method_options: {
         us_bank_account: {
+          verification_method: 'automatic',
           financial_connections: {
             permissions: ['payment_method'],
           },
