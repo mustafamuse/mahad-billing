@@ -24,12 +24,22 @@ export function StripePaymentForm({
   const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
-    if (!stripe || !clientSecret) return
+    if (!stripe || !clientSecret || isProcessing) return // Avoid re-processing
 
     const collectBankAccount = async () => {
       setIsProcessing(true)
 
       try {
+        console.log('🔍 Fetching SetupIntent to check status...')
+        const { setupIntent: retrievedSetupIntent } =
+          await stripe.retrieveSetupIntent(clientSecret)
+
+        if (retrievedSetupIntent?.status === 'succeeded') {
+          console.log('🎉 Setup already completed:', retrievedSetupIntent.id)
+          onSuccess({ setupIntentId: retrievedSetupIntent.id })
+          return // Skip further processing
+        }
+
         // Step 1: Collect bank account
         console.log('🏦 Starting bank account collection...')
         const { error: collectError } = await stripe.collectBankAccountForSetup(
@@ -86,12 +96,20 @@ export function StripePaymentForm({
           error instanceof Error ? error : new Error('Unknown error occurred')
         )
       } finally {
-        setIsProcessing(false)
+        setIsProcessing(false) // Unlock for further actions
       }
     }
 
     collectBankAccount()
-  }, [stripe, clientSecret, customerName, customerEmail, onSuccess, onError])
+  }, [
+    stripe,
+    clientSecret,
+    customerName,
+    customerEmail,
+    onSuccess,
+    onError,
+    isProcessing,
+  ])
 
   return (
     <div className="space-y-8">

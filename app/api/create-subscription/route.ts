@@ -6,7 +6,6 @@ import Stripe from 'stripe'
 import { redis } from '@/lib/redis'
 
 import {
-  getRedisKey,
   handleError,
   logEvent,
   setRedisKey,
@@ -42,6 +41,16 @@ export async function POST(request: Request) {
 
     // Step 1: Retrieve the setup intent
     const setupIntent = await stripe.setupIntents.retrieve(setupIntentId)
+
+    // Validate SetupIntent status
+    if (setupIntent.status !== 'succeeded') {
+      console.error('❌ Invalid SetupIntent:', setupIntent.status)
+      return NextResponse.json(
+        { error: `Invalid SetupIntent. Status: ${setupIntent.status}` },
+        { status: 400 }
+      )
+    }
+
     if (!setupIntent.customer || !setupIntent.payment_method) {
       return NextResponse.json(
         {
@@ -60,14 +69,17 @@ export async function POST(request: Request) {
 
     // Step 2: Check for existing subscription
     const existingSubscriptionId = await checkExistingSubscription(customerId)
+
     if (existingSubscriptionId) {
-      logEvent('Existing Subscription Found', existingSubscriptionId, {
-        customerId,
-      })
-      return NextResponse.json({
-        message: 'Subscription already exists.',
-        subscriptionId: existingSubscriptionId,
-      })
+      console.error('❗ Existing subscription found:', existingSubscriptionId)
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Customer already has an active or trialing subscription.',
+          subscriptionId: existingSubscriptionId,
+        },
+        { status: 400 }
+      )
     }
 
     // Step 3: Verify US bank account payment method
@@ -94,6 +106,13 @@ export async function POST(request: Request) {
         { status: 500 }
       )
     }
+
+    console.log('🔍 Verification Checkpoint before creating subscription:', {
+      setupIntentId: setupIntentId,
+      customerId: customerId,
+      paymentMethodId: paymentMethodId,
+      metadata: setupIntent.metadata,
+    })
 
     const subscription = await createSubscription({
       customerId,
@@ -125,14 +144,17 @@ export async function POST(request: Request) {
   async function checkExistingSubscription(
     customerId: string
   ): Promise<string | null> {
-    const redisKey = `payment_setup:${customerId}`
-    const existingData = await getRedisKey(redisKey)
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'all', // Retrieve all subscriptions, regardless of status
+    })
 
-    if (existingData && existingData.subscriptionId) {
-      return existingData.subscriptionId
-    }
+    // Check for any active or trialing subscriptions
+    const activeSubscription = subscriptions.data.find(
+      (sub) => sub.status === 'active' || sub.status === 'trialing'
+    )
 
-    return null
+    return activeSubscription ? activeSubscription.id : null
   }
 
   async function verifyUsBankAccount(
@@ -297,9 +319,11 @@ export async function POST(request: Request) {
     }
 
     // Validate parsed metadata
-    const { studentKey } = parsedMetadata
-    if (!studentKey) {
-      throw new Error('Missing studentKey in metadata retrieved from Redis.')
+    const { studentKey, total, customerId: metadataCustomerId } = parsedMetadata
+    if (!studentKey || !total || !metadataCustomerId) {
+      throw new Error(
+        'Missing required fields in metadata retrieved from Redis.'
+      )
     }
 
     console.log('Fetching students from Redis using key:', studentKey)

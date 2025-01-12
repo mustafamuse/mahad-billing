@@ -131,7 +131,8 @@ export function EnrollmentForm() {
   // Handle Enrollment in Step 2
   const handleEnrollment = async (values: enrollmentSchemaType) => {
     try {
-      setIsProcessing(true)
+      if (isProcessing) return // Prevent duplicate requests
+      setIsProcessing(true) // Lock the submission process
       const requestBody = {
         total: selectedStudents.reduce((sum, s) => sum + s.monthlyRate, 0),
         email: values.email,
@@ -142,9 +143,14 @@ export function EnrollmentForm() {
       }
       console.log('Enrollment Request:', requestBody)
 
+      const idempotencyKey = `${values.email}-${Date.now()}` // Unique key
+
       const response = await fetch('/api/enroll', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+        },
         body: JSON.stringify(requestBody),
       })
 
@@ -170,7 +176,7 @@ export function EnrollmentForm() {
       toasts.apiError({ error })
       console.error('Enrollment API Error:', error)
     } finally {
-      setIsProcessing(false)
+      setIsProcessing(false) // Unlock the submission process
     }
   }
 

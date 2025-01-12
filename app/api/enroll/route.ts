@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
 import { redis } from '@/lib/redis'
-import { Student } from '@/lib/types'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2024-11-20.acacia',
@@ -11,123 +10,119 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { total, email, firstName, lastName, phone, students } = body
-
-    // 1️⃣ Create a unique key for storing the student data
-    const redisKey = `students:${email}`
-
-    // 2️⃣ Save the student data in Redis
-    const stringifiedStudents = JSON.stringify(students)
-    console.log('✅ Saving to Redis:', stringifiedStudents) // Debug before saving
-    await redis.set(redisKey, stringifiedStudents, { ex: 86400 }) // TTL = 1 day
-
-    console.log('✅ Students saved to Redis with key:', redisKey)
-
-    // 3️⃣ Retrieve students from Redis to verify data storage
-    // 3️⃣ Retrieve students from Redis to verify data storage
-    const storedStudents = await redis.get(redisKey)
-    console.log('✅ Retrieved from Redis:', storedStudents) // Debug after retrieving
-
-    // Check if storedStudents is null or undefined
-    if (!storedStudents) {
-      throw new Error(
-        `Failed to retrieve students from Redis for key: ${redisKey}`
+    // Extract the Idempotency-Key from headers
+    const idempotencyKey = request.headers.get('Idempotency-Key')
+    if (!idempotencyKey) {
+      return NextResponse.json(
+        { error: 'Missing Idempotency-Key in headers' },
+        { status: 400 }
       )
     }
 
-    // Ensure storedStudents is in the correct format
-    let parsedStudents: Student[]
-    if (typeof storedStudents === 'string') {
-      // If it's a string, parse it
-      parsedStudents = JSON.parse(storedStudents) as Student[]
-    } else if (Array.isArray(storedStudents)) {
-      // If it's already an array, assign it directly
-      parsedStudents = storedStudents as Student[]
-    } else {
-      // If it's neither a string nor an array, throw an error
-      throw new Error(`Unexpected data format in Redis for key: ${redisKey}.`)
+    console.log('🔑 Received Idempotency-Key:', idempotencyKey)
+
+    // Check if this key has already been processed
+    const idempotencyCacheKey = `idempotency:${idempotencyKey}`
+    const cachedResponse = await redis.get(idempotencyCacheKey)
+
+    if (cachedResponse) {
+      console.log('✅ Idempotency Key Found in Cache:', idempotencyKey)
+      // Parse only if cachedResponse is a string
+      const parsedResponse =
+        typeof cachedResponse === 'string'
+          ? JSON.parse(cachedResponse)
+          : cachedResponse
+      return NextResponse.json(parsedResponse)
     }
 
-    console.log('✅ Parsed students from Redis:', parsedStudents)
+    console.log('ℹ️ Idempotency Key Not Found in Cache, proceeding...')
 
-    // 4️⃣ Modify metadata to include only the reference key
-    const customerData = {
-      name: `${firstName} ${lastName}`,
-      phone,
-      metadata: {
-        studentKey: redisKey, // Reference key for external data
-        total: total.toString(),
-      },
-    }
+    const body = await request.json()
+    const { total, email, firstName, lastName, phone, students } = body
 
-    // 5️⃣ Find or create a Stripe Customer
+    const redisKey = `students:${email}`
+    const stringifiedStudents = JSON.stringify(students)
+
+    await redis.set(redisKey, stringifiedStudents, { ex: 86400 })
+    console.log('✅ Students saved to Redis with key:', redisKey)
+
     let customer = (await stripe.customers.list({ email, limit: 1 })).data[0]
     if (!customer) {
-      customer = await stripe.customers.create({ email, ...customerData })
-    } else {
-      customer = await stripe.customers.update(customer.id, customerData)
+      customer = await stripe.customers.create({
+        email,
+        name: `${firstName} ${lastName}`,
+        phone,
+        metadata: {
+          studentKey: redisKey,
+          total: total.toString(),
+        },
+      })
     }
 
-    console.log('API: Customer created/updated:', {
-      id: customer.id,
-      email,
-      name: `${firstName} ${lastName}`,
-      phone,
-      total,
-      students: parsedStudents.map((student) => student.name), // Retrieved from Redis
+    console.log('🔍 Checking for existing SetupIntent...')
+    const existingSetupIntents = await stripe.setupIntents.list({
+      customer: customer.id,
+      limit: 1, // Assume only one active SetupIntent is relevant
     })
 
-    // 6️⃣ Create a SetupIntent with minimal metadata
+    const activeSetupIntent = existingSetupIntents.data.find(
+      (intent) =>
+        intent.status === 'requires_payment_method' ||
+        intent.status === 'requires_confirmation'
+    )
+
+    if (activeSetupIntent) {
+      console.log('⚠️ Found existing SetupIntent:', activeSetupIntent.id)
+      return NextResponse.json({
+        clientSecret: activeSetupIntent.client_secret,
+        customerId: customer.id,
+        setupIntent: activeSetupIntent,
+        studentKey: redisKey,
+      })
+    }
+
+    console.log('ℹ️ No active SetupIntent found. Creating a new one...')
+
     const setupIntent = await stripe.setupIntents.create({
       customer: customer.id,
       payment_method_types: ['us_bank_account'],
       payment_method_options: {
         us_bank_account: {
-          financial_connections: {
-            permissions: ['payment_method'],
-          },
+          financial_connections: { permissions: ['payment_method'] },
         },
       },
       metadata: {
-        studentKey: redisKey, // Reference to external data
+        studentKey: redisKey,
         total: total.toString(),
         customerId: customer.id,
       },
     })
 
-    // Save metadata to Redis for later retrieval
-    // Save metadata to Redis for later retrieval
-    const setupIntentMetadataKey = `setup_intent_metadata:${customer.id}`
-    const setupIntentMetadata = {
-      studentKey: redisKey,
-      total: total.toString(),
-      customerId: customer.id,
-    }
-    console.log(
-      `Saving metadata to Redis with key: ${setupIntentMetadataKey}`,
-      setupIntentMetadata
-    )
-
-    await redis.set(
-      setupIntentMetadataKey,
-      JSON.stringify(setupIntentMetadata),
-      { ex: 86400 } // TTL: 1 day
-    )
-
-    console.log(
-      `✅ Saved setup intent metadata to Redis with key: ${setupIntentMetadataKey}`
-    )
-
-    return NextResponse.json({
+    const responsePayload = {
       clientSecret: setupIntent.client_secret,
       customerId: customer.id,
-      setupIntent: setupIntent,
+      setupIntent,
+      studentKey: redisKey,
+    }
+
+    // Save metadata and response in Redis for idempotency
+    const setupIntentMetadataKey = `setup_intent_metadata:${customer.id}`
+    await redis.set(setupIntentMetadataKey, JSON.stringify(responsePayload), {
+      ex: 86400,
     })
+
+    // Cache the response for the Idempotency Key
+    await redis.set(idempotencyCacheKey, JSON.stringify(responsePayload), {
+      ex: 86400, // Cache for 1 day
+    })
+
+    console.log('✅ Cached response for Idempotency-Key:', idempotencyKey)
+
+    return NextResponse.json(responsePayload)
   } catch (error) {
-    console.error('Error creating SetupIntent:', error)
+    console.error('Error processing request:', error)
     return NextResponse.json(
-      { error: 'Failed to create SetupIntent' },
+      { error: 'Failed to process the request' },
       { status: 500 }
     )
   }
