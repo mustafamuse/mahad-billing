@@ -129,6 +129,7 @@ export function EnrollmentProvider({
         })
         setState((prev) => ({ ...prev, isProcessing: true }))
 
+        // Proceed with enrollment
         console.log('Submitting Enrollment:', {
           payorDetails: {
             firstName: values.firstName,

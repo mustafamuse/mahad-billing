@@ -1,12 +1,14 @@
 'use client'
 
+import React from 'react'
+
 import { Elements } from '@stripe/react-stripe-js'
-import { loadStripe } from '@stripe/stripe-js/pure'
-import { type UseFormReturn } from 'react-hook-form'
+import { loadStripe } from '@stripe/stripe-js'
+import { Loader2 } from 'lucide-react'
+import { UseFormReturn } from 'react-hook-form'
 
 import { EnrollmentSummary } from '@/components/enrollment/enrollment-summary'
 import { StripePaymentForm } from '@/components/stripe-payment-form'
-import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -16,39 +18,42 @@ import {
 } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { useEnrollment } from '@/contexts/enrollment-context'
-import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 )
 
 interface PaymentStepProps {
-  form: UseFormReturn<EnrollmentFormValues>
+  form: UseFormReturn<{
+    students: string[]
+    relationship:
+      | 'self'
+      | 'father'
+      | 'mother'
+      | 'sibling'
+      | 'uncle'
+      | 'aunt'
+      | 'step-father'
+      | 'step-mother'
+      | 'other'
+    firstName: string
+    lastName: string
+    email: string
+    phone: string
+    termsAccepted: boolean
+    setupIntentId?: string
+  }>
 }
 
-export function PaymentStep({ form }: PaymentStepProps) {
-  const {
-    state: { clientSecret, selectedStudents },
-    actions: { previousStep },
-  } = useEnrollment()
-
-  if (!clientSecret) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Setting up payment...</CardTitle>
-          <CardDescription>
-            Please wait while we prepare the payment form.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    )
+export function PaymentStep(_props: PaymentStepProps) {
+  const { state } = useEnrollment()
+  const options = {
+    clientSecret: state.clientSecret || '',
   }
 
-  const formValues = form.getValues()
-  const billingDetails = {
-    name: `${formValues.firstName} ${formValues.lastName}`,
-    email: formValues.email,
+  // Skip rendering the form if we've moved past step 3
+  if (state.step > 3) {
+    return null
   }
 
   return (
@@ -56,32 +61,23 @@ export function PaymentStep({ form }: PaymentStepProps) {
       <CardHeader>
         <CardTitle>Payment Details</CardTitle>
         <CardDescription>
-          Review your enrollment summary and set up your bank account for
-          monthly tuition payments.
+          Set up automatic monthly tuition payments from your bank account.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="rounded-lg border bg-card p-6">
-          <EnrollmentSummary selectedStudents={selectedStudents} />
+        <div className="rounded-lg border p-4">
+          <EnrollmentSummary selectedStudents={state.selectedStudents} />
         </div>
-
-        <Separator className="my-6" />
-
-        <Elements stripe={stripePromise} options={{ clientSecret }}>
-          <StripePaymentForm
-            formValues={formValues}
-            billingDetails={billingDetails}
-          />
-        </Elements>
-
-        <Button
-          type="button"
-          onClick={previousStep}
-          variant="outline"
-          className="w-full"
-        >
-          Back to Payor Details
-        </Button>
+        <Separator />
+        {state.clientSecret ? (
+          <Elements stripe={stripePromise} options={options}>
+            <StripePaymentForm clientSecret={state.clientSecret} />
+          </Elements>
+        ) : (
+          <div className="flex items-center justify-center p-4">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        )}
       </CardContent>
     </Card>
   )

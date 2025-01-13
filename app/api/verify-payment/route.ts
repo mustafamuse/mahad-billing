@@ -10,8 +10,17 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: Request) {
   try {
-    const { customerId } = await request.json()
-    console.log('🔍 Verifying payment setup for customer:', customerId)
+    const { setupIntentId } = await request.json()
+    console.log('🔍 Verifying payment setup for setupIntent:', setupIntentId)
+
+    // Get the setupIntent to get the customer ID
+    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId)
+    if (!setupIntent.customer) {
+      console.log('❌ No customer found for setupIntent:', setupIntentId)
+      return NextResponse.json({ verified: false })
+    }
+
+    const customerId = setupIntent.customer as string
 
     // Check payment setup status
     const paymentSetup = await redis.get(`payment_setup:${customerId}`)
