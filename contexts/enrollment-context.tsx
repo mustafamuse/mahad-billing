@@ -15,6 +15,7 @@ interface EnrollmentState {
   clientSecret?: string
   hasViewedTerms: boolean
   isTermsModalOpen: boolean
+  formValues?: EnrollmentFormValues
 }
 
 interface EnrollmentActions {
@@ -52,6 +53,7 @@ export function EnrollmentProvider({
     clientSecret: undefined,
     hasViewedTerms: false,
     isTermsModalOpen: false,
+    formValues: undefined,
   })
 
   // Actions
@@ -127,7 +129,11 @@ export function EnrollmentProvider({
           values,
           currentStep: state.step,
         })
-        setState((prev) => ({ ...prev, isProcessing: true }))
+        setState((prev) => ({
+          ...prev,
+          isProcessing: true,
+          formValues: values,
+        }))
 
         // Proceed with enrollment
         console.log('Submitting Enrollment:', {
@@ -209,6 +215,7 @@ export function EnrollmentProvider({
       clientSecret: undefined,
       hasViewedTerms: false,
       isTermsModalOpen: false,
+      formValues: undefined,
     })
   }, [])
 

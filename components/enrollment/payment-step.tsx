@@ -46,13 +46,15 @@ interface PaymentStepProps {
 }
 
 export function PaymentStep(_props: PaymentStepProps) {
-  const { state } = useEnrollment()
+  const {
+    state: { step, clientSecret, selectedStudents, formValues },
+  } = useEnrollment()
   const options = {
-    clientSecret: state.clientSecret || '',
+    clientSecret: clientSecret || '',
   }
 
   // Skip rendering the form if we've moved past step 3
-  if (state.step > 3) {
+  if (step > 3) {
     return null
   }
 
@@ -66,12 +68,29 @@ export function PaymentStep(_props: PaymentStepProps) {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="rounded-lg border p-4">
-          <EnrollmentSummary selectedStudents={state.selectedStudents} />
+          <EnrollmentSummary selectedStudents={selectedStudents} />
         </div>
         <Separator />
-        {state.clientSecret ? (
+        {clientSecret ? (
           <Elements stripe={stripePromise} options={options}>
-            <StripePaymentForm clientSecret={state.clientSecret} />
+            <>
+              {console.log('PaymentStep - payorDetails:', {
+                formValues,
+                payorDetails: {
+                  email: formValues?.email ?? '',
+                  name: `${formValues?.firstName ?? ''} ${formValues?.lastName ?? ''}`.trim(),
+                  phone: formValues?.phone ?? '',
+                },
+              })}
+              <StripePaymentForm
+                clientSecret={clientSecret}
+                payorDetails={{
+                  email: formValues?.email ?? '',
+                  name: `${formValues?.firstName ?? ''} ${formValues?.lastName ?? ''}`.trim(),
+                  phone: formValues?.phone ?? '',
+                }}
+              />
+            </>
           </Elements>
         ) : (
           <div className="flex items-center justify-center p-4">
