@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import Stripe from 'stripe'
-
 import { redis } from '@/lib/redis'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+import { stripeServerClient } from '@/lib/utils/stripe'
 
 // Add force-dynamic to ensure this route is always dynamic
 export const dynamic = 'force-dynamic'
@@ -42,7 +37,7 @@ export async function GET() {
 
     console.log('Fetching data from Stripe and Redis...')
 
-    const subscriptions = await stripe.subscriptions.list({
+    const subscriptions = await stripeServerClient.subscriptions.list({
       status: 'active',
       expand: ['data.customer'],
     })

@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 
-import Stripe from 'stripe'
-
 import { redis } from '@/lib/redis'
 import { Student } from '@/lib/types'
+import { stripeServerClient } from '@/lib/utils/stripe'
 
 interface FormValues {
   firstName: string
@@ -18,10 +17,6 @@ interface EnrollmentData {
   students: Student[]
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-11-20.acacia',
-})
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -35,7 +30,8 @@ export async function GET(request: Request) {
     }
 
     // Get the SetupIntent from Stripe to get the metadata
-    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId)
+    const setupIntent =
+      await stripeServerClient.setupIntents.retrieve(setupIntentId)
     if (!setupIntent.metadata?.studentKey) {
       throw new Error('No student key found in SetupIntent metadata')
     }
@@ -53,7 +49,7 @@ export async function GET(request: Request) {
         : (studentsData as Student[])
 
     // Get the customer details from Stripe
-    const customer = await stripe.customers.retrieve(
+    const customer = await stripeServerClient.customers.retrieve(
       setupIntent.customer as string
     )
 

@@ -2,6 +2,8 @@ import { config } from 'dotenv'
 import prompts from 'prompts' // FIX: Use default import for prompts
 import Stripe from 'stripe'
 
+import { stripeServerClient } from '../lib/utils/stripe'
+
 // Load environment variables from .env.local
 config({ path: '.env.local' })
 
@@ -9,10 +11,6 @@ if (!process.env.STRIPE_SECRET_KEY) {
   console.error('❌ STRIPE_SECRET_KEY is not set in .env.local')
   process.exit(1)
 }
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-11-20.acacia',
-})
 
 // Error handling utility
 async function safeStripeOperation<T>(
@@ -44,12 +42,15 @@ async function cleanupStripe() {
       paymentIntents,
       invoices,
     ] = await Promise.all([
-      stripe.subscriptions.list({ limit: 200 }),
-      stripe.customers.list({ limit: 200 }),
-      stripe.paymentMethods.list({ type: 'us_bank_account', limit: 200 }),
-      stripe.setupIntents.list({ limit: 200 }),
-      stripe.paymentIntents.list({ limit: 200 }),
-      stripe.invoices.list({ limit: 200 }),
+      stripeServerClient.subscriptions.list({ limit: 200 }),
+      stripeServerClient.customers.list({ limit: 200 }),
+      stripeServerClient.paymentMethods.list({
+        type: 'us_bank_account',
+        limit: 200,
+      }),
+      stripeServerClient.setupIntents.list({ limit: 200 }),
+      stripeServerClient.paymentIntents.list({ limit: 200 }),
+      stripeServerClient.invoices.list({ limit: 200 }),
     ])
 
     // Log summary

@@ -1,23 +1,20 @@
 import { NextResponse } from 'next/server'
 
-import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+import { stripeServerClient } from '@/lib/utils/stripe'
 
 export async function POST(request: Request) {
   try {
     const { subscriptionId } = await request.json()
 
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-    const invoice = await stripe.invoices.retrieve(
+    const subscription =
+      await stripeServerClient.subscriptions.retrieve(subscriptionId)
+    const invoice = await stripeServerClient.invoices.retrieve(
       subscription.latest_invoice as string
     )
 
     if (invoice.status !== 'paid') {
       // Create a new PaymentIntent for the failed invoice
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await stripeServerClient.paymentIntents.create({
         amount: invoice.amount_due,
         currency: invoice.currency,
         customer: invoice.customer as string,
@@ -40,7 +37,7 @@ export async function POST(request: Request) {
       })
 
       // Update invoice with payment method
-      await stripe.invoices.pay(invoice.id, {
+      await stripeServerClient.invoices.pay(invoice.id, {
         payment_method: subscription.default_payment_method as string,
       })
 

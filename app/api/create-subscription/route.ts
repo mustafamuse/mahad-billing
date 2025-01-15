@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
 import { redis } from '@/lib/redis'
+import { stripeServerClient } from '@/lib/utils/stripe'
+
 
 import {
   getRedisKey,
@@ -12,10 +14,6 @@ import {
   setRedisKey,
   verifyPaymentSetup,
 } from '../../../lib/utils'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
 
 export async function POST(request: Request) {
   try {
@@ -41,7 +39,8 @@ export async function POST(request: Request) {
     }
 
     // Step 1: Retrieve the setup intent
-    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId)
+    const setupIntent =
+      await stripeServerClient.setupIntents.retrieve(setupIntentId)
     if (!setupIntent.customer || !setupIntent.payment_method) {
       return NextResponse.json(
         {
@@ -138,7 +137,7 @@ export async function POST(request: Request) {
   async function verifyUsBankAccount(
     customerId: string
   ): Promise<Stripe.PaymentMethod> {
-    const paymentMethods = await stripe.paymentMethods.list({
+    const paymentMethods = await stripeServerClient.paymentMethods.list({
       customer: customerId,
       type: 'us_bank_account',
     })
@@ -203,7 +202,7 @@ export async function POST(request: Request) {
           amount: oneTimeChargeAmount,
         })
         // Create a PaymentIntent for the one-time charge
-        const paymentIntent = await stripe.paymentIntents.create({
+        const paymentIntent = await stripeServerClient.paymentIntents.create({
           customer: customerId,
           payment_method: paymentMethodId,
           amount: oneTimeChargeAmount,
@@ -359,7 +358,7 @@ export async function POST(request: Request) {
     // Create the subscription in Stripe
     let subscription
     try {
-      subscription = await stripe.subscriptions.create({
+      subscription = await stripeServerClient.subscriptions.create({
         customer: customerId,
         default_payment_method: paymentMethodId,
         items: students.map((student) => ({

@@ -5,13 +5,9 @@ import { z } from 'zod'
 
 import { BASE_RATE, STUDENTS } from '@/lib/data'
 import { Student } from '@/lib/types'
+import { stripeServerClient } from '@/lib/utils/stripe'
 
 export const dynamic = 'force-dynamic'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-  typescript: true,
-})
 
 const QuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -40,7 +36,7 @@ export async function GET(request: Request) {
       queryResult.data
 
     // Fetch active subscriptions
-    const subscriptions = await stripe.subscriptions
+    const subscriptions = await stripeServerClient.subscriptions
       .list({
         expand: ['data.customer'],
         limit: 100,

@@ -1,17 +1,12 @@
 import { NextResponse } from 'next/server'
 
-import Stripe from 'stripe'
-
 import { STUDENTS } from '@/lib/data'
 import { parseStudentMetadata } from '@/lib/utils/parse-students'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+import { stripeServerClient } from '@/lib/utils/stripe'
 
 export async function GET() {
   try {
-    const subscriptions = await stripe.subscriptions.list({
+    const subscriptions = await stripeServerClient.subscriptions.list({
       expand: ['data.customer'],
     })
 

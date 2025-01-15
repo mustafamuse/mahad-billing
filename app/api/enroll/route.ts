@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server'
 
-import Stripe from 'stripe'
-
 import { redis } from '@/lib/redis'
 import { Student } from '@/lib/types'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2024-11-20.acacia',
-})
+import { stripeServerClient } from '@/lib/utils/stripe'
 
 export async function POST(request: Request) {
   try {
@@ -62,11 +57,19 @@ export async function POST(request: Request) {
     }
 
     // 5️⃣ Find or create a Stripe Customer
-    let customer = (await stripe.customers.list({ email, limit: 1 })).data[0]
+    let customer = (
+      await stripeServerClient.customers.list({ email, limit: 1 })
+    ).data[0]
     if (!customer) {
-      customer = await stripe.customers.create({ email, ...customerData })
+      customer = await stripeServerClient.customers.create({
+        email,
+        ...customerData,
+      })
     } else {
-      customer = await stripe.customers.update(customer.id, customerData)
+      customer = await stripeServerClient.customers.update(
+        customer.id,
+        customerData
+      )
     }
 
     console.log('API: Customer created/updated:', {
@@ -79,7 +82,7 @@ export async function POST(request: Request) {
     })
 
     // 6️⃣ Create a SetupIntent with minimal metadata
-    const setupIntent = await stripe.setupIntents.create({
+    const setupIntent = await stripeServerClient.setupIntents.create({
       customer: customer.id,
       payment_method_types: ['us_bank_account'],
       payment_method_options: {

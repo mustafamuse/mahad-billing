@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
 import { SubscriptionPaymentStatus, BankAccountStatus } from '@/lib/types'
+import { stripeServerClient } from '@/lib/utils/stripe'
+
 
 import {
   extractIdsFromEvent,
@@ -13,11 +15,8 @@ import {
 import { logEvent } from '../../../lib/utils'
 import { handleError } from '../../../lib/utils'
 
-export const dynamic = 'force-dynamic'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+export const dynamic = 'force-dynamic'
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
@@ -47,7 +46,11 @@ export async function POST(request: Request) {
       )
     }
 
-    event = stripe.webhooks.constructEvent(payload, signature, webhookSecret)
+    event = stripeServerClient.webhooks.constructEvent(
+      payload,
+      signature,
+      webhookSecret
+    )
     logEvent('Received', event.id, { eventType: event.type })
 
     const eventKey = `stripe_event:${event.id}`
@@ -98,7 +101,8 @@ async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   }
 
   try {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+    const subscription =
+      await stripeServerClient.subscriptions.retrieve(subscriptionId)
     const invoice = event.data.object as Stripe.Invoice
 
     const firstPaymentDate = invoice.status_transitions?.paid_at
@@ -152,7 +156,8 @@ async function handleInvoicePaymentFailed(event: Stripe.Event) {
   }
 
   try {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+    const subscription =
+      await stripeServerClient.subscriptions.retrieve(subscriptionId)
     const redisKey = `payment_setup:${customerId}`
     const existingData = await getRedisKey(redisKey)
     const bankVerified = existingData?.bankVerified || false
@@ -254,7 +259,7 @@ async function retryFailedPayment(failedPaymentData: any) {
   try {
     console.log('🔄 Retrying payment for PaymentIntent:', paymentIntentId) // Logging it for traceability
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntent = await stripeServerClient.paymentIntents.create({
       customer: customerId,
       amount,
       currency: 'usd',
