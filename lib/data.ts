@@ -1,9 +1,8 @@
+// Internal modules/local imports
 import { getOverriddenPrice } from './config/price-overrides'
 import { Student } from './types'
 
-// ---------------------------------------
 // Configuration & Constants
-// ---------------------------------------
 export const BASE_RATE = 150
 
 // ---------------------------------------

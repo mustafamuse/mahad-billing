@@ -68,9 +68,10 @@ export function InputField({
               onBlur={field.onBlur}
               name={field.name}
               ref={field.ref}
+              className={fieldState.error ? 'border-destructive' : ''}
             />
           </FormControl>
-          {fieldState.isTouched && <FormMessage />}
+          {fieldState.error && fieldState.isTouched && <FormMessage />}
         </FormItem>
       )}
     />
@@ -98,16 +99,23 @@ export function RelationshipSelect({ form }: RelationshipSelectProps) {
     <FormField
       control={form.control}
       name="relationship"
-      render={({ field }) => (
+      render={({ field, fieldState }) => (
         <FormItem>
           <FormLabel>Relationship to Student</FormLabel>
           <Select
             value={field.value}
             onValueChange={field.onChange}
             defaultValue={field.value}
+            onOpenChange={() => {
+              if (!fieldState.isTouched) {
+                field.onBlur()
+              }
+            }}
           >
             <FormControl>
-              <SelectTrigger>
+              <SelectTrigger
+                className={fieldState.error ? 'border-destructive' : ''}
+              >
                 <SelectValue placeholder="Select your relationship" />
               </SelectTrigger>
             </FormControl>
@@ -119,7 +127,7 @@ export function RelationshipSelect({ form }: RelationshipSelectProps) {
               ))}
             </SelectContent>
           </Select>
-          <FormMessage />
+          {fieldState.error && fieldState.isTouched && <FormMessage />}
         </FormItem>
       )}
     />

@@ -1,15 +1,55 @@
+/* eslint-disable import/order */
+// Built-in Node modules
 import { config } from 'dotenv'
-import prompts from 'prompts' // FIX: Use default import for prompts
-import Stripe from 'stripe'
-
-import { stripeServerClient } from '../lib/utils/stripe'
-
-// Load environment variables from .env.local
 config({ path: '.env.local' })
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.error('❌ STRIPE_SECRET_KEY is not set in .env.local')
+const prompts = require('prompts')
+import Stripe from 'stripe'
+
+import { redis } from '../lib/redis'
+import { stripeServerClient } from '../lib/utils/stripe'
+/* eslint-enable import/order */
+
+const requiredEnvVars = [
+  'STRIPE_SECRET_KEY',
+  'KV_REST_API_URL',
+  'KV_REST_API_TOKEN',
+] as const
+
+const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar])
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:')
+  missingEnvVars.forEach((envVar) => {
+    console.error(`   - ${envVar}`)
+  })
+  console.error('\nPlease check your .env.local file')
   process.exit(1)
+}
+
+// Verify connections
+async function verifyConnections() {
+  try {
+    // Test Redis connection
+    const pingResult = await redis.ping()
+    if (pingResult !== 'PONG') {
+      throw new Error('Redis ping failed')
+    }
+    console.log('✅ Redis connection verified')
+
+    // Test Stripe connection
+    const stripeTest = await stripeServerClient.customers.list({ limit: 1 })
+    if (!Array.isArray(stripeTest.data)) {
+      throw new Error('Stripe API response invalid')
+    }
+    console.log('✅ Stripe connection verified')
+  } catch (error) {
+    console.error('❌ Connection verification failed:')
+    if (error instanceof Error) {
+      console.error(`   ${error.message}`)
+    }
+    process.exit(1)
+  }
 }
 
 // Error handling utility
@@ -33,7 +73,11 @@ async function cleanupStripe() {
   try {
     console.log('🚀 Starting Stripe cleanup...\n')
 
+    // Verify connections first
+    await verifyConnections()
+
     // Retrieve all items to clean up
+    console.log('\n📦 Fetching Stripe resources...')
     const [
       subscriptions,
       customers,
@@ -54,26 +98,41 @@ async function cleanupStripe() {
     ])
 
     // Log summary
-    console.log('🔍 Found the following items:')
+    console.log('\n🔍 Found the following items:')
     console.log(`- ${subscriptions.data.length} subscriptions`)
     console.log(`- ${customers.data.length} customers`)
     console.log(`- ${paymentMethods.data.length} payment methods`)
     console.log(`- ${setupIntents.data.length} setup intents`)
     console.log(`- ${paymentIntents.data.length} payment intents`)
-    console.log(`- ${invoices.data.length} invoices`)
+    console.log(`- ${invoices.data.length} invoices\n`)
+
+    // If no items to clean up, exit early
+    const totalItems = [
+      subscriptions.data,
+      customers.data,
+      paymentMethods.data,
+      setupIntents.data,
+      paymentIntents.data,
+      invoices.data,
+    ].reduce((sum, items) => sum + items.length, 0)
+
+    if (totalItems === 0) {
+      console.log('✨ No items to clean up!')
+      return
+    }
 
     // Confirm cleanup
     const { confirmed } = await prompts({
       type: 'confirm',
       name: 'confirmed',
       message:
-        '⚠️ Are you sure you want to delete all these items? This cannot be undone.',
+        '⚠️  Are you sure you want to delete all these items? This cannot be undone.',
       initial: false,
     })
 
     if (!confirmed) {
       console.log('🛑 Cleanup cancelled.')
-      process.exit(0)
+      return
     }
 
     // Begin cleanup operations
@@ -187,5 +246,13 @@ async function cleanupStripe() {
   }
 }
 
-// Run cleanup
+// Run cleanup with proper error handling
 cleanupStripe()
+  .then(() => {
+    console.log('\n👋 Script completed successfully')
+    process.exit(0)
+  })
+  .catch((error) => {
+    console.error('\n❌ Script failed:', error)
+    process.exit(1)
+  })

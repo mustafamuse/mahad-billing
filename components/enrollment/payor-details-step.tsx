@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react'
+
 import { UseFormReturn } from 'react-hook-form'
 
 import {
@@ -42,6 +44,11 @@ export function PayorDetailsStep({ form }: PayorDetailsStepProps) {
     state: { selectedStudents, hasViewedTerms, isTermsModalOpen },
     actions: { previousStep, handleTermsAgreement, toggleTermsModal },
   } = useEnrollment()
+
+  // Reset form validation state when component mounts
+  useEffect(() => {
+    form.clearErrors()
+  }, [form])
 
   return (
     <Card className="border-0 sm:border">
@@ -108,7 +115,7 @@ export function PayorDetailsStep({ form }: PayorDetailsStepProps) {
                       </span>
                     )}
                   </FormLabel>
-                  <FormMessage />
+                  {field.value === false && <FormMessage />}
                 </div>
               </div>
             </FormItem>

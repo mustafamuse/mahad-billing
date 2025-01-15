@@ -2,10 +2,34 @@ import Stripe from 'stripe'
 
 import { redis } from '../redis'
 
-// Initialize configured server-side Stripe client
-export const stripeServerClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-  typescript: true,
+let stripeClient: Stripe | null = null
+
+// Get configured server-side Stripe client
+export function getStripeClient(): Stripe {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error('STRIPE_SECRET_KEY is not defined')
+  }
+
+  if (!stripeClient) {
+    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2024-11-20.acacia',
+      typescript: true,
+    })
+  }
+
+  return stripeClient
+}
+
+// Export a proxy object that lazily initializes the client
+export const stripeServerClient = new Proxy({} as Stripe, {
+  get: (target, prop) => {
+    const client = getStripeClient()
+    const value = client[prop as keyof Stripe]
+    if (typeof value === 'function') {
+      return value.bind(client)
+    }
+    return value
+  },
 })
 
 // Utility: Verify payment setup and bank account
