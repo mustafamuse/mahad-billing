@@ -84,7 +84,7 @@ async function cleanupStripe() {
       if (['active', 'past_due', 'trialing'].includes(subscription.status)) {
         console.log(`🟡 Canceling subscription: ${subscription.id}`)
         await safeStripeOperation(
-          () => stripe.subscriptions.cancel(subscription.id),
+          () => stripeServerClient.subscriptions.cancel(subscription.id),
           `Failed to cancel subscription ${subscription.id}`
         )
       } else {
@@ -111,7 +111,7 @@ async function cleanupStripe() {
 
         console.log(`🟡 Canceling payment intent: ${intent.id}`)
         await safeStripeOperation(
-          () => stripe.paymentIntents.cancel(intent.id),
+          () => stripeServerClient.paymentIntents.cancel(intent.id),
           `Failed to cancel payment intent ${intent.id}`
         )
       } else {
@@ -132,7 +132,7 @@ async function cleanupStripe() {
       ) {
         console.log(`🟡 Canceling setup intent: ${intent.id}`)
         await safeStripeOperation(
-          () => stripe.setupIntents.cancel(intent.id),
+          () => stripeServerClient.setupIntents.cancel(intent.id),
           `Failed to cancel setup intent ${intent.id}`
         )
       } else {
@@ -148,7 +148,7 @@ async function cleanupStripe() {
         // FIX: Handle null status
         console.log(`🟡 Voiding invoice: ${invoice.id}`)
         await safeStripeOperation(
-          () => stripe.invoices.voidInvoice(invoice.id),
+          () => stripeServerClient.invoices.voidInvoice(invoice.id),
           `Failed to void invoice ${invoice.id}`
         )
       } else {
@@ -165,7 +165,7 @@ async function cleanupStripe() {
       if (pm.customer) {
         console.log(`🟡 Detaching payment method: ${pm.id}`)
         await safeStripeOperation(
-          () => stripe.paymentMethods.detach(pm.id),
+          () => stripeServerClient.paymentMethods.detach(pm.id),
           `Failed to detach payment method ${pm.id}`
         )
       }
@@ -175,7 +175,7 @@ async function cleanupStripe() {
     for (const customer of customers.data) {
       console.log(`🟡 Deleting customer: ${customer.id}`)
       await safeStripeOperation(
-        () => stripe.customers.del(customer.id),
+        () => stripeServerClient.customers.del(customer.id),
         `Failed to delete customer ${customer.id}`
       )
     }
