@@ -493,7 +493,7 @@ export async function handleVerifiedSetupIntent(
   const setupIntentId = setupIntent.id
 
   try {
-    // Retrieve verification data from Redis
+    // Step 1: Retrieve verification data from Redis
     const verificationKey = getSetupVerificationKey(setupIntentId)
     const verificationDataString = await redis.get(verificationKey)
 
@@ -513,54 +513,87 @@ export async function handleVerifiedSetupIntent(
     }
 
     const verificationData = JSON.parse(
-      verificationDataString
+      verificationDataString as string
     ) as VerificationData
 
-    // Check if subscription already exists
+    // Step 2: Check if a subscription already exists for this setupIntent
     const subscriptionStatusKey = getWebhookSubscriptionStatusKey(setupIntentId)
     const subscriptionStatusString = await redis.get(subscriptionStatusKey)
 
     if (subscriptionStatusString) {
       const subscriptionStatus = JSON.parse(
-        subscriptionStatusString
+        subscriptionStatusString as string
       ) as SubscriptionStatus
       if (subscriptionStatus.status === 'active') {
-        const logData: LogEventData = {
+        logEvent('Subscription already active', event.id, {
           eventId: event.id,
           type: event.type,
-          message: 'Subscription already active',
-          setupIntentId,
           timestamp: Date.now(),
-          metadata: {
-            subscriptionId: subscriptionStatus.subscriptionId || 'unknown',
-          },
-        }
-        logEvent('Subscription already active', event.id, logData)
+          setupIntentId,
+          subscriptionId: subscriptionStatus.subscriptionId || 'unknown',
+        })
         return true
       }
     }
 
-    // Create the subscription in Stripe
+    // Step 3: Parse the necessary metadata
+    const priceId = verificationData.metadata?.priceId
+    const paymentMethodId = verificationData.paymentMethodId
+    const studentKey = verificationData.studentKey
+
+    if (!priceId || !paymentMethodId || !studentKey) {
+      throw new Error(
+        'Missing required priceId, paymentMethodId, or studentKey'
+      )
+    }
+
+    // Step 4: Fetch students data from Redis
+    const studentsFromRedis = await redis.get(studentKey)
+
+    if (!studentsFromRedis) {
+      throw new Error(
+        `Failed to retrieve students from Redis with key: ${studentKey}`
+      )
+    }
+
+    const students = JSON.parse(studentsFromRedis as string)
+
+    if (
+      !Array.isArray(students) ||
+      students.some((student) => !student.monthlyRate)
+    ) {
+      throw new Error('Invalid student data retrieved from Redis.')
+    }
+
+    // Step 6: Create the subscription
     const subscription = await stripeServerClient.subscriptions.create({
-      customer: verificationData.customerId,
+      customer: verificationData.customerId as string,
+      default_payment_method: paymentMethodId as string,
+      items: students.map((student) => ({
+        price_data: {
+          currency: 'usd',
+          unit_amount: student.monthlyRate * 100,
+          recurring: { interval: 'month' },
+          product: process.env.STRIPE_PRODUCT_ID!,
+        },
+        quantity: 1,
+        metadata: {
+          studentId: student.id,
+          studentName: student.name,
+        },
+      })),
+      collection_method: 'charge_automatically',
       payment_settings: {
         payment_method_types: ['us_bank_account'],
-        payment_method_options: {
-          us_bank_account: {
-            verification_method: 'instant',
-          },
-        },
+        save_default_payment_method: 'on_subscription',
       },
-      items: [{ price: verificationData.metadata.priceId || '' }],
-      default_payment_method: verificationData.paymentMethodId || '',
-      expand: ['latest_invoice.payment_intent'],
       metadata: {
-        studentKey: verificationData.studentKey || 'unknown',
-        setupIntentId: setupIntentId,
+        studentKey,
+        setupIntentId,
       },
     })
 
-    // Update Redis with the new subscription status
+    // Step 7: Update Redis with subscription details
     const updatedStatus: SubscriptionStatus = {
       status: 'active',
       subscriptionId: subscription.id,
@@ -572,72 +605,59 @@ export async function handleVerifiedSetupIntent(
       ex: CONFIG.TTL.SUBSCRIPTION_STATUS,
     })
 
-    const successData: LogEventData = {
+    logEvent('Subscription created successfully', event.id, {
       eventId: event.id,
       type: event.type,
-      message: 'Subscription created successfully',
+      timestamp: Date.now(),
       setupIntentId,
       subscriptionId: subscription.id,
-      timestamp: Date.now(),
-    }
-    logEvent('Subscription created successfully', event.id, successData)
+      status: 'active',
+    })
+
     return true
   } catch (error) {
-    // If this is a retriable error, increment attempt count and schedule retry
+    // Handle retries on subscription creation failure
     const retryKey = `stripe:recovery:attempt:${setupIntentId}`
-    const currentAttempt = parseInt((await redis.get(retryKey)) || '0', 10)
+    const retryAttempt = await redis.get(retryKey)
+    const currentAttempt = parseInt(retryAttempt?.toString() ?? '0', 10)
 
     if (currentAttempt < CONFIG.RETRY.MAX_RETRIES[1]) {
       const nextAttempt = currentAttempt + 1
       const delay = CONFIG.RETRY.DELAYS[1][currentAttempt]
 
-      await redis.set(retryKey, nextAttempt.toString(), {
-        ex: delay,
-      })
+      await redis.set(retryKey, nextAttempt.toString(), { ex: delay })
 
-      const retryData: LogEventData = {
+      logEvent('Retrying subscription creation', event.id, {
         eventId: event.id,
         type: event.type,
-        message: 'Scheduling retry for subscription creation',
+        timestamp: Date.now(),
         setupIntentId,
         attempt: nextAttempt,
         delay,
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: Date.now(),
-        metadata: { retryAttempt: nextAttempt },
-      }
-      logEvent('Scheduling subscription creation retry', event.id, retryData)
+      })
 
-      // Schedule retry
       setTimeout(async () => {
         try {
           await handleVerifiedSetupIntent(event)
         } catch (retryError) {
-          handleError('Subscription Creation Retry', event.id, retryError)
+          handleError(
+            'Subscription Creation Retry Failed',
+            event.id,
+            retryError
+          )
         }
       }, delay * 1000)
     } else {
-      const maxRetriesData: LogEventData = {
+      logEvent('Max retries reached for subscription creation', event.id, {
         eventId: event.id,
         type: event.type,
-        message: 'Max retries reached for subscription creation',
+        timestamp: Date.now(),
         setupIntentId,
         attempts: currentAttempt,
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: Date.now(),
-        metadata: {
-          maxAttempts: CONFIG.RETRY.MAX_RETRIES[1],
-          status: 'failed',
-        },
-      }
-      logEvent(
-        'Max retries reached for subscription creation',
-        event.id,
-        maxRetriesData
-      )
+      })
     }
 
-    handleError('Verified Setup Intent Processing', event.id, error)
+    handleError('Subscription Creation Failed', event.id, error)
     throw error
   }
 }

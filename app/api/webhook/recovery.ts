@@ -49,6 +49,7 @@ export async function detectAndReplayMissingEvents(
             eventId: event.id,
             type: event.type,
             error: error instanceof Error ? error.message : String(error),
+            timestamp: Date.now(),
           })
         }
       }
@@ -61,6 +62,7 @@ export async function detectAndReplayMissingEvents(
       type: 'recovery.error',
       error: error instanceof Error ? error.message : String(error),
       metadata: { stats },
+      timestamp: Date.now(),
     })
     throw error
   }
@@ -143,6 +145,7 @@ export async function detectAndReplayMissingEventsInChunks(
                   (endTime - startTime) / CONFIG.CHUNK_SIZE
                 ),
               },
+              timestamp: Date.now(),
             })
           }
         }
@@ -173,6 +176,7 @@ export async function detectAndReplayMissingEventsInChunks(
       type: 'recovery.error',
       error: error instanceof Error ? error.message : String(error),
       metadata: { stats },
+      timestamp: Date.now(),
     })
     throw error
   }

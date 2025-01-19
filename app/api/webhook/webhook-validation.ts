@@ -49,7 +49,7 @@ export async function validateAndTrackEvent(
       let existingEvent: StoredEventData | null = null
       try {
         existingEvent = duplicateData
-          ? (JSON.parse(duplicateData) as StoredEventData)
+          ? (JSON.parse(duplicateData as string) as StoredEventData)
           : null
       } catch {
         existingEvent = null
@@ -77,7 +77,7 @@ export async function validateAndTrackEvent(
       let lastEvent: LastEventData | null = null
       try {
         lastEvent = lastEventJson
-          ? (JSON.parse(lastEventJson) as LastEventData)
+          ? (JSON.parse(lastEventJson as string) as LastEventData)
           : null
       } catch {
         lastEvent = null
@@ -122,9 +122,11 @@ export async function validateAndTrackEvent(
         type: event.type,
         message: 'Event does not have a specific object ID',
         metadata: {
-          ...logContext,
-          timestamp: Date.now(),
+          account: event.account,
+          apiVersion: event.api_version,
+          created: event.created,
         },
+        timestamp: Date.now(),
       }
       logEvent(
         'Event does not have a specific object ID',

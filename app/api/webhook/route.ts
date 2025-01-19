@@ -43,6 +43,7 @@ export async function POST(req: Request) {
       eventId: 'system',
       type: 'webhook.error',
       error: error instanceof Error ? error.message : String(error),
+      timestamp: Date.now(),
     })
     return new NextResponse('Webhook Error', { status: 400 })
   }
