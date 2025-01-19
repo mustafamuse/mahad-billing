@@ -2,6 +2,8 @@ import { type ClassValue, clsx } from 'clsx'
 import Stripe from 'stripe'
 import { twMerge } from 'tailwind-merge'
 
+import { LogEventData } from '@/app/api/webhook/types'
+
 import { BASE_RATE } from './data'
 import { redis } from './redis'
 import { Student } from './types'
@@ -186,13 +188,21 @@ export async function setRedisKey<T>(redisKey: string, value: T, ttl: number) {
   }
 }
 
-// Utility: Log Stripe Events
+/**
+ * Logs an event with structured data
+ * @param message - The log message
+ * @param eventId - The ID of the event (e.g. Stripe event ID)
+ * @param data - Structured data about the event
+ */
 export function logEvent(
-  action: string,
+  message: string,
   eventId: string,
-  details: object = {}
-) {
-  console.log(`[${action}] Event: ${eventId}`, details)
+  data: LogEventData
+): void {
+  const timestamp = new Date().toISOString()
+  console.log(`[${timestamp}] ${message}`, {
+    ...data,
+  })
 }
 
 // Utility: Handle errors gracefully

@@ -6,7 +6,6 @@ import Stripe from 'stripe'
 import { redis } from '@/lib/redis'
 import { stripeServerClient } from '@/lib/utils/stripe'
 
-
 import {
   getRedisKey,
   handleError,
@@ -69,8 +68,20 @@ export async function POST(request: Request) {
       })
     }
 
-    // Step 3: Verify US bank account payment method
-    const paymentMethod = await verifyUsBankAccount(customerId)
+    // Step 3: Get payment method without re-verifying (it's already verified)
+    const paymentMethods = await stripeServerClient.paymentMethods.list({
+      customer: customerId,
+      type: 'us_bank_account',
+    })
+
+    if (!paymentMethods.data.length) {
+      return NextResponse.json(
+        { error: 'No bank account found for customer.' },
+        { status: 400 }
+      )
+    }
+
+    const paymentMethod = paymentMethods.data[0]
     await saveBankAccountInRedis(paymentMethod)
 
     // Step 4: Save initial setup state in Redis
@@ -132,21 +143,6 @@ export async function POST(request: Request) {
     }
 
     return null
-  }
-
-  async function verifyUsBankAccount(
-    customerId: string
-  ): Promise<Stripe.PaymentMethod> {
-    const paymentMethods = await stripeServerClient.paymentMethods.list({
-      customer: customerId,
-      type: 'us_bank_account',
-    })
-
-    if (!paymentMethods.data.length) {
-      throw new Error('No US bank account payment method found for customer.')
-    }
-
-    return paymentMethods.data[0]
   }
 
   async function saveBankAccountInRedis(paymentMethod: Stripe.PaymentMethod) {

@@ -101,7 +101,6 @@ export async function POST(request: Request) {
     })
 
     // Save metadata to Redis for later retrieval
-    // Save metadata to Redis for later retrieval
     const setupIntentMetadataKey = `setup_intent_metadata:${customer.id}`
     const setupIntentMetadata = {
       studentKey: redisKey,
