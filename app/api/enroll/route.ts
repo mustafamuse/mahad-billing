@@ -1,137 +1,195 @@
 import { NextResponse } from 'next/server'
 
-import { redis } from '@/lib/redis'
-import { Student } from '@/lib/types'
+import { Stripe } from 'stripe'
+
+import { createEnrollment, cleanupEnrollmentRecords } from '@/lib/db/enrollment'
+import { AppError, Errors, handleStripeError } from '@/lib/errors'
+import { EnrollmentApiSchema } from '@/lib/schemas/enrollment'
 import { stripeServerClient } from '@/lib/utils/stripe'
 
-export async function POST(request: Request) {
+interface CustomerData {
+  name: string
+  phone: string
+  metadata: Record<string, string>
+}
+
+interface EnrollmentResponse {
+  clientSecret: string
+  customerId: string
+  setupIntent: Stripe.SetupIntent
+  enrollment: {
+    payorId: string
+    studentIds: string[]
+  }
+}
+
+// Helper to handle errors consistently
+function handleError(error: unknown): NextResponse {
+  console.error('Error in enrollment:', error)
+
+  if (error instanceof SyntaxError) {
+    return NextResponse.json(
+      { error: 'Invalid JSON payload', code: 'INVALID_JSON' },
+      { status: 400 }
+    )
+  }
+
+  if (error instanceof AppError) {
+    return NextResponse.json(
+      { error: error.message, code: error.code },
+      { status: error.statusCode }
+    )
+  }
+
+  return NextResponse.json(
+    { error: 'An unexpected error occurred', code: 'UNKNOWN_ERROR' },
+    { status: 500 }
+  )
+}
+
+// Create or update Stripe customer with better error handling
+async function createCustomer(email: string, customerData: CustomerData) {
   try {
-    const body = await request.json()
-    const { total, email, firstName, lastName, phone, students } = body
-
-    // 1️⃣ Create a unique key for storing the student data
-    const redisKey = `students:${email}`
-
-    // 2️⃣ Save the student data in Redis
-    const stringifiedStudents = JSON.stringify(students)
-    console.log('✅ Saving to Redis:', stringifiedStudents) // Debug before saving
-    await redis.set(redisKey, stringifiedStudents, { ex: 86400 }) // TTL = 1 day
-
-    console.log('✅ Students saved to Redis with key:', redisKey)
-
-    // 3️⃣ Retrieve students from Redis to verify data storage
-    // 3️⃣ Retrieve students from Redis to verify data storage
-    const storedStudents = await redis.get(redisKey)
-    console.log('✅ Retrieved from Redis:', storedStudents) // Debug after retrieving
-
-    // Check if storedStudents is null or undefined
-    if (!storedStudents) {
-      throw new Error(
-        `Failed to retrieve students from Redis for key: ${redisKey}`
-      )
-    }
-
-    // Ensure storedStudents is in the correct format
-    let parsedStudents: Student[]
-    if (typeof storedStudents === 'string') {
-      // If it's a string, parse it
-      parsedStudents = JSON.parse(storedStudents) as Student[]
-    } else if (Array.isArray(storedStudents)) {
-      // If it's already an array, assign it directly
-      parsedStudents = storedStudents as Student[]
-    } else {
-      // If it's neither a string nor an array, throw an error
-      throw new Error(`Unexpected data format in Redis for key: ${redisKey}.`)
-    }
-
-    console.log('✅ Parsed students from Redis:', parsedStudents)
-
-    // 4️⃣ Modify metadata to include only the reference key
-    const customerData = {
-      name: `${firstName} ${lastName}`,
-      phone,
-      metadata: {
-        studentKey: redisKey, // Reference key for external data
-        total: total.toString(),
-      },
-    }
-
-    // 5️⃣ Find or create a Stripe Customer
     let customer = (
       await stripeServerClient.customers.list({ email, limit: 1 })
     ).data[0]
+
     if (!customer) {
       customer = await stripeServerClient.customers.create({
         email,
         ...customerData,
       })
+      console.log('✅ New Stripe customer created:', { id: customer.id, email })
     } else {
       customer = await stripeServerClient.customers.update(
         customer.id,
         customerData
       )
+      console.log('✅ Existing Stripe customer updated:', {
+        id: customer.id,
+        email,
+      })
     }
 
-    console.log('API: Customer created/updated:', {
-      id: customer.id,
-      email,
-      name: `${firstName} ${lastName}`,
-      phone,
-      total,
-      students: parsedStudents.map((student) => student.name), // Retrieved from Redis
-    })
+    return customer
+  } catch (error) {
+    console.error(`❌ Customer operation failed:`, error)
+    if (error instanceof Stripe.errors.StripeError) {
+      throw handleStripeError(error)
+    }
+    throw Errors.stripeCustomer()
+  }
+}
 
-    // 6️⃣ Create a SetupIntent with minimal metadata
-    const setupIntent = await stripeServerClient.setupIntents.create({
-      customer: customer.id,
-      payment_method_types: ['us_bank_account'],
-      payment_method_options: {
-        us_bank_account: {
-          verification_method: 'automatic',
-          financial_connections: {
-            permissions: ['payment_method'],
-          },
+// Create SetupIntent for bank account connection
+async function createSetupIntent(
+  customerId: string,
+  metadata: Record<string, string>
+): Promise<Stripe.SetupIntent> {
+  return await stripeServerClient.setupIntents.create({
+    customer: customerId,
+    payment_method_types: ['us_bank_account'],
+    payment_method_options: {
+      us_bank_account: {
+        verification_method: 'automatic',
+        financial_connections: {
+          permissions: ['payment_method'],
         },
       },
-      metadata: {
-        studentKey: redisKey, // Reference to external data
-        total: total.toString(),
-        customerId: customer.id,
-      },
-    })
+    },
+    metadata,
+  })
+}
 
-    // Save metadata to Redis for later retrieval
-    const setupIntentMetadataKey = `setup_intent_metadata:${customer.id}`
-    const setupIntentMetadata = {
-      studentKey: redisKey,
-      total: total.toString(),
-      customerId: customer.id,
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+
+    // 1. Validate request body
+    const result = EnrollmentApiSchema.safeParse(body)
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid request data',
+          code: 'VALIDATION_ERROR',
+          details: result.error.issues,
+        },
+        { status: 400 }
+      )
     }
-    console.log(
-      `Saving metadata to Redis with key: ${setupIntentMetadataKey}`,
-      setupIntentMetadata
-    )
 
-    await redis.set(
-      setupIntentMetadataKey,
-      JSON.stringify(setupIntentMetadata),
-      { ex: 86400 } // TTL: 1 day
-    )
+    const {
+      email,
+      firstName,
+      lastName,
+      phone,
+      relationship,
+      total,
+      studentIds,
+    } = result.data
 
-    console.log(
-      `✅ Saved setup intent metadata to Redis with key: ${setupIntentMetadataKey}`
-    )
+    // 2. Create/Update Stripe Customer
+    const customerData: CustomerData = {
+      name: `${firstName} ${lastName}`,
+      phone,
+      metadata: {
+        totalAmount: total.toString(),
+      },
+    }
+    const customer = await createCustomer(email, customerData)
 
-    return NextResponse.json({
-      clientSecret: setupIntent.client_secret,
-      customerId: customer.id,
-      setupIntent: setupIntent,
+    // 3. Create Database Records
+    const enrollment = await createEnrollment({
+      email,
+      firstName,
+      lastName,
+      phone,
+      relationship,
+      studentIds,
+      stripeCustomerId: customer.id,
     })
+
+    // 4. Create SetupIntent
+    try {
+      const setupIntent = await createSetupIntent(customer.id, {
+        payorId: enrollment.payor.id,
+        totalAmount: total.toString(),
+        studentIds: enrollment.students.map((s) => s.id).join(','),
+      })
+
+      // 5. Return success response
+      const response: EnrollmentResponse = {
+        clientSecret: setupIntent.client_secret!,
+        customerId: customer.id,
+        setupIntent,
+        enrollment: {
+          payorId: enrollment.payor.id,
+          studentIds: enrollment.students.map((s) => s.id),
+        },
+      }
+
+      return NextResponse.json(response)
+    } catch (error) {
+      if (error instanceof Stripe.errors.StripeError) {
+        console.error('❌ SetupIntent creation failed:', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          type:
+            error instanceof Stripe.errors.StripeError ? error.type : 'Unknown',
+          code:
+            error instanceof Stripe.errors.StripeError ? error.code : 'Unknown',
+          customerId: customer.id,
+          payorId: enrollment.payor.id,
+          studentIds: enrollment.students.map((s) => s.id),
+        })
+
+        // Cleanup created records
+        await cleanupEnrollmentRecords(enrollment.payor.id)
+
+        throw Errors.setupIntent()
+      }
+      throw error
+    }
   } catch (error) {
-    console.error('Error creating SetupIntent:', error)
-    return NextResponse.json(
-      { error: 'Failed to create SetupIntent' },
-      { status: 500 }
-    )
+    return handleError(error)
   }
 }

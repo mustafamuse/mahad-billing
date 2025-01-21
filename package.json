@@ -12,10 +12,15 @@
     "prepare": "husky install",
     "cleanup": "npm run format && npm run lint -- --fix && npm run type-check",
     "cleanup-stripe": "tsx scripts/cleanup-stripe.ts",
-    "see-active": "ts-node scripts/see-active.ts"
+    "see-active": "ts-node scripts/see-active.ts",
+    "tunnel": "npx localtunnel --port 3000 --subdomain mahad-dev",
+    "dev:tunnel": "concurrently \"npm run dev\" \"npm run tunnel\"",
+    "webhook": "stripe listen --forward-to localhost:3000/api/webhook",
+    "dev:webhook": "concurrently \"npm run dev\" \"npm run webhook\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
+    "@prisma/client": "^6.2.1",
     "@radix-ui/react-accordion": "^1.2.1",
     "@radix-ui/react-alert-dialog": "^1.1.2",
     "@radix-ui/react-aspect-ratio": "^1.1.0",
@@ -84,6 +89,7 @@
     "@typescript-eslint/parser": "^8.16.0",
     "autoprefixer": "^10.0.1",
     "axios": "^1.7.9",
+    "concurrently": "^8.2.2",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^16.4.7",
     "eslint": "^8",
@@ -92,9 +98,11 @@
     "eslint-plugin-prettier": "^5.2.1",
     "husky": "^8.0.0",
     "lint-staged": "^15.2.10",
+    "localtunnel": "^2.0.2",
     "postcss": "^8",
     "prettier": "^3.4.1",
     "prettier-plugin-tailwindcss": "^0.6.9",
+    "prisma": "^6.2.1",
     "prompts": "^2.4.2",
     "table": "^6.9.0",
     "tailwindcss": "^3.3.0",
@@ -111,5 +119,8 @@
     "*.{json,md}": [
       "prettier --write"
     ]
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

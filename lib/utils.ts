@@ -1,11 +1,9 @@
 import { type ClassValue, clsx } from 'clsx'
-import Stripe from 'stripe'
 import { twMerge } from 'tailwind-merge'
 
 import { LogEventData } from '@/app/api/webhook/types'
 
 import { BASE_RATE } from './data'
-import { redis } from './redis'
 import { Student } from './types'
 
 export function cn(...inputs: ClassValue[]) {
@@ -72,120 +70,6 @@ export function getBillingCycleAnchor(dayOfMonth: number = 1): number {
 
   // Return Unix timestamp
   return Math.floor(targetDate.getTime() / 1000)
-}
-
-export async function verifyPaymentSetup(customerId: string) {
-  const [paymentSetup, bankAccount] = await Promise.all([
-    redis.get(`payment_setup:${customerId}`),
-    redis.get(`bank_account:${customerId}`),
-  ])
-
-  // Add debug logging
-  console.log('Verification Check:', {
-    customerId,
-    paymentSetup,
-    bankAccount,
-    timestamp: new Date().toISOString(),
-  })
-
-  if (!paymentSetup || !bankAccount) {
-    console.log('❌ Missing setup data:', { paymentSetup, bankAccount })
-    return false
-  }
-
-  const setup =
-    typeof paymentSetup === 'string' ? JSON.parse(paymentSetup) : paymentSetup
-
-  const bank =
-    typeof bankAccount === 'string' ? JSON.parse(bankAccount) : bankAccount
-
-  console.log('🔍 Verification Status:', {
-    setupCompleted: setup.setupCompleted,
-    subscriptionActive: setup.subscriptionActive,
-    bankVerified: bank.verified,
-    timestamp: new Date(setup.timestamp).toISOString(),
-  })
-
-  return setup.setupCompleted && bank.verified
-}
-
-// Utility: Extract subscriptionId and customerId
-export function extractIdsFromEvent(event: Stripe.Event): {
-  subscriptionId: string | null
-  customerId: string | null
-} {
-  const dataObject = event.data.object
-
-  // Handle invoice events
-  if (
-    event.type === 'invoice.payment_succeeded' ||
-    event.type === 'invoice.payment_failed'
-  ) {
-    const invoice = dataObject as Stripe.Invoice // Narrow type to Stripe.Invoice
-    const subscriptionId =
-      typeof invoice.subscription === 'string'
-        ? invoice.subscription
-        : (invoice.subscription?.id ?? null)
-
-    const customerId =
-      typeof invoice.customer === 'string'
-        ? invoice.customer
-        : (invoice.customer?.id ?? null)
-
-    return { subscriptionId, customerId }
-  }
-
-  // Handle payment method events
-  if (event.type === 'payment_method.attached') {
-    const paymentMethod = dataObject as Stripe.PaymentMethod // Narrow type to Stripe.PaymentMethod
-    const customerId =
-      typeof paymentMethod.customer === 'string' ? paymentMethod.customer : null
-
-    return { subscriptionId: null, customerId }
-  }
-
-  // Log unhandled types
-  console.warn(`⚠️ Unhandled event type in extractIdsFromEvent: ${event.type}`)
-  return { subscriptionId: null, customerId: null }
-}
-
-// Utility: Handle Redis get and set
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getRedisKey(redisKey: string): Promise<any | null> {
-  try {
-    const data = await redis.get(redisKey)
-
-    // Redis can return a string or null. Ensure it's valid before parsing.
-    if (typeof data === 'string') {
-      return JSON.parse(data)
-    }
-
-    return null // Return null if no data is found
-  } catch (error) {
-    console.error('❌ Redis GET operation failed:', { redisKey, error })
-    throw new Error('Redis operation failed')
-  }
-}
-
-export async function setRedisKey<T>(redisKey: string, value: T, ttl: number) {
-  // Validate TTL
-  if (typeof ttl !== 'number' || ttl <= 0) {
-    throw new Error(`Invalid TTL value: ${ttl}`)
-  }
-
-  try {
-    // Save to Redis with expiration
-    await redis.set(redisKey, JSON.stringify(value), { ex: ttl })
-    console.log(`✅ Redis SET success:`, { redisKey, ttl })
-  } catch (error) {
-    console.error('❌ Redis SET operation failed:', {
-      redisKey,
-      value,
-      ttl,
-      error,
-    })
-    throw new Error('Redis operation failed')
-  }
 }
 
 /**

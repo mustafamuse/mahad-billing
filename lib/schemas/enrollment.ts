@@ -37,3 +37,25 @@ export const enrollmentSchema = z.object({
 
 export type EnrollmentFormValues = z.infer<typeof enrollmentSchema>
 export type RelationshipType = (typeof relationshipTypes)[number]
+
+export const EnrollmentApiSchema = z.object({
+  email: z.string().email(),
+  firstName: z.string(),
+  lastName: z.string(),
+  phone: z.string(),
+  relationship: z.enum([
+    'self',
+    'father',
+    'mother',
+    'sibling',
+    'uncle',
+    'aunt',
+    'step-father',
+    'step-mother',
+    'other',
+  ]),
+  total: z.number(),
+  studentIds: z.array(z.string()).min(1, 'Please select at least one student'),
+})
+
+export type EnrollmentApiValues = z.infer<typeof EnrollmentApiSchema>

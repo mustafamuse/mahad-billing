@@ -1,67 +1,55 @@
 import React from 'react'
 
-import { cn } from '@/lib/utils'
+import { BadgeCheck, Banknote, UserRound } from 'lucide-react'
 
 interface StepsProgressProps {
   currentStep: number
-  steps: {
-    id: number
-    label: string
-    description?: string
-  }[]
 }
 
-export function StepsProgress({ currentStep, steps }: StepsProgressProps) {
+export function StepsProgress({ currentStep }: StepsProgressProps) {
   return (
-    <div className="mb-8 space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Step {currentStep} of {steps.length}
-      </p>
-      <nav aria-label="Progress">
-        <ol role="list" className="space-y-4 md:flex md:space-x-8 md:space-y-0">
-          {steps.map((step) => (
-            <li key={step.id} className="md:flex-1">
-              <div
-                className={cn(
-                  'group flex flex-col border-l-4 py-2 pl-4 md:border-l-0 md:border-t-4 md:pb-0 md:pl-0 md:pt-4',
-                  step.id < currentStep
-                    ? 'border-primary hover:border-primary/70'
-                    : step.id === currentStep
-                      ? 'border-primary'
-                      : 'border-muted-foreground/20'
-                )}
-              >
-                <span
-                  className={cn(
-                    'text-sm font-medium',
-                    step.id < currentStep
-                      ? 'text-primary'
-                      : step.id === currentStep
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                  )}
-                >
-                  {step.label}
-                </span>
-                {step.description && (
-                  <span
-                    className={cn(
-                      'text-sm',
-                      step.id < currentStep
-                        ? 'text-muted-foreground'
-                        : step.id === currentStep
-                          ? 'text-foreground'
-                          : 'text-muted-foreground/60'
-                    )}
-                  >
-                    {step.description}
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ol>
-      </nav>
+    <div className="mb-8 flex justify-center">
+      <div className="flex items-center space-x-2">
+        {/* Student Info Step */}
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-600">
+          <BadgeCheck className="h-5 w-5" />
+        </div>
+        <div className="text-sm font-medium">Student Info</div>
+        <div className="h-0.5 w-12 bg-gray-200" />
+
+        {/* Contact Info Step */}
+        <div
+          className={`flex h-8 w-8 items-center justify-center rounded-full ${currentStep >= 2 ? 'bg-green-100 text-green-600' : 'bg-muted text-muted-foreground'}`}
+        >
+          {currentStep >= 2 ? (
+            <BadgeCheck className="h-5 w-5" />
+          ) : (
+            <UserRound className="h-5 w-5" />
+          )}
+        </div>
+        <div
+          className={`text-sm font-medium ${currentStep >= 2 ? 'text-foreground' : 'text-muted-foreground'}`}
+        >
+          Contact Info
+        </div>
+        <div className="h-0.5 w-12 bg-gray-200" />
+
+        {/* Payment Setup Step */}
+        <div
+          className={`flex h-8 w-8 items-center justify-center rounded-full ${currentStep >= 3 ? 'bg-green-100 text-green-600' : 'bg-muted text-muted-foreground'}`}
+        >
+          {currentStep >= 3 ? (
+            <BadgeCheck className="h-5 w-5" />
+          ) : (
+            <Banknote className="h-5 w-5" />
+          )}
+        </div>
+        <div
+          className={`text-sm font-medium ${currentStep >= 3 ? 'text-foreground' : 'text-muted-foreground'}`}
+        >
+          Payment Setup
+        </div>
+      </div>
     </div>
   )
 }

@@ -14,8 +14,13 @@ import {
   enrollmentSchema,
   type EnrollmentFormValues,
 } from '@/lib/schemas/enrollment'
+import { Student } from '@/lib/types'
 
-export function EnrollmentForm() {
+interface EnrollmentFormProps {
+  students: Student[]
+}
+
+export function EnrollmentForm({ students }: EnrollmentFormProps) {
   const {
     state: { step },
     actions: { handleEnrollment },
@@ -59,7 +64,7 @@ export function EnrollmentForm() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)}>
               {step === 1 ? (
-                <StudentSelectionStep form={form} />
+                <StudentSelectionStep students={students} form={form} />
               ) : step === 2 ? (
                 <PayorDetailsStep form={form} />
               ) : (

@@ -146,7 +146,6 @@ export function EnrollmentProvider({
           },
           students: {
             list: state.selectedStudents.map((s) => ({
-              id: s.id,
               name: s.name,
               monthlyRate: s.monthlyRate,
             })),
@@ -168,7 +167,8 @@ export function EnrollmentProvider({
           firstName: values.firstName,
           lastName: values.lastName,
           phone: values.phone,
-          students: state.selectedStudents,
+          relationship: values.relationship,
+          studentIds: state.selectedStudents.map((student) => student.id),
         }
 
         console.log('Making API request to /api/enroll:', requestBody)
