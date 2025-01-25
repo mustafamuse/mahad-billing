@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/db'
 
 interface StudentData {
   id: string
@@ -22,8 +22,6 @@ interface StudentsData {
 }
 
 const studentsData = require('../lib/data/students.json') as StudentsData
-
-const prisma = new PrismaClient()
 
 async function dropTables() {
   console.log('❌ Dropping all table data...')

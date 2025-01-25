@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertCircle, RefreshCcw, Loader2 } from 'lucide-react'
-import { UseFormReturn } from 'react-hook-form'
 
 import { EmptySelection } from '@/components/enrollment/empty-selection'
 import { EnrollmentSummary } from '@/components/enrollment/enrollment-summary'
@@ -21,31 +20,24 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from '@/components/ui/form'
 import { useEnrollment } from '@/contexts/enrollment-context'
 import { useStudentSelection } from '@/hooks/use-student-selection'
-import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
-import { Student } from '@/lib/types'
+import { type Student } from '@/lib/types'
 
 import { StepsProgress } from './steps-progress'
 
 interface StudentSelectionStepProps {
-  form: UseFormReturn<EnrollmentFormValues>
   students: Student[]
 }
 
-export function StudentSelectionStep({
-  form,
-  students,
-}: StudentSelectionStepProps) {
+export function StudentSelectionStep({ students }: StudentSelectionStepProps) {
   const [open, setOpen] = useState(false)
   const {
-    selectedStudents,
+    state: { selectedStudents, isProcessing },
+    actions: { nextStep, updateSelectedStudents },
+  } = useEnrollment()
+
+  const {
     isLoading,
     error,
     isRetrying,
@@ -54,13 +46,7 @@ export function StudentSelectionStep({
     handleStudentRemove,
     isStudentEnrolled,
     isStudentSelected,
-  } = useStudentSelection({ form })
-
-  const {
-    actions: { nextStep },
-  } = useEnrollment()
-
-  const isSubmitting = form.formState.isSubmitting
+  } = useStudentSelection({ selectedStudents, updateSelectedStudents })
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -82,8 +68,13 @@ export function StudentSelectionStep({
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const result = await form.trigger('students')
-    if (result) {
+    console.log('Submit clicked in StudentSelectionStep', {
+      selectedStudents,
+      selectedStudentsLength: selectedStudents.length,
+      isProcessing,
+    })
+    if (selectedStudents.length > 0) {
+      console.log('Calling nextStep from StudentSelectionStep')
       nextStep()
     }
   }
@@ -130,76 +121,64 @@ export function StudentSelectionStep({
             </Alert>
           )}
 
-          <FormField
-            control={form.control}
-            name="students"
-            render={({ fieldState }) => (
-              <FormItem>
-                <FormControl>
-                  <div className="space-y-4">
-                    <StudentSearchCombobox
-                      students={students}
-                      isLoading={isLoading}
-                      error={error}
-                      open={open}
-                      onOpenChange={setOpen}
-                      onSelect={handleStudentSelect}
-                      isStudentSelected={isStudentSelected}
-                      isStudentEnrolled={isStudentEnrolled}
-                    />
+          <div className="space-y-4">
+            <StudentSearchCombobox
+              students={students}
+              isLoading={isLoading}
+              error={error}
+              open={open}
+              onOpenChange={setOpen}
+              onSelect={handleStudentSelect}
+              isStudentSelected={isStudentSelected}
+              isStudentEnrolled={isStudentEnrolled}
+            />
 
-                    {fieldState.isTouched && <FormMessage />}
-
-                    <div
-                      className="space-y-3"
-                      role="list"
-                      aria-label="Selected students"
+            <div
+              className="space-y-3"
+              role="list"
+              aria-label="Selected students"
+            >
+              {isLoading ? (
+                <StudentListSkeleton />
+              ) : selectedStudents.length === 0 ? (
+                <EmptySelection />
+              ) : (
+                <AnimatePresence mode="popLayout">
+                  {selectedStudents.map((student) => (
+                    <motion.div
+                      key={student.id}
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 500,
+                        damping: 30,
+                      }}
                     >
-                      {isLoading ? (
-                        <StudentListSkeleton />
-                      ) : selectedStudents.length === 0 ? (
-                        <EmptySelection />
-                      ) : (
-                        <AnimatePresence mode="popLayout">
-                          {selectedStudents.map((student) => (
-                            <motion.div
-                              key={student.id}
-                              layout
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, x: -20 }}
-                              transition={{
-                                type: 'spring',
-                                stiffness: 500,
-                                damping: 30,
-                              }}
-                            >
-                              <StudentCard
-                                student={student}
-                                onRemove={handleStudentRemove}
-                              />
-                            </motion.div>
-                          ))}
-                        </AnimatePresence>
-                      )}
-                    </div>
+                      <StudentCard
+                        student={student}
+                        onRemove={handleStudentRemove}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              )}
+            </div>
 
-                    <EnrollmentSummary selectedStudents={selectedStudents} />
-                  </div>
-                </FormControl>
-              </FormItem>
-            )}
-          />
+            <EnrollmentSummary selectedStudents={selectedStudents} />
+          </div>
         </CardContent>
         <CardFooter className="p-4 sm:p-6">
           <Button
             type="button"
             className="h-12 w-full text-base font-medium"
-            disabled={selectedStudents.length === 0 || isSubmitting}
+            disabled={selectedStudents.length === 0 || isProcessing}
             aria-label="Continue to payment details"
             onClick={onSubmit}
           >
-            {isSubmitting ? (
+            {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Processing...

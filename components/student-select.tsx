@@ -1,7 +1,6 @@
 'use client'
 
 import { X } from 'lucide-react'
-import { UseFormReturn } from 'react-hook-form'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,98 +13,75 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { BASE_RATE, STUDENTS } from '@/lib/data'
+import { BASE_RATE } from '@/lib/data'
 import { Student } from '@/lib/types'
 
-interface FormValues {
-  students: string[] // Array of student IDs
-}
-
 interface StudentSelectProps {
-  form: UseFormReturn<FormValues>
+  students: Student[]
   selectedStudents: Student[]
-  setSelectedStudents: (students: Student[]) => void
+  onStudentsChange: (students: Student[]) => void
 }
 
 export function StudentSelect({
-  form,
+  students,
   selectedStudents,
-  setSelectedStudents,
+  onStudentsChange,
 }: StudentSelectProps) {
   const handleStudentSelect = (studentId: string) => {
-    const student = STUDENTS.find((s) => s.id === studentId)
-    if (student && !selectedStudents.find((s) => s.id === student.id)) {
-      const newStudents = [...selectedStudents, student]
-      setSelectedStudents(newStudents)
-      form.setValue(
-        'students',
-        newStudents.map((s) => s.id)
-      )
+    const student = students.find((s: Student) => s.id === studentId)
+
+    if (!student) return
+
+    if (selectedStudents.some((s: Student) => s.id === student.id)) {
+      return // Student already selected
     }
+
+    onStudentsChange([...selectedStudents, student])
   }
 
-  const removeStudent = (studentId: string) => {
-    const newStudents = selectedStudents.filter((s) => s.id !== studentId)
-    setSelectedStudents(newStudents)
-    form.setValue(
-      'students',
-      newStudents.map((s) => s.id)
+  const handleStudentRemove = (studentId: string) => {
+    onStudentsChange(
+      selectedStudents.filter((s: Student) => s.id !== studentId)
     )
   }
 
   const renderStudentOption = (student: Student) => {
-    const isSelected = selectedStudents.some((s) => s.id === student.id)
-
+    const isSelected = selectedStudents.some(
+      (s: Student) => s.id === student.id
+    )
     return (
-      <SelectItem key={student.id} value={student.id} disabled={isSelected}>
-        <span className="font-medium">{student.name}</span>
+      <SelectItem
+        key={student.id}
+        value={student.id}
+        disabled={isSelected}
+        className="flex items-center justify-between"
+      >
+        <span>{student.name}</span>
+        <span className="text-sm text-muted-foreground">
+          ${student.customRate || BASE_RATE}/mo
+        </span>
       </SelectItem>
     )
   }
 
-  const renderSelectedStudent = (student: Student) => {
-    const isSiblingDiscount = !!student.familyId
-    const discount = BASE_RATE - student.monthlyRate
-
-    return (
-      <div
-        key={student.id}
-        className="group flex w-full items-center justify-between rounded-lg border bg-card p-4 shadow-sm"
-      >
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{student.name}</span>
-            {isSiblingDiscount && (
-              <Badge
-                variant="secondary"
-                className="text-green-600 dark:text-green-400"
-              >
-                Family Discount: ${discount} off
-              </Badge>
-            )}
-          </div>
-          {isSiblingDiscount && (
-            <div className="text-sm text-muted-foreground">
-              <span className="line-through">${BASE_RATE}</span>
-              {' → '}
-              <span className="font-medium text-green-600 dark:text-green-400">
-                ${student.monthlyRate}
-              </span>
-              <span className="ml-1">per month</span>
-            </div>
-          )}
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100"
-          onClick={() => removeStudent(student.id)}
-        >
-          <X className="h-4 w-4" />
-        </Button>
+  const renderSelectedStudent = (student: Student) => (
+    <div
+      key={student.id}
+      className="flex items-center justify-between rounded-lg border p-4"
+    >
+      <div className="flex items-center gap-2">
+        <Badge variant="secondary">${student.customRate || BASE_RATE}/mo</Badge>
+        <span>{student.name}</span>
       </div>
-    )
-  }
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => handleStudentRemove(student.id)}
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -118,7 +94,7 @@ export function StudentSelect({
           <SelectContent>
             <SelectGroup>
               <ScrollArea className="h-[300px]">
-                {STUDENTS.map(renderStudentOption)}
+                {students.map(renderStudentOption)}
               </ScrollArea>
             </SelectGroup>
           </SelectContent>
@@ -132,16 +108,10 @@ export function StudentSelect({
               Selected Students ({selectedStudents.length})
             </h3>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {selectedStudents.map(renderSelectedStudent)}
           </div>
         </div>
-      )}
-
-      {form.formState.errors.students && (
-        <p className="mt-2 text-sm text-destructive">
-          {form.formState.errors.students.message as string}
-        </p>
       )}
     </div>
   )

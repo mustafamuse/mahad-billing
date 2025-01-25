@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useState } from 'react'
 
-import { UseFormReturn } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { toast } from 'sonner'
 
 import {
   PayorDetailsFields,
@@ -19,13 +21,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
+import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Tooltip,
   TooltipContent,
@@ -33,24 +30,71 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useEnrollment } from '@/contexts/enrollment-context'
-import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
+import {
+  enrollmentSchema,
+  type EnrollmentFormValues,
+  isApiError,
+} from '@/lib/schemas/enrollment'
 
 import { StepsProgress } from './steps-progress'
 
-interface PayorDetailsStepProps {
-  form: UseFormReturn<EnrollmentFormValues>
-}
-
-export function PayorDetailsStep({ form }: PayorDetailsStepProps) {
+export function PayorDetailsStep() {
   const {
-    state: { selectedStudents, hasViewedTerms, isTermsModalOpen },
-    actions: { previousStep, handleTermsAgreement, toggleTermsModal },
+    state: {
+      selectedStudents,
+      hasViewedTerms,
+      isTermsModalOpen,
+      payorDetails,
+      isProcessing,
+    },
+    actions: {
+      previousStep,
+      nextStep,
+      updatePayorDetails,
+      handleTermsAgreement,
+      toggleTermsModal,
+      prepareSetup,
+    },
   } = useEnrollment()
 
-  // Reset form validation state when component mounts
-  useEffect(() => {
-    form.clearErrors()
-  }, [form])
+  const form = useForm<EnrollmentFormValues>({
+    resolver: zodResolver(enrollmentSchema),
+    defaultValues: {
+      termsAccepted: false,
+      students: selectedStudents.map((s) => s.id),
+      ...payorDetails,
+    },
+    mode: 'onChange',
+    reValidateMode: 'onChange',
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [showErrors, setShowErrors] = useState(true)
+
+  const handleSubmit = form.handleSubmit(async (values) => {
+    try {
+      await prepareSetup({
+        ...values,
+        studentIds: selectedStudents.map((s) => s.id),
+      })
+      nextStep()
+    } catch (error) {
+      console.error('Failed to prepare setup:', error)
+      if (isApiError(error)) {
+        toast.error(error.message)
+      } else {
+        toast.error('Failed to prepare setup. Please try again.')
+      }
+    }
+  })
+
+  console.log('Form State:', {
+    values: form.getValues(),
+    errors: form.formState.errors,
+    isValid: form.formState.isValid,
+    isDirty: form.formState.isDirty,
+    touchedFields: form.formState.touchedFields,
+  })
 
   return (
     <div>
@@ -66,93 +110,126 @@ export function PayorDetailsStep({ form }: PayorDetailsStepProps) {
               : ' This should be the parent/guardian if paying for children.'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 p-4 sm:p-6">
-          <RelationshipSelect form={form} />
-          <PayorDetailsFields form={form} />
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4 p-4 sm:p-6">
+            <RelationshipSelect
+              value={form.watch('relationship')}
+              onChange={(value) => {
+                form.setValue('relationship', value, { shouldValidate: true })
+                updatePayorDetails({
+                  ...payorDetails,
+                  relationship: value,
+                })
+              }}
+              error={
+                showErrors && form.formState.errors.relationship
+                  ? form.formState.errors.relationship.message
+                  : undefined
+              }
+            />
 
-          <FormField
-            control={form.control}
-            name="termsAccepted"
-            render={({ field }) => (
-              <FormItem className="flex flex-col space-y-3">
-                <div className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={(checked) => {
-                                if (!hasViewedTerms) {
-                                  toggleTermsModal()
-                                  return
-                                }
-                                field.onChange(checked)
-                              }}
-                              disabled={!hasViewedTerms}
-                            />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" sideOffset={5}>
-                          <p>Please read the terms and conditions first</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel className="text-base font-normal">
-                      I agree to the{' '}
-                      <Button
-                        variant="link"
-                        className="h-auto p-0 text-primary underline decoration-primary underline-offset-4 hover:text-primary/80"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          toggleTermsModal()
+            <PayorDetailsFields
+              values={form.watch()}
+              onChange={(values) => {
+                Object.entries(values).forEach(([key, value]) => {
+                  form.setValue(key as keyof EnrollmentFormValues, value, {
+                    shouldValidate: true,
+                  })
+                })
+                updatePayorDetails(values)
+              }}
+              showErrors={showErrors}
+              errors={form.formState.errors}
+            />
+
+            <div className="flex items-start space-x-3">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      <Checkbox
+                        checked={form.watch('termsAccepted')}
+                        onCheckedChange={(checked) => {
+                          if (!hasViewedTerms) {
+                            toggleTermsModal()
+                            return
+                          }
+                          form.setValue('termsAccepted', checked as boolean, {
+                            shouldValidate: true,
+                          })
                         }}
-                      >
-                        Terms and Conditions
-                      </Button>
-                      {!hasViewedTerms && (
-                        <span className="ml-1 text-xs text-muted-foreground">
-                          (click to review)
-                        </span>
-                      )}
-                    </FormLabel>
-                    {field.value === false && <FormMessage />}
-                  </div>
-                </div>
-              </FormItem>
-            )}
-          />
-        </CardContent>
+                        disabled={!hasViewedTerms}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={5}>
+                    <p>Please read the terms and conditions first</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <div className="space-y-1 leading-none">
+                <Label className="text-base font-normal">
+                  I agree to the{' '}
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 text-primary underline decoration-primary underline-offset-4 hover:text-primary/80"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      toggleTermsModal()
+                    }}
+                  >
+                    Terms and Conditions
+                  </Button>
+                  {!hasViewedTerms && (
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      (click to review)
+                    </span>
+                  )}
+                </Label>
+                {showErrors && form.formState.errors.termsAccepted && (
+                  <p className="text-sm text-destructive">
+                    {form.formState.errors.termsAccepted.message}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
 
-        <CardFooter className="flex gap-4 p-4 sm:p-6">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 flex-1 text-base font-medium"
-            onClick={previousStep}
-          >
-            Back
-          </Button>
-          <Button
-            type="submit"
-            className="h-12 flex-1 text-base font-medium"
-            disabled={
-              form.formState.isSubmitting || !form.getValues('termsAccepted')
-            }
-          >
-            {form.formState.isSubmitting
-              ? 'Processing...'
-              : 'Continue to Payment'}
-          </Button>
-        </CardFooter>
+          <CardFooter className="flex gap-4 p-4 sm:p-6">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 flex-1 text-base font-medium"
+              onClick={previousStep}
+            >
+              Back
+            </Button>
+            <Button
+              type="submit"
+              className="h-12 flex-1 text-base font-medium"
+              disabled={isProcessing || !form.formState.isValid}
+            >
+              {isProcessing ? (
+                <>
+                  <Spinner className="mr-2 h-4 w-4" />
+                  Processing...
+                </>
+              ) : (
+                'Continue to Payment'
+              )}
+            </Button>
+          </CardFooter>
+        </form>
 
         <TermsModal
           open={isTermsModalOpen}
           onOpenChange={toggleTermsModal}
-          onAgree={() => handleTermsAgreement(form)}
+          onAgree={(form) => {
+            handleTermsAgreement(form)
+            form.setValue('termsAccepted', true, { shouldValidate: true })
+          }}
+          form={form}
         />
       </Card>
     </div>

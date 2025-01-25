@@ -1,34 +1,65 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState } from 'react'
 
 import { UseFormReturn } from 'react-hook-form'
+import { toast } from 'sonner'
 
-import { toasts } from '@/components/toast/toast-utils'
 import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
-import { Student } from '@/lib/types'
+import { type Student } from '@/lib/types'
+
+// 1. Define Types
+type EnrollmentStatus = 'draft' | 'confirming' | 'confirmed' | 'failed'
+
+interface PayorDetails {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  relationship: string
+}
+
+interface PrepareSetupResponse {
+  clientSecret: string
+  customerId: string
+  setupIntent: any // We'll type this properly later
+  enrollment: {
+    payorId: string
+    studentIds: string[]
+  }
+}
 
 interface EnrollmentState {
   step: number
   selectedStudents: Student[]
+  payorDetails: PayorDetails | null
+  status: EnrollmentStatus
+  clientSecret: string | null
+  customerId: string | null
+  setupIntent: any | null
   isProcessing: boolean
-  clientSecret?: string
   hasViewedTerms: boolean
   isTermsModalOpen: boolean
-  formValues?: EnrollmentFormValues
+  error: string | null
 }
 
 interface EnrollmentActions {
-  nextStep: () => void
-  previousStep: () => void
   setStep: (step: number) => void
-  addStudent: (student: Student) => void
-  removeStudent: (studentId: string) => void
-  setSelectedStudents: (students: Student[]) => void
+  previousStep: () => void
+  nextStep: () => void
+  updateSelectedStudents: (students: Student[]) => void
+  updatePayorDetails: (details: PayorDetails) => void
+  finalizeEnrollment: (values: EnrollmentFormValues) => Promise<void>
   handleTermsAgreement: (form: UseFormReturn<EnrollmentFormValues>) => void
   toggleTermsModal: () => void
-  handleEnrollment: (values: EnrollmentFormValues) => Promise<void>
-  resetForm: () => void
+  prepareSetup: (data: {
+    firstName: string
+    lastName: string
+    email: string
+    phone: string
+    relationship: string
+    studentIds: string[]
+  }) => Promise<void>
 }
 
 interface EnrollmentContextType {
@@ -36,205 +67,143 @@ interface EnrollmentContextType {
   actions: EnrollmentActions
 }
 
+// 2. Create Context
 const EnrollmentContext = createContext<EnrollmentContextType | undefined>(
   undefined
 )
 
+// 3. Initial State
+const initialState: EnrollmentState = {
+  step: 0,
+  selectedStudents: [],
+  payorDetails: null,
+  status: 'draft',
+  clientSecret: null,
+  customerId: null,
+  setupIntent: null,
+  isProcessing: false,
+  hasViewedTerms: false,
+  isTermsModalOpen: false,
+  error: null,
+}
+
+// 4. Provider Component
 export function EnrollmentProvider({
   children,
 }: {
   children: React.ReactNode
 }) {
-  // State
-  const [state, setState] = useState<EnrollmentState>({
-    step: 1,
-    selectedStudents: [],
-    isProcessing: false,
-    clientSecret: undefined,
-    hasViewedTerms: false,
-    isTermsModalOpen: false,
-    formValues: undefined,
-  })
+  const [state, setState] = useState<EnrollmentState>(initialState)
 
-  // Actions
-  const nextStep = useCallback(() => {
-    setState((prev) => {
-      if (prev.step === 1) {
-        console.log('Moving to Payor Details Step:', {
-          selectedStudents: prev.selectedStudents.map((s) => ({
-            id: s.id,
-            name: s.name,
-            monthlyRate: s.monthlyRate,
-          })),
-          totalStudents: prev.selectedStudents.length,
-          totalMonthlyRate: prev.selectedStudents.reduce(
-            (sum, s) => sum + s.monthlyRate,
-            0
-          ),
-        })
-      }
-      return { ...prev, step: prev.step + 1 }
-    })
-  }, [])
-
-  const previousStep = useCallback(() => {
-    setState((prev) => ({ ...prev, step: prev.step - 1 }))
-  }, [])
-
-  const setStep = useCallback((step: number) => {
-    setState((prev) => ({ ...prev, step }))
-  }, [])
-
-  const addStudent = useCallback((student: Student) => {
-    setState((prev) => ({
-      ...prev,
-      selectedStudents: [...prev.selectedStudents, student],
-    }))
-  }, [])
-
-  const removeStudent = useCallback((studentId: string) => {
-    setState((prev) => ({
-      ...prev,
-      selectedStudents: prev.selectedStudents.filter((s) => s.id !== studentId),
-    }))
-  }, [])
-
-  const setSelectedStudents = useCallback((students: Student[]) => {
-    setState((prev) => ({ ...prev, selectedStudents: students }))
-  }, [])
-
-  const handleTermsAgreement = useCallback(
-    (form: UseFormReturn<EnrollmentFormValues>) => {
-      setState((prev) => ({
-        ...prev,
-        hasViewedTerms: true,
-        isTermsModalOpen: false,
-      }))
-      form.setValue('termsAccepted', true)
+  // 5. Define Actions
+  const actions: EnrollmentActions = {
+    setStep: (step: number) => {
+      setState((prev) => ({ ...prev, step }))
     },
-    []
-  )
 
-  const toggleTermsModal = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      isTermsModalOpen: !prev.isTermsModalOpen,
-    }))
-  }, [])
+    previousStep: () => {
+      setState((prev) => ({ ...prev, step: Math.max(0, prev.step - 1) }))
+    },
 
-  const handleEnrollment = useCallback(
-    async (values: EnrollmentFormValues) => {
+    nextStep: () => {
+      setState((prev) => ({ ...prev, step: prev.step + 1 }))
+    },
+
+    updateSelectedStudents: (students: Student[]) => {
+      setState((prev) => ({ ...prev, selectedStudents: students }))
+    },
+
+    updatePayorDetails: (details: PayorDetails) => {
+      setState((prev) => ({ ...prev, payorDetails: details }))
+    },
+
+    prepareSetup: async (data) => {
+      setState((prev) => ({ ...prev, isProcessing: true, error: null }))
+
       try {
-        console.log('Starting enrollment process...', {
-          values,
-          currentStep: state.step,
-        })
-        setState((prev) => ({
-          ...prev,
-          isProcessing: true,
-          formValues: values,
-        }))
-
-        // Proceed with enrollment
-        console.log('Submitting Enrollment:', {
-          payorDetails: {
-            firstName: values.firstName,
-            lastName: values.lastName,
-            email: values.email,
-            phone: values.phone,
-            relationship: values.relationship,
-          },
-          students: {
-            list: state.selectedStudents.map((s) => ({
-              name: s.name,
-              monthlyRate: s.monthlyRate,
-            })),
-            count: state.selectedStudents.length,
-            totalMonthlyRate: state.selectedStudents.reduce(
-              (sum, s) => sum + s.monthlyRate,
-              0
-            ),
-          },
-          termsAccepted: values.termsAccepted,
-        })
-
-        const requestBody = {
-          total: state.selectedStudents.reduce(
-            (sum, s) => sum + s.monthlyRate,
-            0
-          ),
-          email: values.email,
-          firstName: values.firstName,
-          lastName: values.lastName,
-          phone: values.phone,
-          relationship: values.relationship,
-          studentIds: state.selectedStudents.map((student) => student.id),
-        }
-
-        console.log('Making API request to /api/enroll:', requestBody)
-
-        const response = await fetch('/api/enroll', {
+        const response = await fetch('/api/enrollment/prepare-setup', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
         })
 
         if (!response.ok) {
-          const errorText = await response.text()
-          console.error('API Error Response:', {
-            status: response.status,
-            statusText: response.statusText,
-            body: errorText,
-          })
-          throw new Error(errorText || 'Failed to create SetupIntent')
+          const error = await response.json()
+          throw new Error(error.message || 'Failed to prepare setup')
         }
 
-        const { clientSecret } = await response.json()
-        console.log('Successfully created SetupIntent, moving to step 3')
+        const result: PrepareSetupResponse = await response.json()
 
         setState((prev) => ({
           ...prev,
-          clientSecret,
-          step: 3,
+          clientSecret: result.clientSecret,
+          customerId: result.customerId,
+          setupIntent: result.setupIntent,
+          isProcessing: false,
         }))
       } catch (error) {
-        console.error('Detailed enrollment error:', error)
-        toasts.apiError({ error })
+        console.error('Failed to prepare setup:', error)
+        setState((prev) => ({
+          ...prev,
+          error:
+            error instanceof Error ? error.message : 'Failed to prepare setup',
+          isProcessing: false,
+        }))
+        throw error
+      }
+    },
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    finalizeEnrollment: async (_values: EnrollmentFormValues) => {
+      setState((prev) => ({
+        ...prev,
+        status: 'confirming',
+        isProcessing: true,
+        error: null,
+      }))
+
+      try {
+        // We'll implement the API call later
+        // For now, just the state management
+        setState((prev) => ({
+          ...prev,
+          status: 'confirmed',
+        }))
+
+        toast.success('Enrollment completed successfully!')
+      } catch (error) {
+        console.error('Enrollment failed:', error)
+        setState((prev) => ({
+          ...prev,
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Enrollment failed',
+        }))
+        toast.error(
+          error instanceof Error ? error.message : 'Enrollment failed'
+        )
       } finally {
         setState((prev) => ({ ...prev, isProcessing: false }))
       }
     },
-    [state.selectedStudents]
-  )
 
-  const resetForm = useCallback(() => {
-    setState({
-      step: 1,
-      selectedStudents: [],
-      isProcessing: false,
-      clientSecret: undefined,
-      hasViewedTerms: false,
-      isTermsModalOpen: false,
-      formValues: undefined,
-    })
-  }, [])
+    handleTermsAgreement: (form: UseFormReturn<EnrollmentFormValues>) => {
+      setState((prev) => ({ ...prev, hasViewedTerms: true }))
+      form.setValue('termsAccepted', true)
+    },
 
-  const value = {
-    state,
-    actions: {
-      nextStep,
-      previousStep,
-      setStep,
-      addStudent,
-      removeStudent,
-      setSelectedStudents,
-      handleTermsAgreement,
-      toggleTermsModal,
-      handleEnrollment,
-      resetForm,
+    toggleTermsModal: () => {
+      setState((prev) => ({
+        ...prev,
+        isTermsModalOpen: !prev.isTermsModalOpen,
+      }))
     },
   }
 
+  // 6. Create Context Value
+  const value = { state, actions }
+
+  // 7. Return Provider
   return (
     <EnrollmentContext.Provider value={value}>
       {children}
@@ -242,6 +211,7 @@ export function EnrollmentProvider({
   )
 }
 
+// 8. Custom Hook
 export function useEnrollment() {
   const context = useContext(EnrollmentContext)
   if (context === undefined) {

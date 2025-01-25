@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { UseFormReturn } from 'react-hook-form'
+
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,15 +14,22 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { EnrollmentFormValues } from '@/lib/schemas/enrollment'
 import { cn } from '@/lib/utils'
 
 interface TermsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAgree: () => void
+  onAgree: (form: UseFormReturn<EnrollmentFormValues>) => void
+  form: UseFormReturn<EnrollmentFormValues>
 }
 
-export function TermsModal({ open, onOpenChange, onAgree }: TermsModalProps) {
+export function TermsModal({
+  open,
+  onOpenChange,
+  onAgree,
+  form,
+}: TermsModalProps) {
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
   const [_contentHeight, setContentHeight] = useState(0)
@@ -141,7 +150,10 @@ export function TermsModal({ open, onOpenChange, onAgree }: TermsModalProps) {
             </p>
           )}
           <Button
-            onClick={onAgree}
+            onClick={() => {
+              onAgree(form)
+              onOpenChange(false)
+            }}
             className={cn(
               'w-full',
               !hasScrolledToBottom && 'cursor-not-allowed opacity-50'

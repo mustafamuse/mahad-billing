@@ -30,6 +30,8 @@ model Student {
 model Payor {
   id                String    @id @default(uuid())
   name              String    // Name of the payor (e.g., parent/guardian)
+  email             String    @unique
+  phone             String
   stripeCustomerId  String?   // For payment integration
   relationship      String // Example: "Parent", "Guardian", etc.
   createdAt         DateTime  @default(now())
@@ -69,18 +71,29 @@ model PaymentMethod {
   payor                  Payor    @relation(fields: [payorId], references: [id])
 }
 
+enum SubscriptionStatus {
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
 model Subscription {
   id                    String             @id @default(uuid())
   stripeSubscriptionId  String             @unique
   payorId               String
   amount                Float
   currency              String
-  status                String
+  status                SubscriptionStatus
   billingCycleStart     DateTime?
   billingCycleEnd       DateTime?
   description           String?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
+  canceledAt            DateTime?          // Track when subscription was canceled
 
   payor                 Payor              @relation(fields: [payorId], references: [id])
 }

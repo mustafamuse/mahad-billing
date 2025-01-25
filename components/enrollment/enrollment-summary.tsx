@@ -26,7 +26,7 @@ export function EnrollmentSummary({
             className="h-8 px-2 text-primary"
             onClick={onAddStudents}
           >
-            Add More Students
+            <UserPlus2 className="mr-1 h-4 w-4" /> Add More
           </Button>
         )}
       </div>

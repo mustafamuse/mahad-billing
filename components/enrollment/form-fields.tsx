@@ -1,13 +1,9 @@
-import { UseFormReturn } from 'react-hook-form'
+'use client'
 
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
+import { FieldErrors } from 'react-hook-form'
+
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -15,74 +11,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
-
-interface FormFieldProps {
-  form: UseFormReturn<EnrollmentFormValues>
-  name: keyof EnrollmentFormValues
-  label: string
-  placeholder?: string
-  type?: string
-}
-
-export function InputField({
-  form,
-  name,
-  label,
-  placeholder,
-  type = 'text',
-}: FormFieldProps) {
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field, fieldState }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input
-              type={type}
-              placeholder={placeholder}
-              value={field.value as string}
-              onChange={(e) => {
-                if (name === 'phone') {
-                  // Only allow digits
-                  const value = e.target.value.replace(/\D/g, '')
-
-                  // Validate length and trigger validation
-                  if (value.length > 10) {
-                    return // Don't update if more than 10 digits
-                  }
-
-                  // Format as (XXX) XXX-XXXX if we have enough digits
-                  if (value.length === 10) {
-                    const formatted = `(${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6)}`
-                    field.onChange(formatted)
-                  } else {
-                    field.onChange(value)
-                  }
-                } else {
-                  field.onChange(e)
-                }
-              }}
-              onBlur={field.onBlur}
-              name={field.name}
-              ref={field.ref}
-              className={fieldState.error ? 'border-destructive' : ''}
-            />
-          </FormControl>
-          {fieldState.error && fieldState.isTouched && <FormMessage />}
-        </FormItem>
-      )}
-    />
-  )
-}
+import { EnrollmentFormValues } from '@/lib/schemas/enrollment'
+import { cn } from '@/lib/utils'
 
 interface RelationshipSelectProps {
-  form: UseFormReturn<EnrollmentFormValues>
+  value: string
+  onChange: (value: string) => void
+  error?: string
 }
 
-export function RelationshipSelect({ form }: RelationshipSelectProps) {
+export function RelationshipSelect({
+  value,
+  onChange,
+  error,
+}: RelationshipSelectProps) {
   const relationships = [
     { value: 'self', label: 'Self (I am the student)' },
     { value: 'father', label: 'Father' },
@@ -90,87 +32,139 @@ export function RelationshipSelect({ form }: RelationshipSelectProps) {
     { value: 'sibling', label: 'Sibling' },
     { value: 'uncle', label: 'Uncle' },
     { value: 'aunt', label: 'Aunt' },
-    { value: 'step-father', label: 'Step Father' },
-    { value: 'step-mother', label: 'Step Mother' },
+    { value: 'step-father', label: 'Step-father' },
+    { value: 'step-mother', label: 'Step-mother' },
     { value: 'other', label: 'Other' },
   ]
 
   return (
-    <FormField
-      control={form.control}
-      name="relationship"
-      render={({ field, fieldState }) => (
-        <FormItem>
-          <FormLabel>Relationship to Student</FormLabel>
-          <Select
-            value={field.value}
-            onValueChange={field.onChange}
-            defaultValue={field.value}
-            onOpenChange={() => {
-              if (!fieldState.isTouched) {
-                field.onBlur()
-              }
-            }}
-          >
-            <FormControl>
-              <SelectTrigger
-                className={fieldState.error ? 'border-destructive' : ''}
-              >
-                <SelectValue placeholder="Select your relationship" />
-              </SelectTrigger>
-            </FormControl>
-            <SelectContent>
-              {relationships.map(({ value, label }) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {fieldState.error && fieldState.isTouched && <FormMessage />}
-        </FormItem>
-      )}
-    />
+    <div className="space-y-2">
+      <Label>
+        Relationship to Student(s)
+        <span className="ml-1 text-destructive">*</span>
+      </Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger
+          className={cn(
+            'w-full',
+            error && 'border-destructive',
+            !value && 'text-muted-foreground'
+          )}
+        >
+          <SelectValue placeholder="Select your relationship to the student" />
+        </SelectTrigger>
+        <SelectContent>
+          {relationships.map((relationship) => (
+            <SelectItem key={relationship.value} value={relationship.value}>
+              {relationship.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+    </div>
   )
 }
 
-export function PayorDetailsFields({
-  form,
-}: {
-  form: UseFormReturn<EnrollmentFormValues>
-}) {
-  return (
-    <>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <InputField
-          form={form}
-          name="firstName"
-          label="Payor's First Name"
-          placeholder="Ali"
-        />
-        <InputField
-          form={form}
-          name="lastName"
-          label="Payor's Last Name"
-          placeholder="Yasin"
-        />
-      </div>
+interface PayorDetailsFieldsProps {
+  values: Partial<EnrollmentFormValues>
+  onChange: (values: Partial<EnrollmentFormValues>) => void
+  showErrors?: boolean
+  errors?: FieldErrors<EnrollmentFormValues>
+}
 
-      <div className="grid gap-4">
-        <InputField
-          form={form}
-          name="email"
-          label="Payor's Email"
-          type="email"
-          placeholder="ali.yasin@example.com"
-        />
-        <InputField
-          form={form}
-          name="phone"
-          label="Payor's WhatsApp Number"
-          placeholder="(612) 555-5555"
-        />
+export function PayorDetailsFields({
+  values,
+  onChange,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  showErrors = false,
+  errors,
+}: PayorDetailsFieldsProps) {
+  const handleChange =
+    (field: keyof EnrollmentFormValues) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value
+      onChange({
+        ...values,
+        [field]: value,
+      })
+    }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="firstName">First Name</Label>
+          <Input
+            id="firstName"
+            placeholder="Enter first name"
+            value={values.firstName || ''}
+            onChange={handleChange('firstName')}
+            className={cn(errors?.firstName && 'border-destructive')}
+            aria-invalid={errors?.firstName ? 'true' : 'false'}
+            aria-describedby={errors?.firstName ? 'firstName-error' : undefined}
+          />
+          {errors?.firstName && (
+            <p id="firstName-error" className="text-sm text-destructive">
+              {errors.firstName.message}
+            </p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="lastName">Last Name</Label>
+          <Input
+            id="lastName"
+            placeholder="Enter last name"
+            value={values.lastName || ''}
+            onChange={handleChange('lastName')}
+            className={cn(errors?.lastName && 'border-destructive')}
+            aria-invalid={errors?.lastName ? 'true' : 'false'}
+            aria-describedby={errors?.lastName ? 'lastName-error' : undefined}
+          />
+          {errors?.lastName && (
+            <p id="lastName-error" className="text-sm text-destructive">
+              {errors.lastName.message}
+            </p>
+          )}
+        </div>
       </div>
-    </>
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          type="email"
+          placeholder="Enter email address"
+          value={values.email || ''}
+          onChange={handleChange('email')}
+          className={cn(errors?.email && 'border-destructive')}
+          aria-invalid={errors?.email ? 'true' : 'false'}
+          aria-describedby={errors?.email ? 'email-error' : undefined}
+        />
+        {errors?.email && (
+          <p id="email-error" className="text-sm text-destructive">
+            {errors.email.message}
+          </p>
+        )}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="phone">Phone Number</Label>
+        <Input
+          id="phone"
+          type="tel"
+          placeholder="Enter phone number (10 digits)"
+          value={values.phone || ''}
+          onChange={handleChange('phone')}
+          className={cn(errors?.phone && 'border-destructive')}
+          aria-invalid={errors?.phone ? 'true' : 'false'}
+          aria-describedby={errors?.phone ? 'phone-error' : undefined}
+          pattern="[0-9]{10}"
+        />
+        {errors?.phone && (
+          <p id="phone-error" className="text-sm text-destructive">
+            {errors.phone.message}
+          </p>
+        )}
+      </div>
+    </div>
   )
 }

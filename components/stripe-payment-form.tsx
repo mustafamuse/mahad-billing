@@ -408,9 +408,13 @@ export function StripePaymentForm({
     if (status === 'requires_payment_method') {
       setStatus('initial')
     }
+    setProgress(0) // Start progress at 0
     setIsLoading(true)
 
     try {
+      // Initial Progress: Start setup
+      setProgress(10)
+
       const { setupIntent, error } = await stripe.collectBankAccountForSetup({
         clientSecret,
         params: {
@@ -425,21 +429,27 @@ export function StripePaymentForm({
         },
       })
 
+      // Update progress for status processing
+      setProgress(30)
+
       if (error) {
         setErrorMessage(error.message ?? 'Failed to setup bank account')
         setStatus('requires_payment_method')
+        setProgress(0) // Reset progress on error
         return
       }
 
       if (!setupIntent) {
         setErrorMessage('Failed to setup bank account')
         setStatus('requires_payment_method')
+        setProgress(0) // Reset progress on error
         return
       }
 
-      // Handle known statuses
+      // Handle known statuses and update progress
       switch (setupIntent.status) {
         case 'requires_payment_method':
+          setProgress(0) // Reset on failure
           setStatus('requires_payment_method')
           toast.error('Bank account verification failed', {
             description: 'Please try again with valid bank details.',
@@ -447,10 +457,12 @@ export function StripePaymentForm({
           return
 
         case 'requires_confirmation':
+          setProgress(60) // Intermediate progress for confirmation
           setStatus('requires_confirmation')
           return
 
         case 'requires_action':
+          setProgress(75) // Micro-deposit initiated
           setStatus('requires_action')
           toast.info('Micro-deposits initiated', {
             description:
@@ -459,6 +471,7 @@ export function StripePaymentForm({
           return
 
         case 'succeeded':
+          setProgress(100) // Completion
           setStatus('processing')
           toast.success(
             'Bank account setup complete! Your subscription is being processed.'
@@ -473,11 +486,13 @@ export function StripePaymentForm({
             `Unexpected status: ${setupIntent.status}. Please try again or contact support.`
           )
           setStatus('requires_payment_method')
+          setProgress(0) // Reset on unexpected status
           return
       }
     } catch (err) {
       console.error('Bank account setup error:', err)
       setErrorMessage(err instanceof Error ? err.message : 'An error occurred')
+      setProgress(0) // Reset progress on error
     } finally {
       setIsLoading(false)
     }
