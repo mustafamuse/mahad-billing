@@ -4,12 +4,13 @@ import { useState } from 'react'
 
 import { useStripe } from '@stripe/react-stripe-js'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { Loader2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { cn } from '@/lib/utils'
 
 interface StripePaymentFormProps {
   clientSecret: string
@@ -38,11 +39,10 @@ export function StripePaymentForm({
   studentIds,
 }: StripePaymentFormProps) {
   const stripe = useStripe()
+  const [status, setStatus] = useState<FormStatus>('initial')
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [status, setStatus] = useState<FormStatus>('initial')
   const [progress, setProgress] = useState(0)
-  const [showSuccess, setShowSuccess] = useState(false)
 
   const completeEnrollment = async (setupIntentId: string) => {
     try {
@@ -66,7 +66,6 @@ export function StripePaymentForm({
       }
 
       setProgress(100)
-      setShowSuccess(true)
       setStatus('succeeded')
       toast.success('Enrollment completed successfully! 🎉')
 
@@ -77,63 +76,324 @@ export function StripePaymentForm({
       console.error('Error completing enrollment:', err)
       setErrorMessage(err.message || 'An error occurred')
       setProgress(0)
-      setShowSuccess(false)
     } finally {
       setIsLoading(false)
     }
   }
 
   const getStatusMessage = () => {
+    const baseCardClass = cn(
+      'rounded-lg md:rounded-xl',
+      'p-3 md:p-4 lg:p-5',
+      'border-2'
+    )
+
+    const baseBannerClass = cn(
+      'space-y-1 md:space-y-2',
+      'text-xs md:text-sm lg:text-base'
+    )
+
+    const baseIconClass = cn(
+      'flex-shrink-0',
+      'h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6'
+    )
+
+    const baseListClass = cn(
+      'space-y-1 md:space-y-1.5 lg:space-y-2',
+      'ml-3 md:ml-4 lg:ml-5 mt-2',
+      'text-xs md:text-sm lg:text-base'
+    )
+
     switch (status) {
       case 'processing':
         return (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Your bank account setup is complete! We're now:
-            </p>
-            <ul className="ml-4 list-disc text-sm text-muted-foreground">
-              <li>Processing your subscription setup</li>
-              <li>Setting up automatic payments</li>
-              <li>Preparing your account</li>
-            </ul>
-            <p className="text-sm font-medium text-muted-foreground">
-              This usually takes less than a minute. Please wait...
-            </p>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-3 md:space-y-4 lg:space-y-5"
+          >
+            {/* Status Banner */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className={cn(baseCardClass, 'border-primary/50 bg-primary/10')}
+            >
+              <div className="flex items-start space-x-3">
+                <Loader2
+                  className={cn(
+                    baseIconClass,
+                    'mt-0.5 flex-shrink-0 animate-spin text-primary'
+                  )}
+                />
+                <div className={baseBannerClass}>
+                  <h3 className="font-semibold text-primary">
+                    Processing Your Setup
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Your bank account setup is complete! We're finalizing your
+                    enrollment.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Detailed Explanation */}
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              className={baseCardClass}
+            >
+              <h4 className="font-medium">Why this might have happened:</h4>
+              <ul className={baseListClass}>
+                <motion.li
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.3 }}
+                >
+                  The account details were entered incorrectly
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.4 }}
+                >
+                  The bank account is not eligible for ACH payments
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.5 }}
+                >
+                  The bank rejected the verification attempt
+                </motion.li>
+              </ul>
+            </motion.div>
+
+            {/* Action Guidance */}
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.6 }}
+              className={baseCardClass}
+            >
+              <p className="font-medium text-primary">What to do next:</p>
+              <p className="mt-1 text-muted-foreground">
+                Click the button below to try again with your bank account
+                details. Make sure to double-check all information.
+              </p>
+            </motion.div>
+          </motion.div>
         )
       case 'requires_action':
         return (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              We've initiated two small deposits to verify your bank account.
-              Please note:
-            </p>
-            <ul className="ml-4 list-disc text-sm text-muted-foreground">
-              <li>
-                Look for deposits labeled "STRIPE VERIFICATION" or
-                "VERIFICATION"
-              </li>
-              <li>Each deposit will be less than $1.00</li>
-              <li>They'll appear in 1-2 business days</li>
-              <li>
-                Once you see them, return to the main page and click "Complete
-                Bank Verification"
-              </li>
-            </ul>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-3 md:space-y-4 lg:space-y-5"
+          >
+            {/* Error Banner */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className={cn(
+                baseCardClass,
+                'border-destructive/50 bg-destructive/10'
+              )}
+            >
+              <div className="flex items-start space-x-3">
+                <XCircle
+                  className={cn(
+                    baseIconClass,
+                    'mt-0.5 flex-shrink-0 text-destructive'
+                  )}
+                />
+                <div className={baseBannerClass}>
+                  <h3 className="font-semibold text-destructive">
+                    Bank Verification Failed
+                  </h3>
+                  <p className="text-muted-foreground">
+                    We encountered an issue while verifying your bank account
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Detailed Explanation */}
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              className={baseCardClass}
+            >
+              <h4 className="font-medium">Why this might have happened:</h4>
+              <ul className={baseListClass}>
+                <motion.li
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.3 }}
+                >
+                  The account details were entered incorrectly
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.4 }}
+                >
+                  The bank account is not eligible for ACH payments
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.5 }}
+                >
+                  The bank rejected the verification attempt
+                </motion.li>
+              </ul>
+            </motion.div>
+
+            {/* Action Guidance */}
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.6 }}
+              className={baseCardClass}
+            >
+              <p className="font-medium text-primary">What to do next:</p>
+              <p className="mt-1 text-muted-foreground">
+                Click the button below to try again with your bank account
+                details. Make sure to double-check all information.
+              </p>
+            </motion.div>
+          </motion.div>
         )
       case 'requires_confirmation':
         return (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Please review your bank account details below to ensure they're
-              correct.
-            </p>
-            <p className="text-sm font-medium text-muted-foreground">
-              After confirmation, your first payment will be processed in 5-7
-              business days.
-            </p>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-3 md:space-y-4 lg:space-y-5"
+          >
+            {/* Status Banner */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className={cn(baseCardClass, 'border-primary/50 bg-primary/10')}
+            >
+              <div className="flex items-start space-x-3">
+                <Loader2
+                  className={cn(
+                    baseIconClass,
+                    'mt-0.5 flex-shrink-0 animate-spin text-primary'
+                  )}
+                />
+                <div className={baseBannerClass}>
+                  <h3 className="font-semibold text-primary">
+                    Confirming Bank Account Setup
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Please review your bank account details below to ensure
+                    they're correct.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Detailed Explanation */}
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              className={baseCardClass}
+            >
+              <h4 className="font-medium">After confirmation:</h4>
+              <p className="mt-2 text-muted-foreground">
+                Your first payment will be processed in 5-7 business days.
+              </p>
+            </motion.div>
+          </motion.div>
+        )
+      case 'requires_payment_method':
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-4"
+          >
+            {/* Error Banner */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="rounded-lg border-2 border-destructive/50 bg-destructive/10 p-4"
+            >
+              <div className="flex items-start space-x-3">
+                <XCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
+                <div>
+                  <h3 className="font-semibold text-destructive">
+                    Bank Account Verification Failed
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    We encountered an issue while verifying your bank account
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Detailed Explanation */}
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              className="rounded-lg border bg-muted/50 p-4"
+            >
+              <h4 className="font-medium">Why this might have happened:</h4>
+              <ul className="ml-4 mt-2 list-disc space-y-1.5 text-sm text-muted-foreground">
+                <motion.li
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.3 }}
+                >
+                  The account details were entered incorrectly
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.4 }}
+                >
+                  The bank account is not eligible for ACH payments
+                </motion.li>
+                <motion.li
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.2, delay: 0.5 }}
+                >
+                  The bank rejected the verification attempt
+                </motion.li>
+              </ul>
+            </motion.div>
+
+            {/* Action Guidance */}
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.6 }}
+              className="rounded-lg bg-primary/5 p-4 text-sm"
+            >
+              <p className="font-medium text-primary">What to do next:</p>
+              <p className="mt-1 text-muted-foreground">
+                Click the button below to try again with your bank account
+                details. Make sure to double-check all information.
+              </p>
+            </motion.div>
+          </motion.div>
         )
       default:
         return null
@@ -143,8 +403,12 @@ export function StripePaymentForm({
   const setupBankAccount = async () => {
     if (!stripe) return
 
-    setIsLoading(true)
+    // Optimistic UI updates
     setErrorMessage(null)
+    if (status === 'requires_payment_method') {
+      setStatus('initial')
+    }
+    setIsLoading(true)
 
     try {
       const { setupIntent, error } = await stripe.collectBankAccountForSetup({
@@ -163,33 +427,53 @@ export function StripePaymentForm({
 
       if (error) {
         setErrorMessage(error.message ?? 'Failed to setup bank account')
+        setStatus('requires_payment_method')
         return
       }
 
       if (!setupIntent) {
         setErrorMessage('Failed to setup bank account')
+        setStatus('requires_payment_method')
         return
       }
 
-      if (setupIntent.status === 'requires_confirmation') {
-        setStatus('requires_confirmation')
-        return
-      }
+      // Handle known statuses
+      switch (setupIntent.status) {
+        case 'requires_payment_method':
+          setStatus('requires_payment_method')
+          toast.error('Bank account verification failed', {
+            description: 'Please try again with valid bank details.',
+          })
+          return
 
-      if (setupIntent.status === 'requires_action') {
-        setStatus('requires_action')
-        toast.info('Micro-deposits initiated', {
-          description: 'Two small deposits will be sent to your bank account.',
-        })
-        return
-      }
+        case 'requires_confirmation':
+          setStatus('requires_confirmation')
+          return
 
-      if (setupIntent.status === 'succeeded') {
-        setStatus('processing')
-        toast.success(
-          'Bank account setup complete! Your subscription is being processed.'
-        )
-        await completeEnrollment(setupIntent.id)
+        case 'requires_action':
+          setStatus('requires_action')
+          toast.info('Micro-deposits initiated', {
+            description:
+              'Two small deposits will be sent to your bank account.',
+          })
+          return
+
+        case 'succeeded':
+          setStatus('processing')
+          toast.success(
+            'Bank account setup complete! Your subscription is being processed.'
+          )
+          await completeEnrollment(setupIntent.id)
+          return
+
+        default:
+          // Fallback for unexpected status
+          console.error('Unexpected setup intent status:', setupIntent.status)
+          setErrorMessage(
+            `Unexpected status: ${setupIntent.status}. Please try again or contact support.`
+          )
+          setStatus('requires_payment_method')
+          return
       }
     } catch (err) {
       console.error('Bank account setup error:', err)
@@ -244,44 +528,40 @@ export function StripePaymentForm({
   }
 
   return (
-    <div className={className}>
+    <div
+      className={cn(
+        'w-full',
+        'px-4 md:px-6 lg:px-8',
+        'md:max-w-none',
+        'max-w-[500px] md:max-w-none',
+        className
+      )}
+    >
       <AnimatePresence mode="wait">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
-          className="space-y-6"
+          className="space-y-4"
         >
+          {/* Error Alert */}
           {errorMessage && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{errorMessage}</AlertDescription>
+            <Alert variant="destructive" className="w-full">
+              <AlertDescription className="text-sm md:text-base">
+                {errorMessage}
+              </AlertDescription>
             </Alert>
           )}
-
-          {/* Status Icon */}
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="flex justify-center"
-          >
-            {isLoading ? (
-              <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            ) : showSuccess ? (
-              <CheckCircle2 className="h-12 w-12 text-primary" />
-            ) : errorMessage ? (
-              <XCircle className="h-12 w-12 text-destructive" />
-            ) : null}
-          </motion.div>
 
           {/* Progress Bar */}
           {isLoading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="space-y-2"
+              className="space-y-2 md:space-y-3"
             >
-              <Progress value={progress} className="h-2" />
-              <p className="text-center text-sm text-muted-foreground">
+              <Progress value={progress} className="h-1.5 md:h-2 lg:h-2.5" />
+              <p className="text-center text-xs text-muted-foreground md:text-sm lg:text-base">
                 {progress === 100
                   ? 'Complete!'
                   : 'Processing your enrollment...'}
@@ -296,114 +576,47 @@ export function StripePaymentForm({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
+              className="w-full"
             >
               {getStatusMessage()}
             </motion.div>
           </AnimatePresence>
 
-          {/* Micro-deposit Info Card */}
-          {status === 'requires_action' && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-4 rounded-lg border bg-muted/50 p-4"
-            >
-              <div className="space-y-4 text-sm text-muted-foreground">
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <p className="font-medium">What are micro-deposits?</p>
-                  <p className="mt-1">
-                    Micro-deposits are a secure way to verify your bank account
-                    ownership. We'll send two small test deposits that you'll
-                    need to confirm.
-                  </p>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.4 }}
-                >
-                  <p className="font-medium">What happens next?</p>
-                  <ol className="ml-4 mt-1 list-decimal space-y-1">
-                    <li>
-                      Watch for two deposits labeled "STRIPE VERIFICATION"
-                    </li>
-                    <li>
-                      Once you see them, return here to complete verification
-                    </li>
-                    <li>Enter the deposit amounts to verify your account</li>
-                    <li>
-                      Your account will then be ready for monthly payments
-                    </li>
-                  </ol>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                >
-                  <p className="font-medium">Need help?</p>
-                  <p className="mt-1">
-                    If you don't see the deposits after 2-3 business days,
-                    please reach out!
-                  </p>
-                </motion.div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Buttons */}
-          {status === 'requires_confirmation' ? (
-            <Button
-              onClick={confirmSetup}
-              disabled={isLoading || !stripe}
-              className="mt-4 w-full"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Confirming...
-                </>
-              ) : (
-                'Confirm Bank Account Setup'
-              )}
-            </Button>
-          ) : status === 'canceled' ? (
-            <Button
-              onClick={setupBankAccount}
-              disabled={isLoading || !stripe}
-              className="mt-4 w-full"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Retrying...
-                </>
-              ) : (
-                'Retry Setup'
-              )}
-            </Button>
-          ) : (
-            <Button
-              onClick={setupBankAccount}
-              disabled={isLoading || !stripe}
-              className="mt-4 w-full"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Setting up...
-                </>
-              ) : (
-                'Set up bank account'
-              )}
-            </Button>
-          )}
+          {/* Button Container */}
+          <div
+            className={cn('relative w-full', 'bg-transparent', 'mt-4 md:mt-6')}
+          >
+            <div className="mx-auto max-w-[500px] md:max-w-none">
+              <Button
+                onClick={
+                  status === 'requires_confirmation'
+                    ? confirmSetup
+                    : setupBankAccount
+                }
+                disabled={isLoading || !stripe}
+                className="h-12 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {status === 'requires_confirmation'
+                      ? 'Confirming...'
+                      : 'Setting up...'}
+                  </>
+                ) : status === 'requires_confirmation' ? (
+                  'Confirm Bank Account Setup'
+                ) : status === 'requires_payment_method' ? (
+                  'Retry Setup'
+                ) : status === 'requires_action' ? (
+                  'Try Again'
+                ) : status === 'processing' ? (
+                  'Processing...'
+                ) : (
+                  'Set up bank account'
+                )}
+              </Button>
+            </div>
+          </div>
         </motion.div>
       </AnimatePresence>
     </div>
