@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+import { stripeServerClient } from '@/lib/utils/stripe'
 
 interface _PaymentStatus {
   status:
@@ -25,7 +23,7 @@ interface _PaymentStatus {
 
 export async function GET() {
   try {
-    const paymentIntents = await stripe.paymentIntents.list({
+    const paymentIntents = await stripeServerClient.paymentIntents.list({
       limit: 10,
       expand: ['data.customer', 'data.last_payment_error'],
     })

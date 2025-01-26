@@ -1,81 +1,36 @@
 'use client'
 
-import React, { useState } from 'react'
-
-import { useRouter } from 'next/navigation'
-
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Elements } from '@stripe/react-stripe-js'
-import { loadStripe } from '@stripe/stripe-js'
+import { GraduationCap } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import Stripe from 'stripe'
 
-import { TermsModal } from '@/components/terms-modal'
-import { toasts } from '@/components/toast/toast-utils'
-import { Card, CardContent } from '@/components/ui/card'
+import { PaymentStep } from '@/components/enrollment/payment-step'
+import { PayorDetailsStep } from '@/components/enrollment/payor-details-step'
+import { StudentSelectionStep } from '@/components/enrollment/student-selection-step'
+import { Footer } from '@/components/footer'
 import { Form } from '@/components/ui/form'
+import { useEnrollment } from '@/contexts/enrollment-context'
 import {
   enrollmentSchema,
-  enrollmentSchemaType,
+  type EnrollmentFormValues,
 } from '@/lib/schemas/enrollment'
-import { stripeAppearance } from '@/lib/stripe-config'
 import { Student } from '@/lib/types'
 
-import { PaymentDetailsStep } from './enrollment/payment-details-step'
-import { StepsProgress } from './enrollment/steps-progress'
-import { StudentSelectionStep } from './enrollment/student-selection-step'
-import { StripePaymentForm } from './stripe-payment-form'
-
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-)
-
-interface EnrollmentResponse {
-  clientSecret: string
-  customerId: string
-  setupIntent: Stripe.Response<Stripe.SetupIntent>
+interface EnrollmentFormProps {
+  students: Student[]
 }
 
-const steps = [
-  {
-    id: 1,
-    label: 'Select Students',
-    description: 'Choose students to enroll',
-  },
-  {
-    id: 2,
-    label: 'Payment Details',
-    description: 'Enter bank account information',
-  },
-  {
-    id: 3,
-    label: 'Review & Confirm',
-    description: 'Verify enrollment details',
-  },
-]
+export function EnrollmentForm({ students }: EnrollmentFormProps) {
+  const {
+    state: { step },
+    actions: { handleEnrollment },
+  } = useEnrollment()
 
-export function EnrollmentForm() {
-  // Step and state management
-  const [step, setStep] = useState(1)
-  const [selectedStudents, setSelectedStudents] = useState<Student[]>([])
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [clientSecret, setClientSecret] = useState<string | undefined>()
-  const [hasAgreedToTerms, setHasAgreedToTerms] = useState(false)
-  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false)
-
-  const router = useRouter()
-
-  // Utility function to reset form state
-  const resetFormState = () => {
-    setClientSecret(undefined)
-    setIsProcessing(false)
-    setStep(2)
-  }
-  // Form setup with Zod validation
-  const form = useForm<enrollmentSchemaType>({
+  const form = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentSchema),
     defaultValues: {
       students: [],
+      relationship: undefined,
       firstName: '',
       lastName: '',
       email: '',
@@ -85,166 +40,41 @@ export function EnrollmentForm() {
     mode: 'onChange',
   })
 
-  // Handle terms agreement
-  const handleTermsAgreement = () => {
-    setHasAgreedToTerms(true)
-    setIsTermsModalOpen(false)
-    form.setValue('termsAccepted', true, {
-      shouldValidate: true,
-      shouldDirty: true,
-      shouldTouch: true,
-    })
+  const onSubmit = async (values: EnrollmentFormValues) => {
+    await handleEnrollment(values)
   }
 
-  // Handle form submission
-  const handleSubmit = async (values: enrollmentSchemaType) => {
-    console.log('Form Submission Started:', { values, step })
-
-    if (step === 1) {
-      return handleStudentSelection()
-    }
-
-    if (step === 2) {
-      return await handleEnrollment(values)
-    }
-  }
-
-  // Handle Student Selection in Step 1
-  const handleStudentSelection = () => {
-    console.log('Step 1 Student Selection:', { selectedStudents })
-    if (selectedStudents.length === 0) {
-      toasts.apiError({
-        title: 'No Students Selected',
-        error: new Error(
-          'Please select at least one student to proceed with enrollment.'
-        ),
-      })
-      return
-    }
-    setStep(2)
-    toasts.success(
-      'Autopaying',
-      `${selectedStudents.length} student${selectedStudents.length > 1 ? 's' : ''}`
-    )
-  }
-
-  // Handle Enrollment in Step 2
-  const handleEnrollment = async (values: enrollmentSchemaType) => {
-    try {
-      setIsProcessing(true)
-      const requestBody = {
-        total: selectedStudents.reduce((sum, s) => sum + s.monthlyRate, 0),
-        email: values.email,
-        firstName: values.firstName,
-        lastName: values.lastName,
-        phone: values.phone,
-        students: selectedStudents,
-      }
-      console.log('Enrollment Request:', requestBody)
-
-      const response = await fetch('/api/enroll', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      })
-
-      if (!response.ok) {
-        throw new Error(
-          (await response.text()) || 'Failed to create SetupIntent'
-        )
-      }
-
-      const { clientSecret, customerId, setupIntent } =
-        (await response.json()) as EnrollmentResponse
-      console.log(
-        'SetupIntent Client Secret:',
-        clientSecret,
-        'for customer: ',
-        customerId,
-        'with setupIntent: ',
-        setupIntent
-      )
-      setClientSecret(clientSecret)
-      setStep(3)
-    } catch (error) {
-      toasts.apiError({ error })
-      console.error('Enrollment API Error:', error)
-    } finally {
-      setIsProcessing(false)
-    }
-  }
+  // Only show footer with buttons when not in an enrollment step
+  const showFooterButtons = !step || step === 0
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <StepsProgress currentStep={step} steps={steps} />
+    <>
+      <div className="mx-auto flex w-full max-w-5xl flex-col items-center px-4 py-16">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <GraduationCap className="mb-4 h-12 w-12 text-primary" />
+          <h1 className="mb-3 text-4xl font-bold">Set Up Your Mahad Payment</h1>
+          <p className="max-w-[42rem] text-muted-foreground">
+            Welcome to Irshād Mahad's tuition payment portal. Use this app to
+            set up your monthly tuition payments easily and securely. Simply
+            select your name and complete the payment process.
+          </p>
+        </div>
 
-      <div className="space-y-8">
-        {clientSecret ? (
-          <Card className="border-0 sm:border">
-            <CardContent className="p-4 sm:p-6">
-              <Elements
-                stripe={stripePromise}
-                options={{
-                  clientSecret,
-                  appearance: stripeAppearance,
-                  loader: 'auto',
-                }}
-              >
-                <StripePaymentForm
-                  clientSecret={clientSecret}
-                  customerName={`${form.getValues('firstName')} ${form.getValues('lastName')}`}
-                  customerEmail={form.getValues('email')}
-                  onSuccess={({ setupIntentId }) => {
-                    router.push(
-                      `/payment-success?setupIntentId=${setupIntentId}`
-                    )
-                  }}
-                  onError={(error) => {
-                    console.error('❌ Stripe Payment Form Error:', error)
-                    toasts.apiError({
-                      title: 'Payment Setup Failed',
-                      error: error,
-                    })
-                    resetFormState()
-                  }}
-                />
-              </Elements>
-            </CardContent>
-          </Card>
-        ) : (
+        <div className="w-full max-w-2xl">
           <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(handleSubmit)}
-              className="space-y-6 sm:space-y-8"
-            >
-              {step === 1 && (
-                <StudentSelectionStep
-                  selectedStudents={selectedStudents}
-                  setSelectedStudents={setSelectedStudents}
-                  form={form}
-                  onSubmit={handleStudentSelection}
-                />
-              )}
-
-              {step === 2 && (
-                <PaymentDetailsStep
-                  form={form}
-                  isProcessing={isProcessing}
-                  hasViewedTerms={hasAgreedToTerms}
-                  onBack={() => setStep(1)}
-                  onOpenTerms={() => setIsTermsModalOpen(true)}
-                />
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              {step === 1 ? (
+                <StudentSelectionStep students={students} form={form} />
+              ) : step === 2 ? (
+                <PayorDetailsStep form={form} />
+              ) : (
+                <PaymentStep form={form} />
               )}
             </form>
           </Form>
-        )}
+        </div>
       </div>
-
-      <TermsModal
-        open={isTermsModalOpen}
-        onOpenChange={setIsTermsModalOpen}
-        onAgree={handleTermsAgreement}
-      />
-    </div>
+      <Footer showButtons={showFooterButtons} />
+    </>
   )
 }

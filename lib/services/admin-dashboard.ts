@@ -4,9 +4,7 @@ import { BASE_RATE, STUDENTS } from '@/lib/data'
 import { TableStudent } from '@/lib/types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+import { stripeServerClient } from '../utils/stripe'
 
 function getStatusColor(status: string): string {
   switch (status) {
@@ -57,7 +55,7 @@ export async function getDashboardData(): Promise<{
 }> {
   try {
     // Fetch active subscriptions
-    const subscriptions = await stripe.subscriptions.list({
+    const subscriptions = await stripeServerClient.subscriptions.list({
       expand: ['data.customer'],
       limit: 100,
     })
