@@ -5,7 +5,7 @@ import { Stripe } from 'stripe'
 import { createEnrollment, cleanupEnrollmentRecords } from '@/lib/db/enrollment'
 import { AppError, Errors, handleStripeError } from '@/lib/errors'
 import { EnrollmentApiSchema } from '@/lib/schemas/enrollment'
-import { stripeServerClient } from '@/lib/utils/stripe'
+import { stripeServerClient } from '@/lib/stripe'
 
 interface CustomerData {
   name: string

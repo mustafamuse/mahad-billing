@@ -22,7 +22,7 @@ interface PayorDetails {
 interface PrepareSetupResponse {
   clientSecret: string
   customerId: string
-  setupIntent: any // We'll type this properly later
+  setupIntent: any
   enrollment: {
     payorId: string
     studentIds: string[]
@@ -60,6 +60,7 @@ interface EnrollmentActions {
     relationship: string
     studentIds: string[]
   }) => Promise<void>
+  resetForm: () => void
 }
 
 interface EnrollmentContextType {
@@ -197,6 +198,10 @@ export function EnrollmentProvider({
         ...prev,
         isTermsModalOpen: !prev.isTermsModalOpen,
       }))
+    },
+
+    resetForm: () => {
+      setState(initialState)
     },
   }
 

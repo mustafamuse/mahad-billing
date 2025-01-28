@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { stripeServerClient } from '@/lib/utils/stripe'
+import { stripeServerClient } from '@/lib/stripe'
 
 export async function POST(request: Request) {
   try {

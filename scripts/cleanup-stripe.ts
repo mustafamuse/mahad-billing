@@ -6,15 +6,10 @@ config({ path: '.env.local' })
 const prompts = require('prompts')
 import Stripe from 'stripe'
 
-import { redis } from '../lib/redis'
-import { stripeServerClient } from '../lib/utils/stripe'
+import { stripeServerClient } from '../lib/stripe'
 /* eslint-enable import/order */
 
-const requiredEnvVars = [
-  'STRIPE_SECRET_KEY',
-  'KV_REST_API_URL',
-  'KV_REST_API_TOKEN',
-] as const
+const requiredEnvVars = ['STRIPE_SECRET_KEY'] as const
 
 const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar])
 
@@ -30,13 +25,6 @@ if (missingEnvVars.length > 0) {
 // Verify connections
 async function verifyConnections() {
   try {
-    // Test Redis connection
-    const pingResult = await redis.ping()
-    if (pingResult !== 'PONG') {
-      throw new Error('Redis ping failed')
-    }
-    console.log('✅ Redis connection verified')
-
     // Test Stripe connection
     const stripeTest = await stripeServerClient.customers.list({ limit: 1 })
     if (!Array.isArray(stripeTest.data)) {

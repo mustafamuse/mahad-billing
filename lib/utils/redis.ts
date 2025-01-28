@@ -2,8 +2,8 @@ import { Redis } from '@upstash/redis'
 
 // Initialize Redis client
 export const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
 })
 
 // Utility: Handle Redis get and set
@@ -24,10 +24,35 @@ export async function getRedisKey(redisKey: string): Promise<any | null> {
   }
 }
 
-export async function setRedisKey<T>(redisKey: string, value: T, ttl: number) {
-  // Validate TTL
-  if (typeof ttl !== 'number' || ttl <= 0) {
-    throw new Error(`Invalid TTL value: ${ttl}`)
+// Default TTL values in seconds
+export const DEFAULT_TTL = {
+  SHORT: 300, // 5 minutes
+  MEDIUM: 3600, // 1 hour
+  LONG: 86400, // 24 hours
+  VERY_LONG: 604800, // 7 days
+} as const
+
+export async function setRedisKey<T>(
+  redisKey: string,
+  value: T,
+  ttl: number = DEFAULT_TTL.LONG
+) {
+  // Validate TTL with better error handling
+  if (typeof ttl !== 'number') {
+    console.warn(`Invalid TTL type for key ${redisKey}, using default TTL`, {
+      providedTtl: ttl,
+      defaultTtl: DEFAULT_TTL.LONG,
+    })
+    ttl = DEFAULT_TTL.LONG
+  }
+
+  // Ensure TTL is positive and within reasonable bounds
+  if (ttl <= 0 || ttl > DEFAULT_TTL.VERY_LONG) {
+    console.warn(`TTL out of bounds for key ${redisKey}, using default TTL`, {
+      providedTtl: ttl,
+      defaultTtl: DEFAULT_TTL.LONG,
+    })
+    ttl = DEFAULT_TTL.LONG
   }
 
   try {

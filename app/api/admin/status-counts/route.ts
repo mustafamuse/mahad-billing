@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 
 import { STUDENTS } from '@/lib/data'
+import { stripeServerClient } from '@/lib/stripe'
 import { parseStudentMetadata } from '@/lib/utils/parse-students'
-import { stripeServerClient } from '@/lib/utils/stripe'
 
 export async function GET() {
   try {

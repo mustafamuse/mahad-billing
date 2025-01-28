@@ -10,7 +10,7 @@ import {
   handleStripeError,
 } from '@/lib/errors'
 import { prepareSetupSchema } from '@/lib/schemas/enrollment'
-import { stripeServerClient } from '@/lib/utils/stripe'
+import { stripeServerClient } from '@/lib/stripe'
 
 export async function POST(req: Request) {
   try {

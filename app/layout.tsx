@@ -1,13 +1,9 @@
-import { Inter } from 'next/font/google'
-
 import { Toaster } from 'sonner'
 
-import { ThemeProvider } from '@/components/theme-provider'
 import { EnrollmentProvider } from '@/contexts/enrollment-context'
+import { ThemeProvider } from '@/lib/theme-provider'
 
 import './globals.css'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
   title: 'Mahad Autopay',
@@ -21,7 +17,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+      <head>
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, minimum-scale=1"
+        />
+      </head>
+
+      <body suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

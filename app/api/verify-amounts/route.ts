@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
 import { bankMicroDepositApiSchema } from '@/lib/schemas/bank-verification'
+import { stripeServerClient } from '@/lib/stripe'
 import { handleError, logEvent } from '@/lib/utils'
-import { stripeServerClient } from '@/lib/utils/stripe'
 
 export async function POST(request: NextRequest) {
   try {

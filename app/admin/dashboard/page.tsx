@@ -4,9 +4,9 @@ import { Suspense } from 'react'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-import { DashboardHeader } from '@/components/admin/dashboard-header'
-import { DashboardStats } from '@/components/admin/dashboard-stats'
-import { SubscriptionTable } from '@/components/admin/subscription-table'
+import { DashboardHeader } from '@/app/admin/dashboard/dashboard-header'
+import { DashboardStats } from '@/app/admin/dashboard/dashboard-stats'
+import { SubscriptionTable } from '@/app/admin/dashboard/subscription-table'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 

@@ -1,8 +1,7 @@
-import { PrismaClient, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
+import { prisma } from '@/lib/db'
 import { handlePrismaError } from '@/lib/errors'
-
-const prisma = new PrismaClient()
 
 interface EnrollmentData {
   email: string
@@ -10,7 +9,7 @@ interface EnrollmentData {
   lastName: string
   phone: string
   relationship: string
-  studentIds: string[] // Changed to just IDs instead of full student objects
+  studentIds: string[]
   stripeCustomerId: string
 }
 
@@ -32,40 +31,53 @@ export async function cleanupEnrollmentRecords(payorId: string) {
     console.log('✅ Cleanup completed successfully')
   } catch (error) {
     console.error('❌ Cleanup failed:', error)
-    // We don't throw here as this is already in an error handler
   }
 }
 
 export async function createEnrollment(data: EnrollmentData) {
   try {
     return await prisma.$transaction(async (tx) => {
-      // 1. Create the payor record with the provided information
+      // 1. Verify all students exist and are available
+      const students = await tx.student.findMany({
+        where: {
+          id: { in: data.studentIds },
+          payorId: null, // Double check they're still available
+        },
+        include: { familyGroup: true },
+      })
+
+      if (students.length !== data.studentIds.length) {
+        throw new Error(
+          'One or more selected students are no longer available for enrollment'
+        )
+      }
+
+      // 2. For multiple students, verify family relationship
+      if (students.length > 1) {
+        const familyIds = new Set(
+          students.map((s) => s.familyId).filter(Boolean)
+        )
+        if (familyIds.size > 1) {
+          throw new Error('All students must belong to the same family group')
+        }
+      }
+
+      // 3. Create the payor record
       const payor = await tx.payor.create({
         data: {
           name: `${data.firstName} ${data.lastName}`,
           stripeCustomerId: data.stripeCustomerId,
           relationship: data.relationship,
-        },
-      })
-
-      // 2. Update the existing students to link them to this payor
-      await tx.student.updateMany({
-        where: {
-          id: {
-            in: data.studentIds,
+          students: {
+            connect: data.studentIds.map((id) => ({ id })),
           },
         },
-        data: {
-          payorId: payor.id,
-        },
       })
 
-      // 3. Return the created records
+      // 4. Return the updated records
       const updatedStudents = await tx.student.findMany({
         where: {
-          id: {
-            in: data.studentIds,
-          },
+          id: { in: data.studentIds },
         },
         include: {
           familyGroup: true,

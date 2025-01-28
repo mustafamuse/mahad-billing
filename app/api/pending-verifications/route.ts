@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import { redis } from '@/lib/redis'
-import { stripeServerClient } from '@/lib/utils/stripe'
+import { stripeServerClient } from '@/lib/stripe'
+import { redis } from '@/lib/utils/redis'
 
 export async function GET() {
   try {

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
-import { stripeServerClient } from '@/lib/utils/stripe'
+import { stripeServerClient } from '@/lib/stripe'
 
 export async function GET() {
   try {

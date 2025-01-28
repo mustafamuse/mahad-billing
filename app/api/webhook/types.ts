@@ -186,11 +186,3 @@ export interface SubscriptionStatus {
   createdAt: string
   updatedAt: string
 }
-
-export interface VerificationData extends LogEventData {
-  metadata: {
-    priceId: string
-    verifiedAt?: number
-    [key: string]: any
-  }
-}

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db'
 
+import studentsDataRaw from '../lib/data/students.json'
 interface StudentData {
   id: string
   name: string
@@ -21,18 +22,15 @@ interface StudentsData {
   }
 }
 
-const studentsData = require('../lib/data/students.json') as StudentsData
+const studentsData = studentsDataRaw as StudentsData
 
 async function dropTables() {
   console.log('❌ Dropping all table data...')
 
   // Drop tables in order based on foreign key relationships
   await prisma.$transaction([
-    // First remove many-to-many relationships
-    prisma.$executeRaw`DELETE FROM "_ClassGroupToStudent"`,
-    // Then delete tables with foreign keys
+    prisma.$executeRaw`DELETE FROM "_ClassGroupToStudent"`, // many-to-many
     prisma.student.deleteMany(),
-    // Finally delete the referenced tables
     prisma.familyGroup.deleteMany(),
     prisma.classGroup.deleteMany(),
   ])
@@ -57,7 +55,6 @@ async function seedData() {
     let familyGroupId: string | null = null
     if (student.familyId) {
       if (!familyGroupMap.has(student.familyId)) {
-        // Create a new FamilyGroup with a generated UUID
         const familyGroup = await prisma.familyGroup.create({
           data: {},
         })
@@ -130,11 +127,13 @@ async function main() {
   await seedData()
 }
 
+// Run the seeding script as CLI
 main()
   .catch((e) => {
     console.error('❌ Error:', e)
     process.exit(1)
   })
   .finally(async () => {
+    // Only disconnect here because we're done with the CLI run
     await prisma.$disconnect()
   })

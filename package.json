@@ -15,8 +15,9 @@
     "see-active": "ts-node scripts/see-active.ts",
     "tunnel": "npx localtunnel --port 3000 --subdomain mahad-dev",
     "dev:tunnel": "concurrently \"npm run dev\" \"npm run tunnel\"",
-    "webhook": "stripe listen --forward-to localhost:3000/api/webhook",
-    "dev:webhook": "concurrently \"npm run dev\" \"npm run webhook\""
+    "webhook": "stripe listen --forward-to localhost:3000/api/webhook --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_succeeded,invoice.payment_failed,payment_intent.payment_failed",
+    "dev:webhook": "concurrently \"npm run dev\" \"npm run webhook\"",
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -64,6 +65,7 @@
     "lucide-react": "^0.323.0",
     "next": "^14.2.18",
     "next-themes": "^0.2.1",
+    "raw-body": "^3.0.0",
     "react": "^18",
     "react-day-picker": "^9.4.0",
     "react-dom": "^18",
@@ -119,8 +121,5 @@
     "*.{json,md}": [
       "prettier --write"
     ]
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   }
 }

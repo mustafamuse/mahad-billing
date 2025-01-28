@@ -22,7 +22,6 @@ export default function SuccessPage() {
     actions: { resetForm },
   } = useEnrollment()
 
-  // Clean up enrollment state when component mounts
   useEffect(() => {
     resetForm()
   }, [resetForm])
@@ -42,10 +41,12 @@ export default function SuccessPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="rounded-lg border bg-muted/50 p-4">
-              <h3 className="mb-2 font-semibold">What's Next?</h3>
+              <h3 className="mb-2 font-semibold">What&apos;s Next?</h3>
               <ul className="ml-6 list-disc space-y-2 text-sm text-muted-foreground">
                 <li>Your first payment will be processed in couple of days</li>
-                <li>You'll receive email confirmations for all payments</li>
+                <li>
+                  You&apos;ll receive email confirmations for all payments
+                </li>
                 <li>You can view your payment history in your email</li>
                 <li>
                   Contact support if you need to update your payment method

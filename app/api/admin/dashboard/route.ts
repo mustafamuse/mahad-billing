@@ -4,8 +4,8 @@ import Stripe from 'stripe'
 import { z } from 'zod'
 
 import { BASE_RATE, STUDENTS } from '@/lib/data'
+import { stripeServerClient } from '@/lib/stripe'
 import { Student } from '@/lib/types'
-import { stripeServerClient } from '@/lib/utils/stripe'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,53 +1,98 @@
-import { NextResponse } from 'next/server'
+import { headers } from 'next/headers'
 
-import { stripeServerClient } from '@/lib/utils/stripe'
+import getRawBody from 'raw-body'
+import { Readable } from 'stream'
+import Stripe from 'stripe'
+
+import { prisma } from '@/lib/db'
+import { stripeServerClient } from '@/lib/stripe'
 
 import { eventHandlers } from './event-handlers'
-import {
-  detectAndReplayMissingEvents,
-  detectAndReplayMissingEventsInChunks,
-} from './recovery'
-import { logEvent } from './utils'
-import { validateAndTrackEvent } from './webhook-validation'
 
-export const dynamic = 'force-dynamic'
+// 1. Insert or update the WebhookEvent
+async function handleWebhookEvent(event: Stripe.Event) {
+  let webhookEvent = await prisma.webhookEvent.findUnique({
+    where: { stripeEventId: event.id },
+  })
 
-export async function POST(req: Request) {
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
-    throw new Error('Missing STRIPE_WEBHOOK_SECRET')
+  if (!webhookEvent) {
+    webhookEvent = await prisma.webhookEvent.create({
+      data: {
+        stripeEventId: event.id,
+        eventType: event.type,
+        payload: event.data.object as any,
+        processed: false,
+      },
+    })
+  } else {
+    if (webhookEvent.processed) {
+      console.log(`🚫 Already processed event ${event.id}, skipping.`)
+      return
+    }
   }
 
-  const body = await req.text()
-  const sig = req.headers.get('stripe-signature')
+  const handler = eventHandlers[event.type]
+  if (handler) {
+    try {
+      await handler(event)
+    } catch (err) {
+      // We'll leave `processed = false` so you can reprocess if needed
+      console.error('❌ Error in handler:', err)
+      throw err
+    }
+  } else {
+    console.log(`Unhandled event type: ${event.type}`)
+  }
 
-  if (!sig) {
-    throw new Error('Missing stripe-signature header')
+  await prisma.webhookEvent.update({
+    where: { id: webhookEvent.id },
+    data: { processed: true },
+  })
+
+  console.log(`✅ Webhook event ${event.id} marked as processed.`)
+}
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+}
+
+export async function POST(req: Request) {
+  const signature = headers().get('stripe-signature')
+  const retryCount = headers().get('stripe-retry-count')
+
+  if (!signature) {
+    console.error('❌ No Stripe signature')
+    return new Response('No signature', { status: 400 })
   }
 
   try {
+    const readableBody = Readable.from(req.body as any)
+    const rawBody = await getRawBody(readableBody, { encoding: 'utf-8' })
+
     const event = stripeServerClient.webhooks.constructEvent(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
+      rawBody,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!
     )
 
-    const success = await validateAndTrackEvent(event)
-    if (success) {
-      const handler = eventHandlers[event.type]
-      if (handler) await handler(event)
+    if (retryCount) {
+      console.log(`🔄 Webhook retry #${retryCount} for event ${event.id}`)
     }
 
-    return NextResponse.json({ received: true })
-  } catch (error) {
-    logEvent('Webhook Error', 'system', {
-      eventId: 'system',
-      type: 'webhook.error',
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: Date.now(),
-    })
-    return new NextResponse('Webhook Error', { status: 400 })
+    await handleWebhookEvent(event)
+
+    return new Response('OK', { status: 200 })
+  } catch (err) {
+    console.error('❌ Webhook error:', err)
+
+    // If it's a signature error, respond with 400 so Stripe doesn't keep retrying forever
+    if (err instanceof Stripe.errors.StripeSignatureVerificationError) {
+      return new Response('Invalid signature', { status: 400 })
+    }
+
+    // For other errors, you can respond 400 or 500. Stripe will retry if it's a 400+ code
+    return new Response('Webhook error', { status: 400 })
   }
 }
-
-// Export recovery functions for use in recovery endpoint
-export { detectAndReplayMissingEvents, detectAndReplayMissingEventsInChunks }
