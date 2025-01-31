@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation'
 
 import { Lock } from 'lucide-react'
 
-import { BankVerificationButton } from '@/components/bank-verification-button'
+import { BankVerificationButton } from '@/app/(micro-bank-verification)/bank-verification-button'
 import { Button } from '@/components/ui/button'
+import { useEnrollment } from '@/contexts/enrollment-context'
 
 interface FooterProps {
   showButtons?: boolean
@@ -13,6 +14,10 @@ interface FooterProps {
 
 export function Footer({ showButtons = false }: FooterProps) {
   const router = useRouter()
+  const {
+    state: { step },
+  } = useEnrollment()
+  const shouldShowButtons = showButtons || step === 0
 
   return (
     <footer className="border-t py-6">
@@ -20,7 +25,7 @@ export function Footer({ showButtons = false }: FooterProps) {
         <p className="text-center text-sm leading-loose text-muted-foreground">
           {/* Built by <span className="font-medium">Mustafa Al-Azharī</span> */}
         </p>
-        {showButtons && (
+        {shouldShowButtons && (
           <div className="flex gap-2">
             <BankVerificationButton />
             <Button
