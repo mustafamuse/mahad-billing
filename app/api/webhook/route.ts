@@ -52,16 +52,20 @@ async function handleWebhookEvent(event: Stripe.Event) {
   console.log(`✅ Webhook event ${event.id} marked as processed.`)
 }
 
-// This tells Next.js to not parse the body since we need the raw body for Stripe signature verification
+export const runtime = 'edge' // Optional: Use edge runtime for faster webhook processing
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   const signature = headers().get('stripe-signature')
   const retryCount = headers().get('stripe-retry-count')
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
-  if (!signature) {
-    console.error('❌ No Stripe signature')
-    return new Response('No signature', { status: 400 })
+  if (!signature || !webhookSecret) {
+    console.error('❌ Missing required webhook parameters')
+    return new Response(
+      JSON.stringify({ error: 'Missing required webhook parameters' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    )
   }
 
   try {
@@ -71,7 +75,7 @@ export async function POST(req: Request) {
     const event = stripeServerClient.webhooks.constructEvent(
       rawBody,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     )
 
     if (retryCount) {
