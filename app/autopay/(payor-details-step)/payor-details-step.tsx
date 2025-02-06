@@ -6,11 +6,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
+import { EnrollmentStepsProgress } from '@/app/autopay/(enrollment)/enrollment-steps-progress'
 import {
   PayorDetailsFields,
   RelationshipSelect,
-} from '@/app/(payor-details-step)/payor-details-fields'
-import { TermsModal } from '@/app/(payor-details-step)/terms-modal'
+} from '@/app/autopay/(payor-details-step)/payor-details-fields'
+import { TermsModal } from '@/app/autopay/(payor-details-step)/terms-modal'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -35,8 +36,7 @@ import {
   type EnrollmentFormValues,
   isApiError,
 } from '@/lib/schemas/enrollment'
-
-import { EnrollmentStepsProgress } from '../(enrollment)/enrollment-steps-progress'
+import { type Relationship } from '@/lib/types'
 
 export function PayorDetailsStep() {
   const {
@@ -98,7 +98,7 @@ export function PayorDetailsStep() {
 
   return (
     <div>
-      <EnrollmentStepsProgress currentStep={2} />
+      <EnrollmentStepsProgress currentStep={1} />
       <Card className="border-0 sm:border">
         <CardHeader className="space-y-2 p-4 sm:p-6">
           <CardTitle className="text-xl sm:text-2xl">Payor Details</CardTitle>
@@ -115,10 +115,12 @@ export function PayorDetailsStep() {
             <RelationshipSelect
               value={form.watch('relationship')}
               onChange={(value) => {
-                form.setValue('relationship', value, { shouldValidate: true })
+                form.setValue('relationship', value as Relationship, {
+                  shouldValidate: true,
+                })
                 updatePayorDetails({
                   ...payorDetails,
-                  relationship: value,
+                  relationship: value as Relationship,
                 })
               }}
               error={

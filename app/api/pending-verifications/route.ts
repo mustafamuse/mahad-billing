@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 
 import { stripeServerClient } from '@/lib/stripe'
-import { redis } from '@/lib/utils/redis'
 
 export async function GET() {
   try {
@@ -23,15 +22,11 @@ export async function GET() {
       pendingVerifications.map(async (intent) => {
         const customer = intent.customer as any // Expanded customer object
 
-        // Get student data from Redis
-        const studentData = await redis.get(`students:${customer.id}`)
-        const students = studentData ? JSON.parse(studentData) : []
-
         return {
           id: intent.id,
           email: customer.email,
           name: customer.name,
-          students: students.map((s: any) => s.name),
+          // students: students.map((s: any) => s.name),
           created: new Date(intent.created * 1000).toISOString(),
           last_setup_error: intent.last_setup_error?.message,
         }

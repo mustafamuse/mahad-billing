@@ -6,18 +6,10 @@ import { UseFormReturn } from 'react-hook-form'
 import { toast } from 'sonner'
 
 import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
-import { type Student } from '@/lib/types'
+import { PayorDetails, type Student } from '@/lib/types'
 
 // 1. Define Types
 type EnrollmentStatus = 'draft' | 'confirming' | 'confirmed' | 'failed'
-
-interface PayorDetails {
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  relationship: string
-}
 
 interface PrepareSetupResponse {
   clientSecret: string

@@ -4,7 +4,7 @@ import Stripe from 'stripe'
 
 import { bankMicroDepositApiSchema } from '@/lib/schemas/bank-verification'
 import { stripeServerClient } from '@/lib/stripe'
-import { handleError, logEvent } from '@/lib/utils'
+import { handleError } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,11 +15,10 @@ export async function POST(request: NextRequest) {
     const amountsInCents = amounts.map((amount) =>
       Math.round(Number(amount) * 100)
     )
-
-    logEvent('Verifying Micro-deposits', setupId, {
+    console.log('Verifying Micro-deposits', {
+      setupId,
       amounts: amountsInCents,
     })
-
     // Verify the amounts with Stripe
     const setupIntent =
       await stripeServerClient.setupIntents.verifyMicrodeposits(setupId, {
@@ -28,7 +27,8 @@ export async function POST(request: NextRequest) {
 
     // Check if verification was successful
     if (setupIntent.status === 'succeeded') {
-      logEvent('Micro-deposits Verified', setupId, {
+      console.log('Micro-deposits Verified', {
+        setupId,
         status: setupIntent.status,
       })
       return NextResponse.json({ success: true })

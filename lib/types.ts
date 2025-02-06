@@ -289,20 +289,20 @@ interface _SubscriptionStatus {
   createdAt: string
   updatedAt: string
 }
-
+export type Relationship =
+  | 'self'
+  | 'father'
+  | 'mother'
+  | 'sibling'
+  | 'uncle'
+  | 'aunt'
+  | 'step-father'
+  | 'step-mother'
+  | 'other'
 export interface PayorDetails {
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
-  relationship:
-    | 'self'
-    | 'father'
-    | 'mother'
-    | 'sibling'
-    | 'uncle'
-    | 'aunt'
-    | 'step-father'
-    | 'step-mother'
-    | 'other'
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  relationship?: Relationship
 }

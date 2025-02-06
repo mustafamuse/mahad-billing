@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 
 import { Lock } from 'lucide-react'
 
-import { BankVerificationButton } from '@/app/(micro-bank-verification)/bank-verification-button'
+// import { BankVerificationButton } from '@/app/(micro-bank-verification)/bank-verification-button'
 import { Button } from '@/components/ui/button'
 import { useEnrollment } from '@/contexts/enrollment-context'
 
@@ -27,7 +27,7 @@ export function Footer({ showButtons = false }: FooterProps) {
         </p>
         {shouldShowButtons && (
           <div className="flex gap-2">
-            <BankVerificationButton />
+            {/* <BankVerificationButton /> */}
             <Button
               variant="outline"
               size="sm"

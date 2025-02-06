@@ -52,11 +52,8 @@ async function handleWebhookEvent(event: Stripe.Event) {
   console.log(`✅ Webhook event ${event.id} marked as processed.`)
 }
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
+// This tells Next.js to not parse the body since we need the raw body for Stripe signature verification
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   const signature = headers().get('stripe-signature')

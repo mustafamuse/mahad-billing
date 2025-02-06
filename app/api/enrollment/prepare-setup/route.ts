@@ -100,10 +100,13 @@ export async function POST(req: Request) {
         },
       })
 
+      // Only return serializable data
       return {
         setupIntentId: setupIntent.id,
         clientSecret: setupIntent.client_secret,
         isExistingCustomer: !!existingPayor,
+        status: setupIntent.status,
+        paymentMethodTypes: setupIntent.payment_method_types,
       }
     })
 

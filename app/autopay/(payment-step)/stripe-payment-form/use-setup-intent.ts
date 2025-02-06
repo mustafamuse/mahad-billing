@@ -1,7 +1,5 @@
 import { useState } from 'react'
 
-import type { PaymentMethod, SetupIntent } from '@stripe/stripe-js'
-
 import { getSetupIntent } from '@/lib/actions/get-setup-intent'
 
 import { FormStatus } from './types'
@@ -25,31 +23,16 @@ export function useSetupIntent({ onComplete }: UseSetupIntentProps) {
   const [bankDetails, setBankDetails] = useState<BankDetails | null>(null)
 
   /**
-   * Fetches an expanded SetupIntent using a server action
-   * @param setupIntentId - ID of the SetupIntent
-   */
-  const fetchExpandedSetupIntent = async (
-    setupIntentId: string
-  ): Promise<SetupIntent> => {
-    return getSetupIntent(setupIntentId)
-  }
-
-  /**
    * Handles various statuses of the SetupIntent during the setup process
    */
   const handleSetupIntentStatus = async (
     setupIntentStatus: string,
-    setupIntentId: string,
-    setupIntent?: SetupIntent
+    setupIntentId: string
   ) => {
-    console.log('Setup Intent Status:', setupIntentStatus)
-    console.log('Setup Intent:', setupIntent)
-
     setStatus(setupIntentStatus as FormStatus)
 
     try {
-      // Always fetch the expanded version since we know client-side setupIntent won't have expanded payment_method
-      const fullSetupIntent = await fetchExpandedSetupIntent(setupIntentId)
+      const fullSetupIntent = await getSetupIntent(setupIntentId)
 
       // Handle different statuses
       switch (setupIntentStatus) {
@@ -57,32 +40,13 @@ export function useSetupIntent({ onComplete }: UseSetupIntentProps) {
           setErrorMessage('Please try setting up your bank account again.')
           break
         case 'requires_confirmation':
-          if (
-            fullSetupIntent?.payment_method &&
-            typeof fullSetupIntent.payment_method !== 'string'
-          ) {
-            const paymentMethod =
-              fullSetupIntent.payment_method as PaymentMethod
-            console.log('Payment Method:', paymentMethod)
-
-            if (paymentMethod.us_bank_account) {
-              console.log(
-                'Bank Account Details:',
-                paymentMethod.us_bank_account
-              )
-              setBankDetails({
-                bankName: paymentMethod.us_bank_account.bank_name || undefined,
-                last4: paymentMethod.us_bank_account.last4 || undefined,
-                routingNumber:
-                  paymentMethod.us_bank_account.routing_number || undefined,
-                accountType:
-                  paymentMethod.us_bank_account.account_type || undefined,
-              })
-            } else {
-              console.log('No us_bank_account found in payment method')
-            }
-          } else {
-            console.log('No payment_method found in SetupIntent')
+          if (fullSetupIntent.paymentMethod) {
+            setBankDetails({
+              bankName: fullSetupIntent.paymentMethod.bankName,
+              last4: fullSetupIntent.paymentMethod.last4,
+              routingNumber: fullSetupIntent.paymentMethod.routingNumber,
+              accountType: fullSetupIntent.paymentMethod.accountType,
+            })
           }
           setProgress(60)
           break

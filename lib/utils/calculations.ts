@@ -21,7 +21,7 @@ export function calculateTotal(students: Student[]): number {
 // Utility: Calculate student price with discounts
 export function calculateStudentPrice(student: Student) {
   const basePrice = BASE_RATE
-  const hasSiblingDiscount = student.hasSiblingDiscount || false
+  const hasSiblingDiscount = student.siblings > 0 || false
   const discount = hasSiblingDiscount ? getFamilyDiscount(2) : 0
 
   const price = basePrice - basePrice * (discount / 100)

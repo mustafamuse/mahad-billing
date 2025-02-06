@@ -5,10 +5,11 @@ import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
 
-import { EnrollmentSummary } from '@/app/(enrollment)/enrollment-summary'
-import { EmptySelection } from '@/app/(student-selection-step)/empty-selection'
-import { StudentCard } from '@/app/(student-selection-step)/student-card'
-import { StudentSearchCombobox } from '@/app/(student-selection-step)/student-search-combobox'
+import { EnrollmentStepsProgress } from '@/app/autopay/(enrollment)/enrollment-steps-progress'
+import { EnrollmentSummary } from '@/app/autopay/(enrollment)/enrollment-summary'
+import { EmptySelection } from '@/app/autopay/(student-selection-step)/empty-selection'
+import { StudentCard } from '@/app/autopay/(student-selection-step)/student-card'
+import { StudentSearchCombobox } from '@/app/autopay/(student-selection-step)/student-search-combobox'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -21,8 +22,6 @@ import {
 import { useEnrollment } from '@/contexts/enrollment-context'
 import { useStudentSelection } from '@/hooks/use-student-selection'
 import { type Student } from '@/lib/types'
-
-import { EnrollmentStepsProgress } from '../(enrollment)/enrollment-steps-progress'
 
 interface StudentSelectionStepProps {
   students: Student[]
@@ -71,7 +70,7 @@ export function StudentSelectionStep({ students }: StudentSelectionStepProps) {
 
   return (
     <div>
-      <EnrollmentStepsProgress currentStep={1} />
+      <EnrollmentStepsProgress currentStep={0} />
       <Card className="border-0 sm:border">
         <CardHeader className="space-y-2 p-4 sm:p-6">
           <CardTitle className="text-xl sm:text-2xl">

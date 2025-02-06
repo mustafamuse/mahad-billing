@@ -1,11 +1,13 @@
 'use client'
 
+import { useMemo } from 'react'
+
 import { Elements } from '@stripe/react-stripe-js'
 import { loadStripe } from '@stripe/stripe-js'
 import { LockIcon, ShieldCheck } from 'lucide-react'
 
-import { EnrollmentSummary } from '@/app/(enrollment)/enrollment-summary'
-import { StripePaymentForm } from '@/app/(payment-step)/stripe-payment-form'
+import { EnrollmentSummary } from '@/app/autopay/(enrollment)/enrollment-summary'
+import { StripePaymentForm } from '@/app/autopay/(payment-step)/stripe-payment-form'
 import {
   Card,
   CardContent,
@@ -14,17 +16,12 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { type Student } from '@/lib/types'
+import { PayorDetails, type Student } from '@/lib/types'
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-)
-
-interface PayorDetails {
-  firstName: string
-  lastName: string
-  email: string
-  phone: string
+// Get the publishable key from env
+const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+if (!publishableKey) {
+  throw new Error('Stripe publishable key is not set in environment variables')
 }
 
 interface ClientPaymentFormProps {
@@ -40,6 +37,9 @@ export function ClientPaymentForm({
   selectedStudents,
   onAddStudents,
 }: ClientPaymentFormProps) {
+  // Memoize the Stripe promise
+  const stripePromise = useMemo(() => loadStripe(publishableKey!), [])
+
   return (
     <Card className="relative">
       <div className="absolute right-4 top-4 flex items-center text-sm text-muted-foreground">
@@ -93,9 +93,12 @@ export function ClientPaymentForm({
           <StripePaymentForm
             clientSecret={clientSecret}
             payorDetails={{
-              email: payorDetails.email,
-              name: `${payorDetails.firstName} ${payorDetails.lastName}`,
-              phone: payorDetails.phone,
+              email: payorDetails.email || '',
+              name:
+                payorDetails.firstName && payorDetails.lastName
+                  ? `${payorDetails.firstName} ${payorDetails.lastName}`
+                  : '',
+              phone: payorDetails.phone || '',
             }}
             studentIds={selectedStudents.map((student) => student.id)}
           />

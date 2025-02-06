@@ -189,7 +189,7 @@ export function BankVerificationForm({
         <FormField
           control={form.control}
           name="setupId"
-          render={({ field }) => (
+          render={({ field }: { field: any }) => (
             <FormItem>
               <FormLabel>Select Enrollment</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
@@ -225,7 +225,7 @@ export function BankVerificationForm({
         <FormField
           control={form.control}
           name="amount1"
-          render={({ field }) => (
+          render={({ field }: { field: any }) => (
             <FormItem>
               <FormLabel>First Amount</FormLabel>
               <FormControl>
@@ -239,7 +239,7 @@ export function BankVerificationForm({
         <FormField
           control={form.control}
           name="amount2"
-          render={({ field }) => (
+          render={({ field }: { field: any }) => (
             <FormItem>
               <FormLabel>Second Amount</FormLabel>
               <FormControl>

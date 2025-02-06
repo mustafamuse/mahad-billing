@@ -2,7 +2,7 @@
 
 import { Loader2 } from 'lucide-react'
 
-import { EnrollmentStepsProgress } from '@/app/(enrollment)/enrollment-steps-progress'
+import { EnrollmentStepsProgress } from '@/app/autopay/(enrollment)/enrollment-steps-progress'
 import { useEnrollment } from '@/contexts/enrollment-context'
 
 import { ClientPaymentForm } from './client-payment-form'
@@ -34,7 +34,7 @@ export function PaymentStep() {
   return (
     <div className="space-y-6">
       {/* Progress Steps */}
-      <EnrollmentStepsProgress currentStep={step} />
+      <EnrollmentStepsProgress currentStep={2} />
 
       {/* Payment Form */}
       <ClientPaymentForm

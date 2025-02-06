@@ -108,11 +108,7 @@ export function StripePaymentForm({
       }
 
       // Pass the setupIntent directly to handleSetupIntentStatus
-      await handleSetupIntentStatus(
-        setupIntent.status,
-        setupIntent.id,
-        setupIntent
-      )
+      await handleSetupIntentStatus(setupIntent.status, setupIntent.id)
     } catch (err) {
       console.error('Bank account setup error:', err)
       showErrorToast(err as Error)
@@ -141,11 +137,7 @@ export function StripePaymentForm({
       }
 
       // Pass the setupIntent directly to handleSetupIntentStatus
-      await handleSetupIntentStatus(
-        setupIntent.status,
-        setupIntent.id,
-        setupIntent
-      )
+      await handleSetupIntentStatus(setupIntent.status, setupIntent.id)
     } catch (err) {
       console.error('Bank account confirmation error:', err)
       setErrorMessage(err instanceof Error ? err.message : 'An error occurred')

@@ -1,9 +1,9 @@
 'use client'
 
-import { EnrollmentHeader } from '@/app/(enrollment)/enrollment-header'
-import { PaymentStep } from '@/app/(payment-step)/payment-step'
-import { PayorDetailsStep } from '@/app/(payor-details-step)/payor-details-step'
-import { StudentSelectionStep } from '@/app/(student-selection-step)/student-selection-step'
+import { EnrollmentHeader } from '@/app/autopay/(enrollment)/enrollment-header'
+import { PaymentStep } from '@/app/autopay/(payment-step)/payment-step'
+import { PayorDetailsStep } from '@/app/autopay/(payor-details-step)/payor-details-step'
+import { StudentSelectionStep } from '@/app/autopay/(student-selection-step)/student-selection-step'
 import { Footer } from '@/components/footer'
 import {
   EnrollmentProvider,
