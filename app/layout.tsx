@@ -6,8 +6,9 @@ import { ThemeProvider } from '@/lib/theme-provider'
 import './globals.css'
 
 export const metadata = {
-  title: 'Mahad Autopay',
-  description: 'Enrollment and payment management system',
+  title: 'Roots of Knowledge - Islamic Education',
+  description:
+    'Comprehensive Islamic education and payment management system at Roots of Knowledge, Eden Prairie.',
 }
 
 export default function RootLayout({

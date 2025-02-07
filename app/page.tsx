@@ -14,6 +14,7 @@ import {
   DollarSign,
   CreditCard,
   AlertCircle,
+  MessageCircle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -50,7 +51,7 @@ export default function HomePage() {
               </span>
             </h1>
             <p className="mx-auto max-w-[700px] text-lg text-muted-foreground md:text-xl">
-              Join our vibrant community at Irshad Islamic Center, where
+              Join our vibrant community at Roots of Knowledge, where
               traditional Islamic education meets modern learning approaches.
             </p>
             <div className="flex justify-center gap-4">
@@ -96,7 +97,7 @@ export default function HomePage() {
                   Our Mission
                 </h2>
                 <p className="text-lg text-muted-foreground">
-                  At Irshad Islamic Center, we are dedicated to providing
+                  At Roots of Knowledge, we are dedicated to providing
                   comprehensive Islamic education that empowers individuals with
                   knowledge, understanding, and spiritual growth.
                 </p>
@@ -289,19 +290,25 @@ export default function HomePage() {
                 <div className="rounded-full bg-primary/10 p-2">
                   <MapPin className="h-5 w-5 text-primary" />
                 </div>
-                <p>123 Islamic Center Way, Minneapolis, MN 55401</p>
+                <p>6520 Edenvale Blvd # 110, Eden Prairie, MN 55346</p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="rounded-full bg-primary/10 p-2">
                   <Mail className="h-5 w-5 text-primary" />
                 </div>
-                <p>contact@irshadislamiccenter.org</p>
+                <p>umpp101@gmail.com</p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="rounded-full bg-primary/10 p-2">
                   <Phone className="h-5 w-5 text-primary" />
                 </div>
-                <p>(555) 123-4567</p>
+                <div className="flex items-center gap-2">
+                  <p>612-517-7466</p>
+                  <div className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-sm text-green-700">
+                    <MessageCircle className="h-4 w-4" />
+                    <span>WhatsApp</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -313,7 +320,7 @@ export default function HomePage() {
         <div className="container px-4">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <p className="text-sm text-muted-foreground">
-              © 2024 Irshad Islamic Center. All rights reserved.
+              © 2024 Roots of Knowledge. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
               <Link
