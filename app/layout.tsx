@@ -1,3 +1,4 @@
+import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 
 import { EnrollmentProvider } from '@/contexts/enrollment-context'
@@ -35,6 +36,7 @@ export default function RootLayout({
           <EnrollmentProvider>{children}</EnrollmentProvider>
           <Toaster richColors position="top-right" />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )
