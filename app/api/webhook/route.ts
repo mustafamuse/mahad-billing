@@ -1,11 +1,8 @@
 import { headers } from 'next/headers'
 
-import getRawBody from 'raw-body'
-import { Readable } from 'stream'
 import Stripe from 'stripe'
 
 import { prisma } from '@/lib/db'
-import { stripeServerClient } from '@/lib/stripe'
 
 import { eventHandlers } from './event-handlers'
 
@@ -56,6 +53,7 @@ export const runtime = 'edge' // Optional: Use edge runtime for faster webhook p
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
+  const body = await req.text()
   const signature = headers().get('stripe-signature')
   const retryCount = headers().get('stripe-retry-count')
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -69,14 +67,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const readableBody = Readable.from(req.body as any)
-    const rawBody = await getRawBody(readableBody, { encoding: 'utf-8' })
-
-    const event = stripeServerClient.webhooks.constructEvent(
-      rawBody,
-      signature,
-      webhookSecret
-    )
+    const event = Stripe.webhooks.constructEvent(body, signature, webhookSecret)
 
     if (retryCount) {
       console.log(`🔄 Webhook retry #${retryCount} for event ${event.id}`)

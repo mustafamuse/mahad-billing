@@ -5,3 +5,5 @@ export default async function AutoPayPage() {
   const students = await getStudents()
   return <EnrollmentForm students={students} />
 }
+
+export const dynamic = 'force-dynamic'
