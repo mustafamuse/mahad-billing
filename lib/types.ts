@@ -3,12 +3,41 @@ import type Stripe from 'stripe'
 export interface Student {
   id: string
   name: string
+  className: string
   monthlyRate: number
-  familyId?: string
-  totalFamilyMembers?: number
-  siblings?: number
-  className?: string
-  hasCustomRate?: boolean
+  hasCustomRate: boolean
+  familyId: string | null
+  familyName: string
+  siblings: number
+  totalFamilyMembers: number
+  status: 'enrolled' | 'registered' | 'available'
+  payorId: string | null
+}
+
+export interface StudentData {
+  id: string
+  name: string
+  className: string
+  monthlyRate: number
+  hasCustomRate: boolean
+  familyId: string | null
+  familyName: string
+  siblings: string[]
+  totalFamilyMembers: number
+}
+
+export interface StudentsJson {
+  students: {
+    [key: string]: StudentData
+  }
+  constants: {
+    baseRate: number
+    discounts: {
+      siblings: {
+        [key: string]: number
+      }
+    }
+  }
 }
 
 export interface EnrollmentFormData {
@@ -259,4 +288,21 @@ interface _SubscriptionStatus {
   error?: string
   createdAt: string
   updatedAt: string
+}
+export type Relationship =
+  | 'self'
+  | 'father'
+  | 'mother'
+  | 'sibling'
+  | 'uncle'
+  | 'aunt'
+  | 'step-father'
+  | 'step-mother'
+  | 'other'
+export interface PayorDetails {
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  relationship?: Relationship
 }

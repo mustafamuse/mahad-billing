@@ -1,18 +1,44 @@
+/* eslint-disable import/order */
+// Built-in Node modules
 import { config } from 'dotenv'
-import prompts from 'prompts' // FIX: Use default import for prompts
-import Stripe from 'stripe'
-
-// Load environment variables from .env.local
 config({ path: '.env.local' })
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.error('❌ STRIPE_SECRET_KEY is not set in .env.local')
+const prompts = require('prompts')
+import Stripe from 'stripe'
+
+import { stripeServerClient } from '../lib/stripe'
+/* eslint-enable import/order */
+
+const requiredEnvVars = ['STRIPE_SECRET_KEY'] as const
+
+const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar])
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:')
+  missingEnvVars.forEach((envVar) => {
+    console.error(`   - ${envVar}`)
+  })
+  console.error('\nPlease check your .env.local file')
   process.exit(1)
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2024-11-20.acacia',
-})
+// Verify connections
+async function verifyConnections() {
+  try {
+    // Test Stripe connection
+    const stripeTest = await stripeServerClient.customers.list({ limit: 1 })
+    if (!Array.isArray(stripeTest.data)) {
+      throw new Error('Stripe API response invalid')
+    }
+    console.log('✅ Stripe connection verified')
+  } catch (error) {
+    console.error('❌ Connection verification failed:')
+    if (error instanceof Error) {
+      console.error(`   ${error.message}`)
+    }
+    process.exit(1)
+  }
+}
 
 // Error handling utility
 async function safeStripeOperation<T>(
@@ -35,7 +61,11 @@ async function cleanupStripe() {
   try {
     console.log('🚀 Starting Stripe cleanup...\n')
 
+    // Verify connections first
+    await verifyConnections()
+
     // Retrieve all items to clean up
+    console.log('\n📦 Fetching Stripe resources...')
     const [
       subscriptions,
       customers,
@@ -44,35 +74,53 @@ async function cleanupStripe() {
       paymentIntents,
       invoices,
     ] = await Promise.all([
-      stripe.subscriptions.list({ limit: 200 }),
-      stripe.customers.list({ limit: 200 }),
-      stripe.paymentMethods.list({ type: 'us_bank_account', limit: 200 }),
-      stripe.setupIntents.list({ limit: 200 }),
-      stripe.paymentIntents.list({ limit: 200 }),
-      stripe.invoices.list({ limit: 200 }),
+      stripeServerClient.subscriptions.list({ limit: 200 }),
+      stripeServerClient.customers.list({ limit: 200 }),
+      stripeServerClient.paymentMethods.list({
+        type: 'us_bank_account',
+        limit: 200,
+      }),
+      stripeServerClient.setupIntents.list({ limit: 200 }),
+      stripeServerClient.paymentIntents.list({ limit: 200 }),
+      stripeServerClient.invoices.list({ limit: 200 }),
     ])
 
     // Log summary
-    console.log('🔍 Found the following items:')
+    console.log('\n🔍 Found the following items:')
     console.log(`- ${subscriptions.data.length} subscriptions`)
     console.log(`- ${customers.data.length} customers`)
     console.log(`- ${paymentMethods.data.length} payment methods`)
     console.log(`- ${setupIntents.data.length} setup intents`)
     console.log(`- ${paymentIntents.data.length} payment intents`)
-    console.log(`- ${invoices.data.length} invoices`)
+    console.log(`- ${invoices.data.length} invoices\n`)
+
+    // If no items to clean up, exit early
+    const totalItems = [
+      subscriptions.data,
+      customers.data,
+      paymentMethods.data,
+      setupIntents.data,
+      paymentIntents.data,
+      invoices.data,
+    ].reduce((sum, items) => sum + items.length, 0)
+
+    if (totalItems === 0) {
+      console.log('✨ No items to clean up!')
+      return
+    }
 
     // Confirm cleanup
     const { confirmed } = await prompts({
       type: 'confirm',
       name: 'confirmed',
       message:
-        '⚠️ Are you sure you want to delete all these items? This cannot be undone.',
+        '⚠️  Are you sure you want to delete all these items? This cannot be undone.',
       initial: false,
     })
 
     if (!confirmed) {
       console.log('🛑 Cleanup cancelled.')
-      process.exit(0)
+      return
     }
 
     // Begin cleanup operations
@@ -83,7 +131,7 @@ async function cleanupStripe() {
       if (['active', 'past_due', 'trialing'].includes(subscription.status)) {
         console.log(`🟡 Canceling subscription: ${subscription.id}`)
         await safeStripeOperation(
-          () => stripe.subscriptions.cancel(subscription.id),
+          () => stripeServerClient.subscriptions.cancel(subscription.id),
           `Failed to cancel subscription ${subscription.id}`
         )
       } else {
@@ -110,7 +158,7 @@ async function cleanupStripe() {
 
         console.log(`🟡 Canceling payment intent: ${intent.id}`)
         await safeStripeOperation(
-          () => stripe.paymentIntents.cancel(intent.id),
+          () => stripeServerClient.paymentIntents.cancel(intent.id),
           `Failed to cancel payment intent ${intent.id}`
         )
       } else {
@@ -131,7 +179,7 @@ async function cleanupStripe() {
       ) {
         console.log(`🟡 Canceling setup intent: ${intent.id}`)
         await safeStripeOperation(
-          () => stripe.setupIntents.cancel(intent.id),
+          () => stripeServerClient.setupIntents.cancel(intent.id),
           `Failed to cancel setup intent ${intent.id}`
         )
       } else {
@@ -147,7 +195,7 @@ async function cleanupStripe() {
         // FIX: Handle null status
         console.log(`🟡 Voiding invoice: ${invoice.id}`)
         await safeStripeOperation(
-          () => stripe.invoices.voidInvoice(invoice.id),
+          () => stripeServerClient.invoices.voidInvoice(invoice.id),
           `Failed to void invoice ${invoice.id}`
         )
       } else {
@@ -164,7 +212,7 @@ async function cleanupStripe() {
       if (pm.customer) {
         console.log(`🟡 Detaching payment method: ${pm.id}`)
         await safeStripeOperation(
-          () => stripe.paymentMethods.detach(pm.id),
+          () => stripeServerClient.paymentMethods.detach(pm.id),
           `Failed to detach payment method ${pm.id}`
         )
       }
@@ -174,7 +222,7 @@ async function cleanupStripe() {
     for (const customer of customers.data) {
       console.log(`🟡 Deleting customer: ${customer.id}`)
       await safeStripeOperation(
-        () => stripe.customers.del(customer.id),
+        () => stripeServerClient.customers.del(customer.id),
         `Failed to delete customer ${customer.id}`
       )
     }
@@ -186,5 +234,13 @@ async function cleanupStripe() {
   }
 }
 
-// Run cleanup
+// Run cleanup with proper error handling
 cleanupStripe()
+  .then(() => {
+    console.log('\n👋 Script completed successfully')
+    process.exit(0)
+  })
+  .catch((error) => {
+    console.error('\n❌ Script failed:', error)
+    process.exit(1)
+  })

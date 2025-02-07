@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, ChevronsUpDown, Search } from 'lucide-react'
+import { ChevronsUpDown, Search } from 'lucide-react'
 import { useFormContext } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,6 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandInput,
-  CommandItem,
 } from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,8 +18,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { STUDENTS } from '@/lib/data'
-import { Student } from '@/lib/types'
+// import { Student } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 export default function ApplicantDetails() {
@@ -29,8 +27,8 @@ export default function ApplicantDetails() {
     watch,
     setValue,
     formState: { errors },
-    trigger,
-    clearErrors,
+    // trigger,
+    // clearErrors,
   } = useFormContext()
 
   // Watch form values
@@ -40,23 +38,23 @@ export default function ApplicantDetails() {
   const payer = watch('payer')
 
   // Handle student selection
-  const handleSelectStudent = async (student: Student) => {
-    // Set student info
-    setValue('studentName', student.name, {
-      shouldValidate: true,
-      shouldDirty: true,
-    })
-    clearErrors('studentName')
+  // const handleSelectStudent = async (student: Student) => {
+  //   // Set student info
+  //   setValue('studentName', student.name, {
+  //     shouldValidate: true,
+  //     shouldDirty: true,
+  //   })
+  //   clearErrors('studentName')
 
-    // Set className instead of program
-    setValue('className', student.className)
+  //   // Set className instead of program
+  //   setValue('className', student.className)
 
-    // Set sibling info
-    setValue('siblingCount', student.siblings ?? 0)
-    setValue('monthlyRate', student.monthlyRate ?? 0)
+  //   // Set sibling info
+  //   setValue('siblingCount', student.siblings ?? 0)
+  //   setValue('monthlyRate', student.monthlyRate ?? 0)
 
-    await trigger('studentName')
-  }
+  //   await trigger('studentName')
+  // }
 
   return (
     <div className="space-y-6">
@@ -92,7 +90,7 @@ export default function ApplicantDetails() {
               </div>
               <CommandEmpty>No student found.</CommandEmpty>
               <CommandGroup className="max-h-[300px] overflow-auto p-1">
-                {STUDENTS.map((student) => (
+                {/* {STUDENTS.map((student) => (
                   <CommandItem
                     key={student.id}
                     onSelect={() => handleSelectStudent(student)}
@@ -108,7 +106,7 @@ export default function ApplicantDetails() {
                     />
                     <span>{student.name}</span>
                   </CommandItem>
-                ))}
+                ))} */}
               </CommandGroup>
             </Command>
           </PopoverContent>

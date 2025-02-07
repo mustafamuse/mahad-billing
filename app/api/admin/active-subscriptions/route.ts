@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-11-20.acacia',
-})
+import { stripeServerClient } from '@/lib/stripe'
 
 export async function GET() {
   try {
@@ -15,7 +13,7 @@ export async function GET() {
     let startingAfter: string | undefined = undefined
     while (hasMore) {
       const response: Stripe.Response<Stripe.ApiList<Stripe.Subscription>> =
-        await stripe.subscriptions.list({
+        await stripeServerClient.subscriptions.list({
           status: 'active',
           expand: ['data.customer', 'data.items', 'data.latest_invoice'],
           limit: 100, // Stripe's max limit per page
@@ -34,7 +32,7 @@ export async function GET() {
         const invoice = sub.latest_invoice as Stripe.Invoice | null
 
         // Fetch all invoices for this subscription
-        const invoices = await stripe.invoices.list({
+        const invoices = await stripeServerClient.invoices.list({
           subscription: sub.id,
           status: 'paid', // Only count successfully paid invoices
           limit: 100, // Adjust if needed

@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Student {
+  id                String       @id @default(uuid())
+  name              String       // Name of the student
+  payorId           String?      // Optional link to the Payor
+  familyId          String?      // Foreign key for FamilyGroup
+  stripeCustomerId  String?
+  monthlyRate       Int          @default(150)
+  customRate        Boolean      @default(false)
+  discountApplied   Int?
+  className         String       // Name of the class group (e.g., "irshad-1")
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  payor             Payor?       @relation("PayorToStudents", fields: [payorId], references: [id]) // Payor responsible for this student
+  familyGroup       FamilyGroup? @relation("FamilyMembers", fields: [familyId], references: [id])
+  classGroups       ClassGroup[]
+  payments          Payment[]
+}
+
+model Payor {
+  id                String    @id @default(uuid())
+  name              String    // Name of the payor (e.g., parent/guardian)
+  email             String    @unique
+  phone             String
+  stripeCustomerId  String?   // For payment integration
+  relationship      String // Example: "Parent", "Guardian", etc.
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  students          Student[] @relation("PayorToStudents") // Students linked to this payor
+  subscriptions     Subscription[]
+  paymentMethods    PaymentMethod[]
+  payments          Payment[]
+}
+
+model FamilyGroup {
+  id                String       @id @default(uuid())
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  members           Student[]    @relation("FamilyMembers") // Students in this family group
+}
+
+model ClassGroup {
+  id                String    @id @default(uuid())
+  name              String    // Class name (e.g., "irshad-1")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  students          Student[]
+}
+
+model PaymentMethod {
+  id                     String   @id @default(uuid())
+  stripePaymentMethodId  String   @unique
+  payorId                String
+  type                   String   // e.g., "credit card"
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  payor                  Payor    @relation(fields: [payorId], references: [id])
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+model Subscription {
+  id                    String             @id @default(uuid())
+  stripeSubscriptionId  String             @unique
+  payorId               String
+  amount                Float
+  currency              String
+  status                SubscriptionStatus
+  billingCycleStart     DateTime?
+  billingCycleEnd       DateTime?
+  description           String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  canceledAt            DateTime?          // Track when subscription was canceled
+
+  payor                 Payor              @relation(fields: [payorId], references: [id])
+}
+
+model Payment {
+  id                String   @id @default(uuid())
+  stripePaymentId   String   @unique
+  payorId           String
+  studentId         String?
+  amount            Float
+  currency          String
+  status            String
+  discountApplied   Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  payor             Payor    @relation(fields: [payorId], references: [id])
+  student           Student? @relation(fields: [studentId], references: [id])
+}
+
+model WebhookEvent {
+  id                String   @id @default(uuid())
+  stripeEventId     String   @unique
+  eventType         String
+  payload           Json
+  processed         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

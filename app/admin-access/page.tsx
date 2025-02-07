@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { AuthModal } from '@/components/admin/auth-modal'
+import { AuthModal } from '@/app/admin/dashboard/auth-modal'
 import { useModal } from '@/hooks/use-modal'
 
 export default function AdminAccessPage() {
