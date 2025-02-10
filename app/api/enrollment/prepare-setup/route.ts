@@ -45,20 +45,45 @@ export async function POST(req: Request) {
       let customerId: string
 
       if (existingPayor?.stripeCustomerId) {
-        // 5a. Update existing Stripe customer
-        const customer = await stripeServerClient.customers.update(
-          existingPayor.stripeCustomerId,
-          {
-            name: `${data.firstName} ${data.lastName}`,
-            email: data.email,
-            phone: data.phone,
-            metadata: {
-              relationship: data.relationship,
-              updatedAt: new Date().toISOString(),
-            },
+        try {
+          // 5a. Update existing Stripe customer
+          const customer = await stripeServerClient.customers.update(
+            existingPayor.stripeCustomerId,
+            {
+              name: `${data.firstName} ${data.lastName}`,
+              email: data.email,
+              phone: data.phone,
+              metadata: {
+                relationship: data.relationship,
+                updatedAt: new Date().toISOString(),
+              },
+            }
+          )
+          customerId = customer.id
+        } catch (err: any) {
+          if (err?.raw?.code === 'resource_missing') {
+            // Customer doesn't exist in Stripe anymore, create a new one
+            const customer = await stripeServerClient.customers.create({
+              name: `${data.firstName} ${data.lastName}`,
+              email: data.email,
+              phone: data.phone,
+              metadata: {
+                relationship: data.relationship,
+                enrollmentPending: 'true',
+                createdAt: new Date().toISOString(),
+              },
+            })
+            customerId = customer.id
+
+            // Update the payor record with the new Stripe customer ID
+            await tx.payor.update({
+              where: { email: data.email },
+              data: { stripeCustomerId: customerId },
+            })
+          } else {
+            throw err // Re-throw if it's a different error
           }
-        )
-        customerId = customer.id
+        }
       } else {
         // 5b. Create new Stripe customer
         const customer = await stripeServerClient.customers.create({

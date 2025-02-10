@@ -49,24 +49,25 @@ async function handleWebhookEvent(event: Stripe.Event) {
   console.log(`✅ Webhook event ${event.id} marked as processed.`)
 }
 
-export const runtime = 'edge' // Optional: Use edge runtime for faster webhook processing
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
-  const body = await req.text()
-  const signature = headers().get('stripe-signature')
-  const retryCount = headers().get('stripe-retry-count')
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-
-  if (!signature || !webhookSecret) {
-    console.error('❌ Missing required webhook parameters')
-    return new Response(
-      JSON.stringify({ error: 'Missing required webhook parameters' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    )
-  }
-
+  console.log('🎯 Webhook received')
   try {
+    const body = await req.text()
+    console.log('📦 Request body:', body)
+    const signature = headers().get('stripe-signature')
+    const retryCount = headers().get('stripe-retry-count')
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+
+    if (!signature || !webhookSecret) {
+      console.error('❌ Missing required webhook parameters')
+      return new Response(
+        JSON.stringify({ error: 'Missing required webhook parameters' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
     const event = Stripe.webhooks.constructEvent(body, signature, webhookSecret)
 
     if (retryCount) {
