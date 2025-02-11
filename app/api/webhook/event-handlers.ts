@@ -4,6 +4,7 @@ import type { Stripe } from 'stripe'
 
 import { PAYMENT_RULES, getGracePeriodEnd } from '@/lib/config/payment-rules'
 import { prisma } from '@/lib/db'
+import { stripeServerClient } from '@/lib/stripe'
 import { StudentStatus } from '@/lib/types/student'
 import { logEvent, handleError } from '@/lib/utils'
 
@@ -60,6 +61,13 @@ export async function handleSubscriptionCreated(
   const subscription = event.data.object as Stripe.Subscription
   const customerId = subscription.customer as string
 
+  console.log('📅 Subscription Created - Date Info:', {
+    billingCycleAnchor: new Date(subscription.billing_cycle_anchor * 1000),
+    currentPeriodStart: new Date(subscription.current_period_start * 1000),
+    currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    created: new Date(subscription.created * 1000),
+  })
+
   try {
     // Check for existing subscription record first
     const existingSubscription = await prisma.subscription.findUnique({
@@ -94,7 +102,7 @@ export async function handleSubscriptionCreated(
       throw new Error(`No payer found for Stripe customer: ${customerId}`)
     }
 
-    // Create subscription record
+    // Create subscription record with improved date handling
     const subscriptionData = {
       stripeSubscriptionId: subscription.id,
       payerId: payer.id,
@@ -102,9 +110,11 @@ export async function handleSubscriptionCreated(
       currentPeriodStart: new Date(subscription.current_period_start * 1000),
       currentPeriodEnd: new Date(subscription.current_period_end * 1000),
       lastPaymentDate: new Date(),
-      nextPaymentDate: new Date(
-        subscription.current_period_start * 1000 + 259200000
-      ),
+      // Use billing_cycle_anchor for more accurate next payment date
+      nextPaymentDate: new Date(subscription.billing_cycle_anchor * 1000),
+      paymentRetryCount: 0,
+      lastPaymentError: null,
+      gracePeriodEndsAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000), // 5 days grace period,
     }
 
     await prisma.$transaction(async (tx) => {
@@ -131,10 +141,14 @@ export async function handleSubscriptionCreated(
       timestamp: Date.now(),
     })
 
+    console.log(
+      `✅ Subscription ${subscription.id} created and updated in database`
+    )
     return true
   } catch (error) {
+    console.error('❌ Error in handleSubscriptionCreated:', error)
     handleError('Subscription Created', event.id, error)
-    throw error
+    return false
   }
 }
 
@@ -176,7 +190,7 @@ export async function handleSubscriptionUpdated(
           status: newStatus,
           currentPeriodStart,
           currentPeriodEnd,
-          nextPaymentDate: currentPeriodEnd,
+          nextPaymentDate: new Date(subscription.billing_cycle_anchor * 1000),
           gracePeriodEndsAt:
             newStatus === SubscriptionStatus.PAST_DUE
               ? new Date(Date.now() + 259200000)
@@ -239,6 +253,35 @@ export async function handleSubscriptionDeleted(
       )
     }
 
+    let latestInvoice = subscription.latest_invoice
+
+    // Fetch full Invoice if it's a string (ID)
+    if (typeof latestInvoice === 'string') {
+      try {
+        latestInvoice =
+          await stripeServerClient.invoices.retrieve(latestInvoice)
+      } catch (error) {
+        console.error('❌ Failed to fetch Invoice:', error)
+      }
+    }
+
+    // Determine lastPaymentError with proper checks
+    let lastPaymentError = 'Subscription canceled'
+
+    // Use Stripe's cancellation reason if available
+    if (subscription.cancellation_details?.reason) {
+      lastPaymentError = subscription.cancellation_details.reason
+    }
+
+    // If the latest invoice was finalized but the subscription is canceled, it likely failed due to ACH
+    if (
+      latestInvoice &&
+      typeof latestInvoice !== 'string' &&
+      latestInvoice.status_transitions?.finalized_at
+    ) {
+      lastPaymentError = 'ACH payment failed before finalization'
+    }
+
     await prisma.$transaction(async (tx) => {
       // Mark subscription as canceled
       await tx.subscription.update({
@@ -247,9 +290,7 @@ export async function handleSubscriptionDeleted(
           status: SubscriptionStatus.CANCELED,
           currentPeriodEnd: new Date(subscription.current_period_end * 1000),
           gracePeriodEndsAt: null,
-          lastPaymentError:
-            subscription.cancellation_details?.reason ||
-            'Subscription canceled',
+          lastPaymentError,
           paymentRetryCount: 0,
         },
       })
@@ -284,14 +325,23 @@ export async function handleInvoicePaymentSucceeded(
   const invoice = event.data.object as Stripe.Invoice
   const subscriptionId = invoice.subscription as string
 
+  console.log('📅 Invoice Payment Succeeded - Date Info:', {
+    paidAt: invoice.status_transitions?.paid_at
+      ? new Date(invoice.status_transitions.paid_at * 1000)
+      : null,
+    periodStart: new Date(invoice.period_start * 1000),
+    periodEnd: new Date(invoice.period_end * 1000),
+    nextPaymentAttempt: invoice.next_payment_attempt
+      ? new Date(invoice.next_payment_attempt * 1000)
+      : null,
+  })
+
   try {
     const subscription = await prisma.subscription.findUnique({
       where: { stripeSubscriptionId: subscriptionId },
       include: {
         payer: {
-          include: {
-            students: true,
-          },
+          include: { students: true },
         },
       },
     })
@@ -300,19 +350,48 @@ export async function handleInvoicePaymentSucceeded(
       throw new Error(`No subscription found: ${subscriptionId}`)
     }
 
+    // Fetch the latest subscription data from Stripe
+    const stripeSubscription =
+      await stripeServerClient.subscriptions.retrieve(subscriptionId)
+
+    let paymentIntent = invoice.payment_intent
+
+    if (typeof paymentIntent === 'string') {
+      try {
+        paymentIntent =
+          await stripeServerClient.paymentIntents.retrieve(paymentIntent)
+      } catch (error) {
+        console.error('❌ Failed to fetch PaymentIntent:', error)
+      }
+    }
+
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Update subscription
       await tx.subscription.update({
         where: { stripeSubscriptionId: subscriptionId },
         data: {
           status: SubscriptionStatus.ACTIVE,
-          lastPaymentDate: new Date(),
-          nextPaymentDate: new Date(invoice.period_end * 1000),
-          currentPeriodStart: new Date(invoice.period_start * 1000),
-          currentPeriodEnd: new Date(invoice.period_end * 1000),
+          lastPaymentDate: invoice.status_transitions?.paid_at
+            ? new Date(invoice.status_transitions.paid_at * 1000)
+            : new Date(),
+          currentPeriodStart: new Date(
+            stripeSubscription.current_period_start * 1000
+          ),
+          currentPeriodEnd: new Date(
+            stripeSubscription.current_period_end * 1000
+          ),
+          nextPaymentDate: new Date(
+            stripeSubscription.billing_cycle_anchor * 1000
+          ),
           paymentRetryCount: 0,
           lastPaymentError: null,
-          gracePeriodEndsAt: null,
+          gracePeriodEndsAt:
+            paymentIntent &&
+            typeof paymentIntent !== 'string' &&
+            paymentIntent.status === 'succeeded' &&
+            paymentIntent.payment_method_types?.[0] !== 'ach_debit' // Only clear if NOT ACH
+              ? null
+              : subscription.gracePeriodEndsAt,
         },
       })
 
@@ -336,23 +415,15 @@ export async function handleInvoicePaymentSucceeded(
       timestamp: Date.now(),
     })
 
+    console.log(
+      `✅ Subscription ${subscriptionId} payment recorded successfully`
+    )
     return true
   } catch (error) {
+    console.error('❌ Error in handleInvoicePaymentSucceeded:', error)
     handleError('Invoice Payment Succeeded', event.id, error)
-    throw error
+    return false
   }
-}
-
-export enum PaymentStatus {
-  SUCCEEDED = 'succeeded', // Payment completed successfully
-  PENDING = 'pending', // Payment is awaiting confirmation
-  FAILED = 'failed', // Payment failed (e.g., insufficient funds)
-  CANCELED = 'canceled', // Payment was canceled
-  PROCESSING = 'processing', // Payment is still being processed
-  REQUIRES_ACTION = 'requires_action', // Payment requires additional action (e.g., 3D Secure)
-  REQUIRES_PAYMENT_METHOD = 'requires_payment_method', // Failed payment, needs a new payment method
-  REFUNDED = 'refunded', // Payment was refunded fully
-  PARTIALLY_REFUNDED = 'partially_refunded', // Payment was partially refunded
 }
 
 export async function handleInvoicePaymentFailed(
@@ -377,6 +448,37 @@ export async function handleInvoicePaymentFailed(
       throw new Error(`No subscription found: ${subscriptionId}`)
     }
 
+    let paymentIntent = invoice.payment_intent
+    let charge = invoice.charge
+
+    // Fetch full PaymentIntent if it's a string
+    if (typeof paymentIntent === 'string') {
+      try {
+        paymentIntent =
+          await stripeServerClient.paymentIntents.retrieve(paymentIntent)
+      } catch (error) {
+        console.error('❌ Failed to fetch PaymentIntent:', error)
+      }
+    }
+
+    // Fetch full Charge if it's a string
+    if (typeof charge === 'string') {
+      try {
+        charge = await stripeServerClient.charges.retrieve(charge)
+      } catch (error) {
+        console.error('❌ Failed to fetch Charge:', error)
+      }
+    }
+
+    // Extract error message safely
+    const lastPaymentError =
+      (paymentIntent &&
+        typeof paymentIntent !== 'string' &&
+        paymentIntent.last_payment_error?.message) ||
+      (charge && typeof charge !== 'string' && charge.failure_message) ||
+      (charge && typeof charge !== 'string' && charge.outcome?.reason) ||
+      'ACH payment failed'
+
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Update subscription status
       await tx.subscription.update({
@@ -386,8 +488,7 @@ export async function handleInvoicePaymentFailed(
           paymentRetryCount: {
             increment: 1,
           },
-          lastPaymentError:
-            (invoice as any).last_payment_error?.message || 'Payment failed',
+          lastPaymentError,
           gracePeriodEndsAt: getGracePeriodEnd(new Date()),
         },
       })
@@ -425,7 +526,6 @@ export async function handlePaymentIntentFailed(
   event: Stripe.Event
 ): Promise<boolean> {
   const paymentIntent = event.data.object as Stripe.PaymentIntent
-  const customerId = paymentIntent.customer as string
   const amount = paymentIntent.amount // Already in cents
   const currency = paymentIntent.currency
   const errorMessage =
@@ -434,7 +534,12 @@ export async function handlePaymentIntentFailed(
 
   try {
     const payer = await prisma.payer.findFirst({
-      where: { stripeCustomerId: customerId },
+      where: {
+        stripeCustomerId:
+          typeof paymentIntent.customer === 'string'
+            ? paymentIntent.customer
+            : undefined,
+      },
       include: {
         subscriptions: {
           where: {
@@ -447,7 +552,9 @@ export async function handlePaymentIntentFailed(
     })
 
     if (!payer) {
-      throw new Error(`No payer found for Stripe customer: ${customerId}`)
+      throw new Error(
+        `No payer found for Stripe customer: ${paymentIntent.customer}`
+      )
     }
 
     // If this is related to a subscription payment
@@ -473,7 +580,10 @@ export async function handlePaymentIntentFailed(
       eventId: event.id,
       type: event.type,
       status: 'failed',
-      customerId,
+      customerId:
+        typeof paymentIntent.customer === 'string'
+          ? paymentIntent.customer
+          : undefined,
       metadata: {
         paymentIntentId: paymentIntent.id,
         errorMessage,

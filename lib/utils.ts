@@ -1,3 +1,4 @@
+import { SubscriptionStatus } from '@prisma/client'
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
@@ -97,4 +98,23 @@ export function handleError(action: string, eventId: string, error: unknown) {
     stack: error instanceof Error ? error.stack : undefined,
   })
   throw error // Re-throw to ensure Stripe retries the webhook if needed
+}
+
+export function getStatusColor(status: SubscriptionStatus) {
+  switch (status) {
+    case SubscriptionStatus.ACTIVE:
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+    case SubscriptionStatus.PAST_DUE:
+      return 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
+    case SubscriptionStatus.CANCELED:
+      return 'bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-400'
+    case SubscriptionStatus.INCOMPLETE:
+      return 'bg-orange-50 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400'
+    case SubscriptionStatus.TRIALING:
+      return 'bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+    case SubscriptionStatus.INACTIVE:
+      return 'bg-gray-50 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'
+    default:
+      return 'bg-gray-50 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'
+  }
 }

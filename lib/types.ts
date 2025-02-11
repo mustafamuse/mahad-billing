@@ -109,18 +109,18 @@ export interface DashboardStats {
 export interface ProcessedStudent {
   id: string
   name: string
-  subscriptionId: string | null
-  status: StudentStatus
+  subscriptionId: string
+  status: string
   currentPeriodEnd: number | null
   guardian: {
     id: string
-    name: string | null
-    email: string | null
+    name: string
+    email: string
   }
   monthlyAmount: number
   discount: {
     amount: number
-    type: string
+    type: 'family' | 'custom' | 'none'
     percentage: number
   }
   familyId?: string
@@ -305,4 +305,66 @@ export interface PayorDetails {
   email?: string
   phone?: string
   relationship?: Relationship
+}
+
+export interface SubscriptionQueryParams {
+  page: number
+  limit: number
+  status?: string
+  search?: string
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+  discountType?: string
+  paymentStatus?: string
+}
+
+export interface SubscriptionResponse {
+  students: ProcessedStudent[]
+  totalCount: number
+  activeCount: number
+  pastDueCount: number
+  canceledCount: number
+  totalStudents: number
+  unenrolledCount: number
+  filteredCount: number
+
+  // Active student metrics
+  activeWithFamilyDiscount: number
+  activeFamilyDiscountTotal: number
+  averageActiveFamilyDiscount: number
+  activeNoDiscountCount: number
+  activeNoDiscountRevenue: number
+  activeRevenue: number
+  averageActiveAmount: number
+
+  // Not enrolled metrics
+  notEnrolledWithFamilyDiscount: number
+  notEnrolledFamilyDiscountTotal: number
+  notEnrolledNoDiscountCount: number
+  notEnrolledNoDiscountRevenue: number
+  notEnrolledPotentialRevenue: number
+  notEnrolledTotalDiscounts: number
+
+  // Past due metrics
+  pastDueRevenue: number
+  averagePastDueAmount: number
+
+  // Canceled metrics
+  canceledRevenue: number
+  lastMonthCanceled: number
+
+  // Family discount metrics
+  familyDiscountCount: number
+  noDiscountCount: number
+
+  // Pagination
+  hasMore: boolean
+  nextCursor: string | null
+
+  metrics: {
+    totalRevenue: number
+    totalDiscounts: number
+    averageRevenue: number
+    collectionRate: number
+  }
 }
