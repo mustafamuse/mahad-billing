@@ -37,6 +37,7 @@ model Payer {
   email             String    @unique
   phone             String
   stripeCustomerId  String    @unique
+  relationship      String?   // Nullable relationship field
   isActive          Boolean   @default(true)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

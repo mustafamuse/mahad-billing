@@ -90,7 +90,19 @@ export async function POST(req: Request) {
             email: payerDetails.email,
             phone: payerDetails.phone,
             stripeCustomerId: setupIntent.customer as string,
+            relationship: payerDetails.relationship,
             isActive: true,
+          },
+        })
+      } else {
+        // Update existing payer with new details
+        await tx.payer.update({
+          where: { id: payer.id },
+          data: {
+            name: `${payerDetails.firstName} ${payerDetails.lastName}`,
+            email: payerDetails.email,
+            phone: payerDetails.phone,
+            relationship: payerDetails.relationship,
           },
         })
       }
