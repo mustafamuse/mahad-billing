@@ -10,116 +10,92 @@ datasource db {
 
 model Student {
   id                String       @id @default(uuid())
-  name              String       // Name of the student
-  payorId           String?      // Optional link to the Payor
-  familyId          String?      // Foreign key for FamilyGroup
-  stripeCustomerId  String?
-  monthlyRate       Int          @default(150)
-  customRate        Boolean      @default(false)
+  name              String
+  email             String?
+  className         String
+  monthlyRate       Int         @default(150)
+  customRate        Boolean     @default(false)
   discountApplied   Int?
-  className         String       // Name of the class group (e.g., "irshad-1")
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  status            String      @default("registered") // registered, enrolled, on_leave, withdrawn
+  payerId           String?     // Optional link to current payer
+  familyId          String?     // For sibling grouping
+  lastPaymentDate   DateTime?   // Track last successful payment
+  nextPaymentDue    DateTime?   // Track next payment due
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  payor             Payor?       @relation("PayorToStudents", fields: [payorId], references: [id]) // Payor responsible for this student
-  familyGroup       FamilyGroup? @relation("FamilyMembers", fields: [familyId], references: [id])
+  payer             Payer?      @relation(fields: [payerId], references: [id])
+  familyGroup       FamilyGroup? @relation(fields: [familyId], references: [id])
   classGroups       ClassGroup[]
-  payments          Payment[]
+
+  @@index([status])
 }
 
-model Payor {
+model Payer {
   id                String    @id @default(uuid())
-  name              String    // Name of the payor (e.g., parent/guardian)
+  name              String
   email             String    @unique
   phone             String
-  stripeCustomerId  String?   // For payment integration
-  relationship      String // Example: "Parent", "Guardian", etc.
+  stripeCustomerId  String    @unique
+  isActive          Boolean   @default(true)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  students          Student[] @relation("PayorToStudents") // Students linked to this payor
+  students          Student[]
   subscriptions     Subscription[]
-  paymentMethods    PaymentMethod[]
-  payments          Payment[]
 }
 
 model FamilyGroup {
-  id                String       @id @default(uuid())
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-
-  members           Student[]    @relation("FamilyMembers") // Students in this family group
-}
-
-model ClassGroup {
   id                String    @id @default(uuid())
-  name              String    // Class name (e.g., "irshad-1")
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
   students          Student[]
 }
 
-model PaymentMethod {
-  id                     String   @id @default(uuid())
-  stripePaymentMethodId  String   @unique
-  payorId                String
-  type                   String   // e.g., "credit card"
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+model ClassGroup {
+  id                String    @id @default(uuid())
+  name              String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  payor                  Payor    @relation(fields: [payorId], references: [id])
+  students          Student[]
 }
 
 enum SubscriptionStatus {
-  INCOMPLETE
-  INCOMPLETE_EXPIRED
-  TRIALING
   ACTIVE
   PAST_DUE
   CANCELED
-  UNPAID
+  INACTIVE
+  INCOMPLETE      // Add back for backward compatibility
+  TRIALING       // Add back for future use
 }
 
 model Subscription {
-  id                    String             @id @default(uuid())
-  stripeSubscriptionId  String             @unique
-  payorId               String
-  amount                Float
-  currency              String
-  status                SubscriptionStatus
-  billingCycleStart     DateTime?
-  billingCycleEnd       DateTime?
-  description           String?
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  canceledAt            DateTime?          // Track when subscription was canceled
+  id                  String             @id @default(uuid())
+  stripeSubscriptionId String            @unique
+  payerId             String            
+  status              SubscriptionStatus @default(ACTIVE)
+  
+  // Payment tracking
+  lastPaymentDate     DateTime?
+  nextPaymentDate     DateTime?
+  currentPeriodStart  DateTime?
+  currentPeriodEnd    DateTime?
+  
+  // Error handling
+  paymentRetryCount   Int               @default(0)
+  lastPaymentError    String?
+  gracePeriodEndsAt   DateTime?
 
-  payor                 Payor              @relation(fields: [payorId], references: [id])
-}
+  // Audit
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
-model Payment {
-  id                String   @id @default(uuid())
-  stripePaymentId   String   @unique
-  payorId           String
-  studentId         String?
-  amount            Float
-  currency          String
-  status            String
-  discountApplied   Int?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  payor             Payor    @relation(fields: [payorId], references: [id])
-  student           Student? @relation(fields: [studentId], references: [id])
-}
-
-model WebhookEvent {
-  id                String   @id @default(uuid())
-  stripeEventId     String   @unique
-  eventType         String
-  payload           Json
-  processed         Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  // Relations
+  payer               Payer             @relation(fields: [payerId], references: [id])
+  
+  @@index([status])
+  @@index([payerId])
+  @@index([stripeSubscriptionId])
 }

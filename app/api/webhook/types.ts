@@ -49,4 +49,5 @@ export interface LogEventData {
   }
   studentKey?: string
   total?: string
+  retryCount?: number
 }

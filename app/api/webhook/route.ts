@@ -1,91 +1,52 @@
 import { headers } from 'next/headers'
+import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
-import { prisma } from '@/lib/db'
-
 import { eventHandlers } from './event-handlers'
 
-// 1. Insert or update the WebhookEvent
-async function handleWebhookEvent(event: Stripe.Event) {
-  let webhookEvent = await prisma.webhookEvent.findUnique({
-    where: { stripeEventId: event.id },
-  })
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
-  if (!webhookEvent) {
-    webhookEvent = await prisma.webhookEvent.create({
-      data: {
-        stripeEventId: event.id,
-        eventType: event.type,
-        payload: event.data.object as any,
-        processed: false,
-      },
-    })
-  } else {
-    if (webhookEvent.processed) {
-      console.log(`🚫 Already processed event ${event.id}, skipping.`)
-      return
-    }
+export async function POST(req: Request) {
+  const body = await req.text()
+  const signature = headers().get('stripe-signature')
+
+  // Early return if no signature
+  if (!signature || !process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error('❌ Missing webhook signature or secret')
+    return NextResponse.json(
+      { message: 'Missing signature or webhook secret' },
+      { status: 400 }
+    )
   }
 
-  const handler = eventHandlers[event.type]
-  if (handler) {
-    try {
+  try {
+    const event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET
+    )
+
+    console.log(`✅ Webhook verified: ${event.id}`)
+
+    // Process the event
+    const handler = eventHandlers[event.type as keyof typeof eventHandlers]
+    if (handler) {
       await handler(event)
-    } catch (err) {
-      // We'll leave `processed = false` so you can reprocess if needed
-      console.error('❌ Error in handler:', err)
-      throw err
+      console.log(`✅ Successfully processed ${event.type}`)
+    } else {
+      console.log(`⚠️ Unhandled event type: ${event.type}`)
     }
-  } else {
-    console.log(`Unhandled event type: ${event.type}`)
+
+    return NextResponse.json({ message: 'Processed' }, { status: 200 })
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+    console.error(`❌ Webhook Error: ${errorMessage}`)
+    return NextResponse.json(
+      { message: `Webhook Error: ${errorMessage}` },
+      { status: 400 }
+    )
   }
-
-  await prisma.webhookEvent.update({
-    where: { id: webhookEvent.id },
-    data: { processed: true },
-  })
-
-  console.log(`✅ Webhook event ${event.id} marked as processed.`)
 }
 
 export const dynamic = 'force-dynamic'
-
-export async function POST(req: Request) {
-  console.log('🎯 Webhook received')
-  try {
-    const body = await req.text()
-    console.log('📦 Request body:', body)
-    const signature = headers().get('stripe-signature')
-    const retryCount = headers().get('stripe-retry-count')
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-
-    if (!signature || !webhookSecret) {
-      console.error('❌ Missing required webhook parameters')
-      return new Response(
-        JSON.stringify({ error: 'Missing required webhook parameters' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const event = Stripe.webhooks.constructEvent(body, signature, webhookSecret)
-
-    if (retryCount) {
-      console.log(`🔄 Webhook retry #${retryCount} for event ${event.id}`)
-    }
-
-    await handleWebhookEvent(event)
-
-    return new Response('OK', { status: 200 })
-  } catch (err) {
-    console.error('❌ Webhook error:', err)
-
-    // If it's a signature error, respond with 400 so Stripe doesn't keep retrying forever
-    if (err instanceof Stripe.errors.StripeSignatureVerificationError) {
-      return new Response('Invalid signature', { status: 400 })
-    }
-
-    // For other errors, you can respond 400 or 500. Stripe will retry if it's a 400+ code
-    return new Response('Webhook error', { status: 400 })
-  }
-}

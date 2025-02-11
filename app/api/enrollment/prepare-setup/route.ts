@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { Prisma, SubscriptionStatus } from '@prisma/client'
 import { z } from 'zod'
 
 import { prisma } from '@/lib/db'
@@ -9,8 +10,28 @@ import {
   ValidationError,
   handleStripeError,
 } from '@/lib/errors'
+import { validateStudentForEnrollment } from '@/lib/queries/subscriptions'
 import { prepareSetupSchema } from '@/lib/schemas/enrollment'
 import { stripeServerClient } from '@/lib/stripe'
+
+const ACTIVE_SUBSCRIPTION_STATUSES = [
+  SubscriptionStatus.ACTIVE,
+  SubscriptionStatus.PAST_DUE,
+]
+
+// Type for Payer with included subscriptions and students
+type PayerWithDetails = Prisma.PayerGetPayload<{
+  include: {
+    subscriptions: {
+      where: {
+        status: {
+          in: SubscriptionStatus[]
+        }
+      }
+    }
+    students: true
+  }
+}>
 
 export async function POST(req: Request) {
   try {
@@ -20,46 +41,99 @@ export async function POST(req: Request) {
 
     // 2. Start a database transaction
     const result = await prisma.$transaction(async (tx) => {
-      // 3. Verify students are still available
-      const students = await tx.student.count({
-        where: {
-          id: { in: data.studentIds },
-          payorId: null, // Only count unenrolled students
-        },
-      })
+      // 3. Validate each student individually
+      const validationPromises = data.studentIds.map((studentId) =>
+        validateStudentForEnrollment(studentId)
+      )
+      const validationResults = await Promise.allSettled(validationPromises)
 
-      if (students !== data.studentIds.length) {
-        throw new Error('One or more students are no longer available')
+      // Check for validation failures
+      const failures = validationResults.filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected'
+      )
+
+      if (failures.length > 0) {
+        throw new AppError(
+          `Student validation failed: ${failures[0].reason.message}`,
+          'STUDENT_VALIDATION_FAILED',
+          400
+        )
       }
 
-      // 4. Check for existing payor
-      const existingPayor = await tx.payor.findFirst({
+      // 4. Get students with family info for metadata
+      const students = await tx.student.findMany({
+        where: { id: { in: data.studentIds } },
+        include: { familyGroup: true },
+      })
+
+      // Calculate total monthly rate
+      const totalMonthlyRate = students.reduce(
+        (sum, student) => sum + student.monthlyRate,
+        0
+      )
+
+      // Group students by family
+      const familyGroups = students.reduce(
+        (acc, student) => {
+          if (student.familyId) {
+            if (!acc[student.familyId]) {
+              acc[student.familyId] = []
+            }
+            acc[student.familyId].push(student)
+          }
+          return acc
+        },
+        {} as Record<string, typeof students>
+      )
+
+      // 5. Check for existing payer
+      const existingPayer = (await tx.payer.findFirst({
         where: {
           OR: [{ email: data.email }, { phone: data.phone }],
         },
-        select: {
-          stripeCustomerId: true,
+        include: {
+          subscriptions: {
+            where: {
+              status: {
+                in: ACTIVE_SUBSCRIPTION_STATUSES,
+              },
+            },
+          },
+          students: true,
         },
-      })
+      })) as PayerWithDetails | null
 
       let customerId: string
 
-      if (existingPayor?.stripeCustomerId) {
+      if (existingPayer?.stripeCustomerId) {
         try {
-          // 5a. Update existing Stripe customer
+          // 6a. Update existing Stripe customer
           const customer = await stripeServerClient.customers.update(
-            existingPayor.stripeCustomerId,
+            existingPayer.stripeCustomerId,
             {
               name: `${data.firstName} ${data.lastName}`,
               email: data.email,
               phone: data.phone,
               metadata: {
                 relationship: data.relationship,
+                totalStudents: existingPayer.students.length.toString(),
+                hasActiveSubscription:
+                  existingPayer.subscriptions.length > 0 ? 'true' : 'false',
                 updatedAt: new Date().toISOString(),
               },
             }
           )
           customerId = customer.id
+
+          // Check if payer has any active subscriptions
+          if (existingPayer.subscriptions.length > 0) {
+            throw new AppError(
+              'Payer already has active subscriptions',
+              'ACTIVE_SUBSCRIPTION_EXISTS',
+              409
+            )
+          }
         } catch (err: any) {
           if (err?.raw?.code === 'resource_missing') {
             // Customer doesn't exist in Stripe anymore, create a new one
@@ -70,13 +144,15 @@ export async function POST(req: Request) {
               metadata: {
                 relationship: data.relationship,
                 enrollmentPending: 'true',
+                totalStudents: data.studentIds.length.toString(),
+                totalMonthlyRate: totalMonthlyRate.toString(),
                 createdAt: new Date().toISOString(),
               },
             })
             customerId = customer.id
 
-            // Update the payor record with the new Stripe customer ID
-            await tx.payor.update({
+            // Update the payer record with the new Stripe customer ID
+            await tx.payer.update({
               where: { email: data.email },
               data: { stripeCustomerId: customerId },
             })
@@ -85,7 +161,7 @@ export async function POST(req: Request) {
           }
         }
       } else {
-        // 5b. Create new Stripe customer
+        // 6b. Create new Stripe customer
         const customer = await stripeServerClient.customers.create({
           name: `${data.firstName} ${data.lastName}`,
           email: data.email,
@@ -93,19 +169,21 @@ export async function POST(req: Request) {
           metadata: {
             relationship: data.relationship,
             enrollmentPending: 'true',
+            totalStudents: data.studentIds.length.toString(),
+            totalMonthlyRate: totalMonthlyRate.toString(),
             createdAt: new Date().toISOString(),
           },
         })
         customerId = customer.id
       }
 
-      // 6. Create SetupIntent
+      // 7. Create SetupIntent with enhanced metadata
       const setupIntent = await stripeServerClient.setupIntents.create({
         customer: customerId,
         payment_method_types: ['us_bank_account'],
         usage: 'off_session',
         metadata: {
-          payorDetails: JSON.stringify({
+          payerDetails: JSON.stringify({
             firstName: data.firstName,
             lastName: data.lastName,
             email: data.email,
@@ -113,7 +191,20 @@ export async function POST(req: Request) {
             relationship: data.relationship,
           }),
           studentIds: JSON.stringify(data.studentIds),
+          studentDetails: JSON.stringify(
+            students.map((s) => ({
+              id: s.id,
+              name: s.name,
+              rate: s.monthlyRate,
+              familyId: s.familyId,
+            }))
+          ),
+          totalStudents: data.studentIds.length.toString(),
+          totalMonthlyRate: totalMonthlyRate.toString(),
+          familyGroupCount: Object.keys(familyGroups).length.toString(),
           createdAt: new Date().toISOString(),
+          environment: process.env.NODE_ENV,
+          version: '2.0.0',
         },
         payment_method_options: {
           us_bank_account: {
@@ -129,19 +220,25 @@ export async function POST(req: Request) {
       return {
         setupIntentId: setupIntent.id,
         clientSecret: setupIntent.client_secret,
-        isExistingCustomer: !!existingPayor,
+        customerId,
+        isExistingCustomer: !!existingPayer,
         status: setupIntent.status,
         paymentMethodTypes: setupIntent.payment_method_types,
+        totalMonthlyRate,
+        familyGroupCount: Object.keys(familyGroups).length,
       }
     })
 
-    // 7. Return success response
+    // 8. Return success response with enhanced data
     return NextResponse.json({
       success: true,
       ...result,
+      message: result.isExistingCustomer
+        ? 'Existing customer setup prepared'
+        : 'New customer setup prepared',
+      timestamp: new Date().toISOString(),
     })
   } catch (error) {
-    // 8. Error handling
     console.error('Setup preparation failed:', error)
 
     if (error instanceof z.ZodError) {
@@ -156,22 +253,15 @@ export async function POST(req: Request) {
       )
     }
 
-    if (error instanceof Error) {
-      if (error.message === 'One or more students are no longer available') {
-        const conflictError = new AppError(
-          error.message,
-          'STUDENTS_UNAVAILABLE',
-          409
-        )
-        return NextResponse.json(
-          {
-            success: false,
-            code: conflictError.code,
-            message: conflictError.message,
-          },
-          { status: conflictError.statusCode }
-        )
-      }
+    if (error instanceof AppError) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: error.code,
+          message: error.message,
+        },
+        { status: error.statusCode }
+      )
     }
 
     if (error instanceof stripeServerClient.errors.StripeError) {
@@ -192,6 +282,7 @@ export async function POST(req: Request) {
         success: false,
         code: genericError.code,
         message: genericError.message,
+        timestamp: new Date().toISOString(),
       },
       { status: genericError.statusCode }
     )

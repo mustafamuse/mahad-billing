@@ -1,5 +1,7 @@
 import type Stripe from 'stripe'
 
+import { StudentStatus } from './types/student'
+
 export interface Student {
   id: string
   name: string
@@ -10,7 +12,7 @@ export interface Student {
   familyName: string
   siblings: number
   totalFamilyMembers: number
-  status: 'enrolled' | 'registered' | 'available'
+  status: StudentStatus
   payorId: string | null
 }
 
@@ -103,8 +105,6 @@ export interface DashboardStats {
   }
   financialHealth: FinancialHealth
 }
-
-export type StudentStatus = Stripe.Subscription.Status | 'not_enrolled'
 
 export interface ProcessedStudent {
   id: string

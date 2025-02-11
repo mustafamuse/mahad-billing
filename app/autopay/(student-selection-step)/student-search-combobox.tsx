@@ -5,7 +5,8 @@ import {
   ChevronsUpDown,
   Search,
   CheckCircle2,
-  ClipboardList,
+  Clock,
+  XCircle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { Student } from '@/lib/types'
+import { StudentStatus } from '@/lib/types/student'
 import { cn } from '@/lib/utils'
 
 interface StudentSearchComboboxProps {
@@ -97,7 +99,7 @@ export function StudentSearchCombobox({
             ) : (
               students.map((student) => {
                 const isSelected = isStudentSelected(student.id)
-                const isDisabled = student.status !== 'available'
+                const isDisabled = student.status !== StudentStatus.REGISTERED
 
                 return (
                   <CommandItem
@@ -120,29 +122,37 @@ export function StudentSearchCombobox({
                         <span className="truncate">{student.name}</span>
                       </div>
 
-                      {student.status !== 'available' && (
+                      {student.status !== StudentStatus.REGISTERED && (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div className="flex shrink-0 items-center gap-1 text-muted-foreground">
-                                {student.status === 'enrolled' ? (
+                                {student.status === StudentStatus.ENROLLED ? (
                                   <>
                                     <CheckCircle2 className="h-4 w-4" />
                                     <span className="text-xs">Enrolled</span>
                                   </>
+                                ) : student.status ===
+                                  StudentStatus.ON_LEAVE ? (
+                                  <>
+                                    <Clock className="h-4 w-4" />
+                                    <span className="text-xs">On Leave</span>
+                                  </>
                                 ) : (
                                   <>
-                                    <ClipboardList className="h-4 w-4" />
-                                    <span className="text-xs">Registered</span>
+                                    <XCircle className="h-4 w-4" />
+                                    <span className="text-xs">Withdrawn</span>
                                   </>
                                 )}
                               </div>
                             </TooltipTrigger>
                             <TooltipContent>
                               <p>
-                                {student.status === 'enrolled'
+                                {student.status === StudentStatus.ENROLLED
                                   ? 'This student is already enrolled in the program'
-                                  : 'This student is registered but not yet enrolled'}
+                                  : student.status === StudentStatus.ON_LEAVE
+                                    ? 'This student is currently on leave'
+                                    : 'This student has withdrawn from the program'}
                               </p>
                             </TooltipContent>
                           </Tooltip>

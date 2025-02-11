@@ -4,6 +4,7 @@ import { Prisma, SubscriptionStatus } from '@prisma/client'
 
 import { prisma } from '@/lib/db'
 import { Student } from '@/lib/types'
+import { StudentStatus } from '@/lib/types/student'
 
 export async function getStudents(): Promise<Student[]> {
   console.log('🔍 Calling getStudents()...')
@@ -12,7 +13,7 @@ export async function getStudents(): Promise<Student[]> {
       include: {
         familyGroup: true,
         classGroups: true,
-        payor: {
+        payer: {
           include: {
             subscriptions: {
               where: {
@@ -33,7 +34,7 @@ export async function getStudents(): Promise<Student[]> {
           include: {
             familyGroup: true
             classGroups: true
-            payor: {
+            payer: {
               include: {
                 subscriptions: true
               }
@@ -41,16 +42,13 @@ export async function getStudents(): Promise<Student[]> {
           }
         }>
       ) => {
-        // Calculate status based on payor and subscription data
-        let status: 'available' | 'registered' | 'enrolled' = 'available'
+        // Calculate status based on payer and subscription data
+        let status: StudentStatus = StudentStatus.REGISTERED
 
-        if (student.payor) {
-          // If student has a payor
-          status = 'registered'
-
-          // If payor has any active subscriptions
-          if (student.payor.subscriptions.length > 0) {
-            status = 'enrolled'
+        if (student.payer) {
+          // If student has a payer and active subscriptions
+          if (student.payer.subscriptions.length > 0) {
+            status = StudentStatus.ENROLLED
           }
         }
 
@@ -65,7 +63,7 @@ export async function getStudents(): Promise<Student[]> {
           siblings: 0,
           totalFamilyMembers: 0,
           status,
-          payorId: student.payorId,
+          payorId: student.payerId,
         }
       }
     )
