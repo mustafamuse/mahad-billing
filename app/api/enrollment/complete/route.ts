@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 
-import { SubscriptionStatus } from '@prisma/client'
 import { z } from 'zod'
 
 import { prisma } from '@/lib/db'
 import { AppError, ValidationError, handleStripeError } from '@/lib/errors'
+import { validateStudentForEnrollment } from '@/lib/queries/subscriptions'
 import { stripeServerClient } from '@/lib/stripe'
 
 const completeEnrollmentSchema = z.object({
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     }
 
     // 3. Parse metadata
-    const payorDetails = JSON.parse(setupIntent.metadata?.payorDetails || '{}')
+    const payerDetails = JSON.parse(setupIntent.metadata?.payerDetails || '{}')
     const storedStudentIds = JSON.parse(
       setupIntent.metadata?.studentIds || '[]'
     )
@@ -52,50 +52,67 @@ export async function POST(req: Request) {
 
     // 5. Start database transaction
     const result = await prisma.$transaction(async (tx) => {
-      // 6. Verify students are still available
-      const students = await tx.student.findMany({
-        where: {
-          id: { in: studentIds },
-          payorId: null, // Only get unenrolled students
-        },
-        select: {
-          id: true,
-          name: true,
-          monthlyRate: true,
-          customRate: true,
-          familyId: true,
-        },
-      })
+      // 6. Validate each student
+      const validationPromises = studentIds.map((studentId) =>
+        validateStudentForEnrollment(studentId)
+      )
+      const validationResults = await Promise.allSettled(validationPromises)
 
-      if (students.length !== studentIds.length) {
+      // Check for validation failures
+      const failures = validationResults.filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected'
+      )
+
+      if (failures.length > 0) {
         throw new AppError(
-          'One or more students are no longer available',
-          'STUDENTS_UNAVAILABLE',
-          409
+          `Student validation failed: ${failures[0].reason.message}`,
+          'STUDENT_VALIDATION_FAILED',
+          400
         )
       }
 
-      // 7. Create or update payor record
-      let payor = await tx.payor.findFirst({
+      // Get validated student details
+      const validatedStudents = validationResults.map(
+        (result) => (result as PromiseFulfilledResult<any>).value.student
+      )
+
+      // 7. Create or update payer record
+      let payer = await tx.payer.findFirst({
         where: { stripeCustomerId: setupIntent.customer as string },
       })
 
-      if (!payor) {
-        payor = await tx.payor.create({
+      if (!payer) {
+        payer = await tx.payer.create({
           data: {
-            name: `${payorDetails.firstName} ${payorDetails.lastName}`,
-            email: payorDetails.email,
-            phone: payorDetails.phone,
-            relationship: payorDetails.relationship,
+            name: `${payerDetails.firstName} ${payerDetails.lastName}`,
+            email: payerDetails.email,
+            phone: payerDetails.phone,
             stripeCustomerId: setupIntent.customer as string,
+            relationship: payerDetails.relationship,
+            isActive: true,
+          },
+        })
+      } else {
+        // Update existing payer with new details
+        await tx.payer.update({
+          where: { id: payer.id },
+          data: {
+            name: `${payerDetails.firstName} ${payerDetails.lastName}`,
+            email: payerDetails.email,
+            phone: payerDetails.phone,
+            relationship: payerDetails.relationship,
           },
         })
       }
 
-      // 8. Update students with new payor
+      // 8. Update students with new payer
       await tx.student.updateMany({
         where: { id: { in: studentIds } },
-        data: { payorId: payor.id },
+        data: {
+          payerId: payer.id,
+          updatedAt: new Date(),
+        },
       })
 
       // 9. Set payment method as default for customer
@@ -121,10 +138,10 @@ export async function POST(req: Request) {
         }
       )
 
-      // Create subscription
-      const subscription = await stripeServerClient.subscriptions.create({
+      // Create subscription in Stripe (but let webhook handle the database record)
+      await stripeServerClient.subscriptions.create({
         customer: setupIntent.customer as string,
-        items: students.map((student) => ({
+        items: validatedStudents.map((student) => ({
           price_data: {
             currency: 'usd',
             product: process.env.STRIPE_PRODUCT_ID!,
@@ -137,8 +154,10 @@ export async function POST(req: Request) {
           metadata: {
             studentId: student.id,
             studentName: student.name,
-            isCustomRate: student.customRate ? 'true' : 'false', // Convert boolean to string
+            isCustomRate: student.hasCustomRate ? 'true' : 'false',
             monthlyRate: student.monthlyRate,
+            discountApplied: student.discountApplied || 0,
+            familyId: student.familyId || '',
           },
         })),
         payment_settings: {
@@ -146,26 +165,39 @@ export async function POST(req: Request) {
           save_default_payment_method: 'on_subscription',
         },
         metadata: {
-          payorId: payor.id,
+          payerId: payer.id,
           studentIds: JSON.stringify(studentIds),
-          totalMonthlyRate: students.reduce((sum, s) => sum + s.monthlyRate, 0),
+          totalMonthlyRate: validatedStudents.reduce(
+            (sum, s) => sum + s.monthlyRate,
+            0
+          ),
           enrollmentDate: new Date().toISOString(),
+          totalStudents: validatedStudents.length.toString(),
+          hasFamilyDiscount: validatedStudents.some((s) => s.familyId)
+            ? 'true'
+            : 'false',
+          setupIntentId: setupIntentId, // Add this for tracking
+          environment: process.env.NODE_ENV,
+          version: '2.0.0',
         },
         collection_method: 'charge_automatically',
       })
 
-      // Return success result with subscription details
+      // Return success result with enhanced details
       return {
-        payorId: payor.id,
-        studentCount: students.length,
-        totalMonthlyRate: students.reduce((sum, s) => sum + s.monthlyRate, 0),
-        subscriptionId: subscription.id,
-        status: SubscriptionStatus.INCOMPLETE,
-        students: students.map((s) => ({
+        payerId: payer.id,
+        studentCount: validatedStudents.length,
+        totalMonthlyRate: validatedStudents.reduce(
+          (sum, s) => sum + s.monthlyRate,
+          0
+        ),
+        students: validatedStudents.map((s) => ({
           id: s.id,
           name: s.name,
           rate: s.monthlyRate,
-          isCustomRate: s.customRate,
+          isCustomRate: s.hasCustomRate,
+          discountApplied: s.discountApplied,
+          familyId: s.familyId,
         })),
       }
     })

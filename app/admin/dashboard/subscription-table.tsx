@@ -1,26 +1,36 @@
 'use client'
 
 import { useState } from 'react'
-import React from 'react'
 
+import { SubscriptionStatus } from '@prisma/client'
 import { useQuery } from '@tanstack/react-query'
+import { format } from 'date-fns'
 import {
-  Search,
-  ChevronLeft,
+  ChevronDown,
   ChevronRight,
+  Mail,
+  Phone,
+  Users,
+  Wallet,
   ArrowUpDown,
-  Info,
-  CheckCircle2,
-  XCircle,
   AlertCircle,
-  Clock,
-  Ban,
-  Tags,
+  CheckCircle2,
+  MoreHorizontal,
+  SearchX,
+  FileX,
+  RefreshCcw,
 } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Card } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -29,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -37,856 +48,543 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  TooltipProvider,
-} from '@/components/ui/tooltip'
-import { ProcessedStudent } from '@/lib/types'
-import { formatCurrency } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
-const statusConfig = {
-  all: {
-    label: 'All Statuses',
-    color: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-    icon: AlertCircle,
-  },
-  active: {
-    label: 'Active',
-    color:
-      'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-500/30',
-    icon: CheckCircle2,
-  },
-  not_enrolled: {
-    label: 'Not Enrolled',
-    color: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-    icon: XCircle,
-  },
-  past_due: {
-    label: 'Past Due',
-    color:
-      'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-500/30',
-    icon: Clock,
-  },
-  unpaid: {
-    label: 'Unpaid',
-    color:
-      'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/30',
-    icon: AlertCircle,
-  },
-  canceled: {
-    label: 'Canceled',
-    color:
-      'bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-500/30',
-    icon: Ban,
-  },
-  balance_pending: {
-    label: 'Balance Pending',
-    color: 'bg-yellow-100 text-yellow-700',
-    icon: Clock,
-  },
-} as const
+import { PayorDetailsSlider } from './components/payor-details-slider'
 
-const discountConfig = {
-  all: {
-    label: 'All Discounts',
-    icon: Tags,
-  },
-  'Family Discount': {
-    label: 'Fam',
-    icon: Tags,
-  },
-  None: {
-    label: 'None',
-    icon: XCircle,
-  },
-  Other: {
-    label: 'Other',
-    icon: Tags,
-  },
-} as const
-
-const rowsPerPageOptions = [10, 20, 30, 40, 50] as const
-
-type SortOrder = 'asc' | 'desc'
-
-interface SortConfig {
-  field: string
-  order: SortOrder
+interface Student {
+  id: string
+  name: string
+  payerName: string
+  monthlyAmount: number
+  nextPaymentDate: string
+  status: SubscriptionStatus
+  payerEmail?: string
+  payerPhone?: string
 }
 
-interface TableHeaderProps {
-  table: {
-    data: ProcessedStudent[]
-    getFilteredSelectedRowModel: () => { rows: { length: number }[] }
-    getFilteredRowModel: () => { rows: { length: number }[] }
+interface SubscriptionResponse {
+  students: Student[]
+}
+
+type SortField = keyof Pick<
+  Student,
+  'name' | 'payerName' | 'monthlyAmount' | 'nextPaymentDate'
+>
+
+async function fetchSubscriptions(): Promise<SubscriptionResponse> {
+  const response = await fetch('/api/admin/subscriptions')
+  if (!response.ok) {
+    throw new Error('Failed to fetch subscriptions')
   }
+  return response.json()
 }
 
-interface TableRowProps {
-  row: ProcessedStudent
+function StatsCard({
+  title,
+  value,
+  icon: Icon,
+  description,
+  trend,
+}: {
+  title: string
+  value: string
+  icon: React.ElementType
+  description?: string
+  trend?: {
+    value: number
+    isPositive: boolean
+  }
+}) {
+  return (
+    <Card className="relative overflow-hidden">
+      <div className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <div className="flex items-baseline space-x-2">
+              <h2 className="text-2xl font-bold tracking-tight">{value}</h2>
+              {trend && (
+                <span
+                  className={cn(
+                    'text-sm font-medium',
+                    trend.isPositive ? 'text-green-600' : 'text-red-600'
+                  )}
+                >
+                  {trend.isPositive ? '+' : '-'}
+                  {trend.value}%
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="rounded-full bg-primary/10 p-3">
+            <Icon className="h-5 w-5 text-primary" />
+          </div>
+        </div>
+        {description && (
+          <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+        )}
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-primary/5 via-primary/50 to-primary/5" />
+    </Card>
+  )
+}
+
+function EmptyState({
+  title,
+  description,
+  icon: Icon,
+  action,
+}: {
+  title: string
+  description: string
+  icon: React.ElementType
+  action?: {
+    label: string
+    onClick: () => void
+  }
+}) {
+  return (
+    <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center animate-in fade-in-50">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        <Icon className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <h3 className="mt-4 text-lg font-semibold">{title}</h3>
+      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
+      {action && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          onClick={action.onClick}
+        >
+          {action.label}
+        </Button>
+      )}
+    </div>
+  )
 }
 
 export function SubscriptionTable() {
-  const [page, setPage] = useState(1)
-  const [rowsPerPage, setRowsPerPage] =
-    useState<(typeof rowsPerPageOptions)[number]>(10)
-  const [cursor, setCursor] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<keyof typeof statusConfig>('active')
-  const [discountType, setDiscountType] =
-    useState<keyof typeof discountConfig>('all')
-  const [sortConfig, setSortConfig] = useState<SortConfig>({
-    field: 'name',
-    order: 'asc',
-  })
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [selectedPayor, setSelectedPayor] = useState<{
+    name: string
+    email: string
+    phone: string
+    students: Student[]
+  } | null>(null)
+  const [sortConfig, setSortConfig] = useState<{
+    field: SortField | ''
+    direction: 'asc' | 'desc'
+  }>({ field: '', direction: 'asc' })
 
-  const handleSort = (field: string) => {
-    setSortConfig((prev) => ({
+  const { data, isLoading, error } = useQuery<SubscriptionResponse>({
+    queryKey: ['subscriptions'],
+    queryFn: fetchSubscriptions,
+  })
+
+  const students = data?.students || []
+
+  const filteredAndSortedData = students
+    .filter((student) => {
+      const matchesSearch =
+        searchQuery === '' ||
+        student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.payerName.toLowerCase().includes(searchQuery.toLowerCase())
+
+      const matchesStatus =
+        statusFilter === 'all' ||
+        student.status === (statusFilter.toUpperCase() as SubscriptionStatus)
+
+      return matchesSearch && matchesStatus
+    })
+    .sort((a, b) => {
+      if (!sortConfig.field) return 0
+      const direction = sortConfig.direction === 'asc' ? 1 : -1
+      const aValue = a[sortConfig.field]
+      const bValue = b[sortConfig.field]
+      return aValue > bValue ? direction : -direction
+    })
+
+  const toggleRow = (studentId: string) => {
+    const newExpandedRows = new Set(expandedRows)
+    if (expandedRows.has(studentId)) {
+      newExpandedRows.delete(studentId)
+    } else {
+      newExpandedRows.add(studentId)
+    }
+    setExpandedRows(newExpandedRows)
+  }
+
+  const handleSort = (field: SortField) => {
+    setSortConfig((current) => ({
       field,
-      order: prev.field === field && prev.order === 'asc' ? 'desc' : 'asc',
+      direction:
+        current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
     }))
   }
 
-  const { data, isLoading } = useQuery({
-    queryKey: [
-      'subscriptions',
-      page,
-      rowsPerPage,
-      cursor,
-      search,
-      status,
-      discountType,
-      sortConfig,
-    ],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: rowsPerPage.toString(),
-      })
+  const getStatusColor = (status: SubscriptionStatus) => {
+    switch (status) {
+      case SubscriptionStatus.ACTIVE:
+        return 'bg-green-100 text-green-800'
+      case SubscriptionStatus.PAST_DUE:
+        return 'bg-yellow-100 text-yellow-800'
+      case SubscriptionStatus.CANCELED:
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
 
-      if (cursor) params.set('cursor', cursor)
-      if (search) params.set('search', search)
-      if (status !== 'all') params.set('status', status)
-      if (discountType !== 'all') params.set('discountType', discountType)
-      if (sortConfig.field) {
-        params.set('sortBy', sortConfig.field)
-        params.set('sortOrder', sortConfig.order)
-      }
+  // Calculate summary statistics
+  const totalStudents = data?.students.length || 0
+  const activeStudents =
+    data?.students.filter((s) => s.status === SubscriptionStatus.ACTIVE)
+      .length || 0
+  const totalRevenue =
+    data?.students.reduce((sum, s) => sum + s.monthlyAmount, 0) || 0
+  const averageRevenue = totalStudents ? totalRevenue / totalStudents : 0
 
-      const response = await fetch(`/api/admin/dashboard?${params}`)
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.message || 'Failed to fetch students')
-      }
-      const responseData = await response.json()
+  const getEmptyStateProps = () => {
+    // If there's a search query but no results
+    if (searchQuery && filteredAndSortedData.length === 0) {
       return {
-        ...responseData,
-        totalCount:
-          responseData.totalCount || responseData.students?.length || 0,
+        icon: SearchX,
+        title: 'No matching students found',
+        description: `No students found matching "${searchQuery}". Try adjusting your search.`,
+        action: {
+          label: 'Clear search',
+          onClick: () => setSearchQuery(''),
+        },
       }
-    },
-  })
-
-  const handleSelectAll = (checked: boolean | string) => {
-    if (checked === true && data?.students) {
-      setSelectedRows(new Set(data.students.map((s: ProcessedStudent) => s.id)))
-    } else {
-      setSelectedRows(new Set())
     }
-  }
 
-  const handleSelectRow = (studentId: string, checked: boolean | string) => {
-    const newSelected = new Set(selectedRows)
-    if (checked === true) {
-      newSelected.add(studentId)
-    } else {
-      newSelected.delete(studentId)
-    }
-    setSelectedRows(newSelected)
-  }
-
-  const columns = [
-    {
-      id: 'select',
-      header: ({ table: _table }: TableHeaderProps) => (
-        <Checkbox
-          checked={
-            data?.students?.length > 0 &&
-            selectedRows.size === data.students.length
-          }
-          onCheckedChange={handleSelectAll}
-          aria-label="Select all"
-          className="translate-y-[2px]"
-        />
-      ),
-      cell: ({ row }: TableRowProps) => (
-        <Checkbox
-          checked={selectedRows.has(row.id)}
-          onCheckedChange={(checked) => handleSelectRow(row.id, checked)}
-          aria-label="Select row"
-          className="translate-y-[2px]"
-        />
-      ),
-    },
-    { key: 'name', label: 'Student Name' },
-    { key: 'payer', label: 'Payer' },
-    { key: 'status', label: 'Status' },
-    { key: 'nextPayment', label: 'Next Payment' },
-    { key: 'monthlyAmount', label: 'Monthly Amount' },
-    { key: 'discount', label: 'Discount' },
-  ]
-
-  const renderFilterSummary = () => {
-    if (!data) return null
-
-    if (status === 'active') {
-      if (discountType === 'Family Discount') {
-        return (
-          <div className="rounded-lg bg-muted p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-medium">
-                  {data.activeWithFamilyDiscount} enrolled with family discount
-                </span>
-                <span className="ml-2 text-muted-foreground">
-                  (
-                  {(
-                    (data.activeWithFamilyDiscount / data.activeCount) *
-                    100
-                  ).toFixed(1)}
-                  % of enrolled)
-                </span>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-muted-foreground">
-                  Total Monthly Discounts
-                </div>
-                <div className="text-lg font-medium text-blue-600 dark:text-blue-400">
-                  {formatCurrency(data.activeFamilyDiscountTotal)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Avg. {formatCurrency(data.averageActiveFamilyDiscount)} per
-                  student
-                </div>
-              </div>
-            </div>
-          </div>
-        )
+    // If there's a status filter but no results
+    if (statusFilter !== 'all' && filteredAndSortedData.length === 0) {
+      return {
+        icon: FileX,
+        title: `No ${statusFilter} subscriptions`,
+        description: `There are no subscriptions with ${statusFilter} status.`,
+        action: {
+          label: 'Show all subscriptions',
+          onClick: () => setStatusFilter('all'),
+        },
       }
+    }
 
-      if (discountType === 'None') {
-        return (
-          <div className="rounded-lg bg-muted p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-medium">
-                  {data.activeNoDiscountCount} enrolled at full rate
-                </span>
-                <span className="ml-2 text-muted-foreground">
-                  (
-                  {(
-                    (data.activeNoDiscountCount / data.activeCount) *
-                    100
-                  ).toFixed(1)}
-                  % of enrolled)
-                </span>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-muted-foreground">
-                  Full Rate Revenue
-                </div>
-                <div className="text-lg font-medium">
-                  {formatCurrency(data.activeNoDiscountRevenue)}
-                </div>
-              </div>
-            </div>
-          </div>
-        )
+    // If there's no data at all
+    if (students.length === 0) {
+      return {
+        icon: Users,
+        title: 'No subscriptions found',
+        description: 'No subscriptions have been created yet.',
+        action: {
+          label: 'Refresh data',
+          onClick: () => window.location.reload(),
+        },
       }
-
-      return (
-        <div className="rounded-lg bg-muted p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-medium">{data.activeCount} enrolled</span>
-              <span className="ml-2 text-muted-foreground">
-                ({((data.activeCount / data.totalStudents) * 100).toFixed(1)}%
-                of total)
-              </span>
-            </div>
-            <div className="text-right">
-              <div className="text-lg font-medium text-green-600 dark:text-green-400">
-                {formatCurrency(data.activeRevenue)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Avg. {formatCurrency(data.averageActiveAmount)} per
-                student/month
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    if (status === 'not_enrolled') {
-      if (discountType === 'Family Discount') {
-        return (
-          <div className="rounded-lg bg-muted p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-medium">
-                  {data.notEnrolledWithFamilyDiscount} pending with family
-                  discount
-                </span>
-                <span className="ml-2 text-muted-foreground">
-                  (
-                  {(
-                    (data.notEnrolledWithFamilyDiscount /
-                      data.unenrolledCount) *
-                    100
-                  ).toFixed(1)}
-                  % of pending)
-                </span>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-muted-foreground">
-                  Total Monthly Discounts
-                </div>
-                <div className="text-lg font-medium text-blue-600 dark:text-blue-400">
-                  {formatCurrency(data.notEnrolledFamilyDiscountTotal)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Avg.{' '}
-                  {formatCurrency(
-                    data.notEnrolledFamilyDiscountTotal /
-                      data.notEnrolledWithFamilyDiscount
-                  )}{' '}
-                  discount per student
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      if (discountType === 'None') {
-        return (
-          <div className="rounded-lg bg-muted p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-medium">
-                  {data.notEnrolledNoDiscountCount} pending at full rate
-                </span>
-                <span className="ml-2 text-muted-foreground">
-                  (
-                  {(
-                    (data.notEnrolledNoDiscountCount / data.unenrolledCount) *
-                    100
-                  ).toFixed(1)}
-                  % of pending)
-                </span>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-muted-foreground">
-                  Full Rate Revenue
-                </div>
-                <div className="text-lg font-medium">
-                  {formatCurrency(data.notEnrolledNoDiscountRevenue)}
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      return (
-        <div className="rounded-lg bg-muted p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-medium">
-                {data.unenrolledCount} pending enrollment
-              </span>
-              <span className="ml-2 text-muted-foreground">
-                (
-                {((data.unenrolledCount / data.totalStudents) * 100).toFixed(1)}
-                % of total)
-              </span>
-              <div className="mt-1 text-sm text-muted-foreground">
-                Avg.{' '}
-                {formatCurrency(
-                  data.notEnrolledPotentialRevenue / data.unenrolledCount
-                )}{' '}
-                per student/month
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-muted-foreground">
-                Monthly Revenue Opportunity
-              </div>
-              <div className="text-lg font-medium text-green-600 dark:text-green-400">
-                {formatCurrency(data.notEnrolledPotentialRevenue)}
-                <span className="ml-2 text-xs text-muted-foreground">
-                  ({formatCurrency(data.notEnrolledTotalDiscounts)} in
-                  discounts)
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    if (status === 'past_due' || status === 'unpaid') {
-      return (
-        <div className="rounded-lg bg-muted p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-medium text-red-600 dark:text-red-400">
-                {data.pastDueCount} students with outstanding payments
-              </span>
-              <span className="ml-2 text-muted-foreground">
-                requiring immediate attention
-              </span>
-            </div>
-            <div className="text-right">
-              <div className="text-lg font-medium text-red-600 dark:text-red-400">
-                {formatCurrency(data.pastDueRevenue)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Avg. {formatCurrency(data.averagePastDueAmount)} per student
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    if (status === 'canceled') {
-      return (
-        <div className="rounded-lg bg-muted p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-medium text-gray-600 dark:text-gray-400">
-                {data.canceledCount} canceled enrollments
-              </span>
-              <span className="ml-2 text-muted-foreground">
-                ({data.lastMonthCanceled} in the last month)
-              </span>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-muted-foreground">
-                Lost Monthly Revenue
-              </div>
-              <div className="text-lg font-medium text-gray-600 dark:text-gray-400">
-                {formatCurrency(data.canceledRevenue)}
-              </div>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    if (search) {
-      const activeInSearch =
-        data?.students.filter((s: { status: string }) => s.status === 'active')
-          .length || 0
-      const notEnrolledInSearch =
-        data?.students.filter(
-          (s: { status: string }) => s.status === 'not_enrolled'
-        ).length || 0
-      const pastDueInSearch =
-        data?.students.filter(
-          (s: { status: string }) =>
-            s.status === 'past_due' || s.status === 'unpaid'
-        ).length || 0
-
-      return (
-        <div className="rounded-lg bg-muted p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="font-medium">
-                Found {data.filteredCount} matches
-              </span>
-              <span className="ml-2 text-muted-foreground">
-                for &quot;{search}&quot;
-              </span>
-            </div>
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">
-                Status Breakdown
-              </div>
-              <div className="space-x-2 text-sm">
-                <span className="text-green-600 dark:text-green-400">
-                  {activeInSearch} active
-                </span>
-                <span>·</span>
-                <span className="text-gray-600 dark:text-gray-400">
-                  {notEnrolledInSearch} not enrolled
-                </span>
-                {pastDueInSearch > 0 && (
-                  <>
-                    <span>·</span>
-                    <span className="text-red-600 dark:text-red-400">
-                      {pastDueInSearch} past due
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )
     }
 
     return null
   }
 
-  // Get the correct total count based on the current filter
-  const getTotalFilteredCount = () => {
-    if (!data) return 0
-
-    if (status === 'active') return data.activeCount
-    if (status === 'not_enrolled') return data.unenrolledCount
-    if (status === 'past_due') return data.pastDueCount
-    if (status === 'canceled') return data.canceledCount
-    if (discountType === 'Family Discount') return data.familyDiscountCount
-    if (discountType === 'None') return data.noDiscountCount
-    if (search) return data.filteredCount
-
-    return data.totalCount
+  if (error) {
+    return (
+      <Card className="p-6">
+        <div className="text-red-500">Error loading subscriptions</div>
+      </Card>
+    )
   }
 
-  // Update pagination calculation
-  const totalEntries = getTotalFilteredCount()
-  const currentPageCount = data?.students?.length || 0
-  const startEntry = currentPageCount > 0 ? (page - 1) * rowsPerPage + 1 : 0
-  const endEntry = startEntry + currentPageCount - 1
-
-  return (
-    <div>
-      <div className="space-y-4 p-4">
-        {/* Search and Filters */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-[350px] flex-grow">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search by student name..."
-              value={search}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setSearch(e.target.value)
-              }
-              className="h-10 w-full pl-10 pr-4"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Select
-              value={status}
-              onValueChange={(value: keyof typeof statusConfig) =>
-                setStatus(value)
-              }
-            >
-              <SelectTrigger className="h-10 w-[180px]">
-                <SelectValue>{statusConfig[status].label}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {(
-                  Object.entries(statusConfig) as [
-                    keyof typeof statusConfig,
-                    (typeof statusConfig)[keyof typeof statusConfig],
-                  ][]
-                ).map(([key, config]) => (
-                  <SelectItem key={key} value={key}>
-                    <div className="flex min-w-[100px] items-center gap-2">
-                      <config.icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{config.label}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={discountType}
-              onValueChange={(value: keyof typeof discountConfig) =>
-                setDiscountType(value)
-              }
-            >
-              <SelectTrigger className="h-10 w-[180px]">
-                <SelectValue>{discountConfig[discountType].label}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {(
-                  Object.entries(discountConfig) as [
-                    keyof typeof discountConfig,
-                    (typeof discountConfig)[keyof typeof discountConfig],
-                  ][]
-                ).map(([key, config]) => (
-                  <SelectItem key={key} value={key}>
-                    <div className="flex min-w-[100px] items-center gap-2">
-                      <config.icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{config.label}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        {/* Stats Grid Loading State */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="relative overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-8 w-32" />
+                  </div>
+                  <Skeleton className="h-12 w-12 rounded-full" />
+                </div>
+                <Skeleton className="mt-2 h-4 w-48" />
+              </div>
+            </Card>
+          ))}
         </div>
 
-        {/* Summary Stats */}
-        {renderFilterSummary()}
+        {/* Table Loading State */}
+        <Card>
+          <div className="p-6">
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <Skeleton className="h-10 w-[300px]" />
+                <Skeleton className="h-10 w-[180px]" />
+              </div>
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatsCard
+          title="Total Students"
+          value={totalStudents.toString()}
+          icon={Users}
+          description="Total enrolled students"
+          trend={{ value: 12, isPositive: true }}
+        />
+        <StatsCard
+          title="Active Subscriptions"
+          value={activeStudents.toString()}
+          icon={CheckCircle2}
+          description="Currently active subscriptions"
+          trend={{ value: 4, isPositive: true }}
+        />
+        <StatsCard
+          title="Monthly Revenue"
+          value={`$${totalRevenue.toLocaleString()}`}
+          icon={Wallet}
+          description="Total monthly recurring revenue"
+          trend={{ value: 8, isPositive: true }}
+        />
+        <StatsCard
+          title="Average Revenue"
+          value={`$${averageRevenue.toFixed(2)}`}
+          icon={AlertCircle}
+          description="Average revenue per student"
+          trend={{ value: 2, isPositive: false }}
+        />
       </div>
 
-      {/* Table */}
-      <div className="rounded-md border">
-        <div className="relative w-full overflow-auto">
+      <Card>
+        <div className="flex items-center justify-between p-6">
+          <div className="flex flex-1 items-center space-x-2">
+            <Input
+              placeholder="Filter students..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-[300px]"
+            />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="PAST_DUE">Past Due</SelectItem>
+                <SelectItem value="CANCELED">Canceled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {(searchQuery || statusFilter !== 'all') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery('')
+                setStatusFilter('all')
+              }}
+              className="ml-2"
+            >
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Reset filters
+            </Button>
+          )}
+        </div>
+
+        {filteredAndSortedData.length > 0 ? (
           <Table>
             <TableHeader>
               <TableRow>
-                {columns.map((column, i) => (
-                  <TableHead
-                    key={i}
-                    className={cn(
-                      'h-10 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0',
-                      column.key && 'cursor-pointer hover:text-foreground'
-                    )}
-                    onClick={() => column.key && handleSort(column.key)}
+                <TableHead className="w-[40px]"></TableHead>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('name')}
+                    className="flex items-center gap-1 hover:bg-transparent"
                   >
-                    {column.header ? (
-                      column.header({
-                        table: {
-                          data: data?.students || [],
-                          getFilteredSelectedRowModel: () => ({ rows: [] }),
-                          getFilteredRowModel: () => ({ rows: [] }),
-                        },
-                      })
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        {column.label}
-                        {column.key && (
-                          <ArrowUpDown
-                            className={cn(
-                              'h-4 w-4 transition-transform',
-                              sortConfig.field === column.key &&
-                                sortConfig.order === 'desc' &&
-                                'rotate-180'
-                            )}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </TableHead>
-                ))}
+                    Student
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('payerName')}
+                    className="flex items-center gap-1 hover:bg-transparent"
+                  >
+                    Payer
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('monthlyAmount')}
+                    className="flex items-center gap-1 hover:bg-transparent"
+                  >
+                    Amount
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleSort('nextPaymentDate')}
+                    className="flex items-center gap-1 hover:bg-transparent"
+                  >
+                    Next Payment
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center"
-                  >
-                    Loading...
-                  </TableCell>
-                </TableRow>
-              ) : data?.students?.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center"
-                  >
-                    No students found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data?.students?.map((student: ProcessedStudent) => (
-                  <TableRow key={student.id} className="hover:bg-muted/50">
-                    <TableCell className="h-12 px-4 [&:has([role=checkbox])]:pr-0">
-                      <Checkbox
-                        checked={selectedRows.has(student.id)}
-                        onCheckedChange={(checked) =>
-                          handleSelectRow(student.id, checked)
-                        }
-                        aria-label="Select row"
-                        className="translate-y-[2px]"
-                      />
-                    </TableCell>
-                    <TableCell className="px-4 py-2 font-medium">
-                      {student.name}
-                    </TableCell>
-                    <TableCell className="px-4 py-2">
-                      <div className="flex items-center gap-2">
-                        <span>
-                          {student.guardian.name || 'No payer assigned'}
-                        </span>
-                        {student.guardian.email && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <Info className="h-4 w-4 text-muted-foreground" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{student.guardian.email}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+              {filteredAndSortedData.map((student) => (
+                <>
+                  <TableRow key={student.id} className="group">
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleRow(student.id)}
+                        className="h-8 w-8 p-0 hover:bg-transparent"
+                      >
+                        {expandedRows.has(student.id) ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
                         )}
-                      </div>
+                      </Button>
                     </TableCell>
-                    <TableCell className="px-4 py-2">
-                      <Badge
-                        variant="secondary"
+                    <TableCell>
+                      <div className="font-medium">{student.name}</div>
+                    </TableCell>
+                    <TableCell>{student.payerName}</TableCell>
+                    <TableCell>
+                      <div
                         className={cn(
-                          'inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5',
-                          statusConfig[
-                            student.status as keyof typeof statusConfig
-                          ].color
+                          'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                          getStatusColor(student.status)
                         )}
                       >
-                        {React.createElement(
-                          statusConfig[
-                            student.status as keyof typeof statusConfig
-                          ].icon,
-                          {
-                            className: 'h-3.5 w-3.5 shrink-0',
-                          }
-                        )}
-                        <span className="truncate">
-                          {
-                            statusConfig[
-                              student.status as keyof typeof statusConfig
-                            ].label
-                          }
-                        </span>
-                      </Badge>
+                        {student.status.toLowerCase()}
+                      </div>
                     </TableCell>
-                    <TableCell className="px-4 py-2">
-                      {student.currentPeriodEnd
-                        ? new Date(
-                            student.currentPeriodEnd * 1000
-                          ).toLocaleDateString()
+                    <TableCell>
+                      <div className="font-medium">
+                        ${student.monthlyAmount}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {student.nextPaymentDate
+                        ? format(
+                            new Date(student.nextPaymentDate),
+                            'MMM d, yyyy'
+                          )
                         : 'N/A'}
                     </TableCell>
-                    <TableCell className="px-4 py-2">
-                      {formatCurrency(student.monthlyAmount)}
-                    </TableCell>
-                    <TableCell className="px-4 py-2">
-                      {student.discount.amount > 0 ? (
-                        <Badge
-                          variant="secondary"
-                          className="inline-flex items-center gap-1.5 whitespace-nowrap bg-blue-50 px-2 py-0.5 text-blue-700 hover:bg-blue-100 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
-                        >
-                          <Tags className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">
-                            {discountConfig[
-                              student.discount
-                                .type as keyof typeof discountConfig
-                            ]?.label || student.discount.type}{' '}
-                            ({formatCurrency(student.discount.amount)})
-                          </span>
-                        </Badge>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                          <XCircle className="h-3.5 w-3.5 shrink-0" />
-                          <span>None</span>
-                        </span>
-                      )}
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className="h-8 w-8 p-0 hover:bg-transparent"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-[160px]">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              // Group all students for this payor
+                              const payorStudents =
+                                filteredAndSortedData.filter(
+                                  (s) => s.payerName === student.payerName
+                                )
+                              setSelectedPayor({
+                                name: student.payerName,
+                                email: student.payerEmail || '',
+                                phone: student.payerPhone || '',
+                                students: payorStudents,
+                              })
+                            }}
+                          >
+                            View details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem>Update payment</DropdownMenuItem>
+                          <DropdownMenuItem className="text-red-600">
+                            Cancel subscription
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                  {expandedRows.has(student.id) && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="p-0">
+                        <div className="bg-muted/50 p-4">
+                          <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm text-muted-foreground">
+                                {student.payerEmail || 'No email provided'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm text-muted-foreground">
+                                {student.payerPhone || 'No phone provided'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
+              ))}
             </TableBody>
           </Table>
-        </div>
-      </div>
-
-      {/* Footer with Pagination and Toolbar */}
-      <div className="border-t">
-        <div className="flex flex-col items-center justify-between gap-4 p-4 sm:flex-row">
-          {/* Selection and Rows Per Page */}
-          <div className="flex flex-col items-center gap-4 text-sm text-muted-foreground sm:flex-row">
-            <div>
-              {selectedRows.size} of {totalEntries} row(s) selected
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Rows per page</span>
-              <Select
-                value={rowsPerPage.toString()}
-                onValueChange={(value) => {
-                  const newValue = parseInt(
-                    value
-                  ) as (typeof rowsPerPageOptions)[number]
-                  setRowsPerPage(newValue)
-                  setPage(1)
-                  setCursor(null)
-                }}
-              >
-                <SelectTrigger className="h-8 w-[70px]">
-                  <SelectValue>{rowsPerPage}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {rowsPerPageOptions.map((option) => (
-                    <SelectItem key={option} value={option.toString()}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        ) : (
+          <div className="px-6 pb-6">
+            <EmptyState {...getEmptyStateProps()!} />
           </div>
-
-          {/* Pagination Controls */}
-          <div className="flex items-center justify-end gap-4">
-            <div className="text-sm text-muted-foreground">
-              {currentPageCount > 0 ? (
-                <>
-                  Showing {startEntry} to {endEntry} of {totalEntries} entries
-                </>
-              ) : (
-                <>No entries to show</>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (page > 1) {
-                    setPage(page - 1)
-                    setCursor(null)
-                  }
-                }}
-                disabled={page === 1 || isLoading}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="sr-only">Previous</span>
-              </Button>
-              <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-                Page {page}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (data?.hasMore) {
-                    setPage(page + 1)
-                    setCursor(data.nextCursor)
-                  }
-                }}
-                disabled={!data?.hasMore || isLoading}
-              >
-                <ChevronRight className="h-4 w-4" />
-                <span className="sr-only">Next</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+        )}
+      </Card>
+      {selectedPayor && (
+        <PayorDetailsSlider
+          isOpen={true}
+          onClose={() => setSelectedPayor(null)}
+          payorName={selectedPayor.name}
+          payorEmail={selectedPayor.email}
+          payorPhone={selectedPayor.phone}
+          students={selectedPayor.students}
+        />
+      )}
     </div>
   )
 }

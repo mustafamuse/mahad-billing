@@ -16,7 +16,7 @@ export function StudentCard({ student, onRemove }: StudentCardProps) {
       <div className="flex flex-col">
         <span className="text-sm font-medium sm:text-base">{student.name}</span>
         <div className="flex flex-wrap items-center gap-2">
-          {student.familyId ? (
+          {student.siblingId ? (
             <>
               <span className="text-xs text-muted-foreground line-through sm:text-sm">
                 ${BASE_RATE}

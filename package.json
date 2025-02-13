@@ -17,11 +17,14 @@
     "dev:tunnel": "concurrently \"npm run dev\" \"npm run tunnel\"",
     "webhook": "stripe listen --forward-to localhost:3000/api/webhook --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_succeeded,invoice.payment_failed,payment_intent.payment_failed",
     "dev:webhook": "concurrently \"npm run dev\" \"npm run webhook\"",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "export-data": "curl -o seed-data.json http://localhost:3000/api/admin/export",
+    "seed-from-export": "tsx scripts/seed-from-export.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
-    "@prisma/client": "^6.2.1",
+    "@internationalized/date": "^3.7.0",
+    "@prisma/client": "^6.3.1",
     "@radix-ui/react-accordion": "^1.2.1",
     "@radix-ui/react-alert-dialog": "^1.1.2",
     "@radix-ui/react-aspect-ratio": "^1.1.0",
@@ -60,6 +63,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
+    "csv-parser": "^3.2.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.5.1",
     "framer-motion": "^11.17.0",
@@ -67,8 +71,10 @@
     "lucide-react": "^0.323.0",
     "next": "^14.2.18",
     "next-themes": "^0.2.1",
+    "nuqs": "^2.3.2",
     "raw-body": "^3.0.0",
     "react": "^18",
+    "react-aria-components": "^1.6.0",
     "react-day-picker": "^9.4.0",
     "react-dom": "^18",
     "react-hook-form": "^7.54.2",
@@ -80,8 +86,10 @@
     "stripe": "^17.4.0",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
+    "use-debounce": "^10.0.4",
     "vaul": "^1.1.1",
-    "zod": "^3.24.1"
+    "zod": "^3.24.2",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@types/dotenv": "^6.1.1",
@@ -106,7 +114,7 @@
     "postcss": "^8",
     "prettier": "^3.4.1",
     "prettier-plugin-tailwindcss": "^0.6.9",
-    "prisma": "^6.2.1",
+    "prisma": "^6.3.1",
     "prompts": "^2.4.2",
     "table": "^6.9.0",
     "tailwindcss": "^3.3.0",

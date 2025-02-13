@@ -1,18 +1,32 @@
 'use server'
 
-import { Prisma, SubscriptionStatus } from '@prisma/client'
+import { SubscriptionStatus } from '@prisma/client'
 
 import { prisma } from '@/lib/db'
 import { Student } from '@/lib/types'
 
+import { StudentStatus } from '../types/student'
+
 export async function getStudents(): Promise<Student[]> {
   console.log('🔍 Calling getStudents()...')
   try {
+    const hasNoActiveSubscription = {
+      payer: {
+        subscriptions: {
+          none: {
+            status: SubscriptionStatus.ACTIVE,
+          },
+        },
+      },
+    }
+
     const students = await prisma.student.findMany({
+      where: {
+        OR: [{ payer: null }, hasNoActiveSubscription],
+      },
       include: {
-        familyGroup: true,
-        classGroups: true,
-        payor: {
+        batch: true,
+        payer: {
           include: {
             subscriptions: {
               where: {
@@ -27,48 +41,17 @@ export async function getStudents(): Promise<Student[]> {
       },
     })
 
-    return students.map(
-      (
-        student: Prisma.StudentGetPayload<{
-          include: {
-            familyGroup: true
-            classGroups: true
-            payor: {
-              include: {
-                subscriptions: true
-              }
-            }
-          }
-        }>
-      ) => {
-        // Calculate status based on payor and subscription data
-        let status: 'available' | 'registered' | 'enrolled' = 'available'
-
-        if (student.payor) {
-          // If student has a payor
-          status = 'registered'
-
-          // If payor has any active subscriptions
-          if (student.payor.subscriptions.length > 0) {
-            status = 'enrolled'
-          }
-        }
-
-        return {
-          id: student.id,
-          name: student.name,
-          className: student.className,
-          monthlyRate: student.monthlyRate,
-          hasCustomRate: student.customRate,
-          familyId: student.familyId,
-          familyName: student.name.split(' ').slice(-1)[0],
-          siblings: 0,
-          totalFamilyMembers: 0,
-          status,
-          payorId: student.payorId,
-        }
-      }
-    )
+    return students.map((student) => ({
+      id: student.id,
+      name: student.name,
+      batch: student.batchId,
+      monthlyRate: student.monthlyRate,
+      hasCustomRate: student.customRate,
+      subscription: (student.payer?.subscriptions?.length ?? 0) > 0,
+      status: student.status as StudentStatus,
+      payorId: student.payerId,
+      siblingId: student.siblingGroupId,
+    }))
   } catch (error) {
     console.error('Error fetching students:', error)
     throw error
