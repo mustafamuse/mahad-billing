@@ -6,7 +6,6 @@ import { prisma } from '@/lib/db'
 import { AppError, ValidationError, handleStripeError } from '@/lib/errors'
 import { validateStudentForEnrollment } from '@/lib/queries/subscriptions'
 import { stripeServerClient } from '@/lib/stripe'
-import { StudentStatus } from '@/lib/types/student'
 
 const completeEnrollmentSchema = z.object({
   setupIntentId: z.string(),
@@ -107,12 +106,11 @@ export async function POST(req: Request) {
         })
       }
 
-      // 8. Update students with new payer and status
+      // 8. Update students with new payer
       await tx.student.updateMany({
         where: { id: { in: studentIds } },
         data: {
           payerId: payer.id,
-          status: StudentStatus.ENROLLED,
           updatedAt: new Date(),
         },
       })

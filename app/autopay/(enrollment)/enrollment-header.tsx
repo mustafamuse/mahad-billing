@@ -10,9 +10,9 @@ export function EnrollmentHeader() {
             Set Up Your Tuition Payment
           </h1>
           <p className="max-w-[42rem] text-muted-foreground">
-            Welcome to Roots of Knowledge's tuition payment portal. Use this app
-            to set up your monthly tuition payments easily and securely. Simply
-            select your name and complete the payment process.
+            Welcome to the Mahad's tuition payment portal. Use this app to set
+            up your monthly tuition payments easily and securely. Simply select
+            your name and complete the payment process.
           </p>
         </div>
       </div>

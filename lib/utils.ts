@@ -38,7 +38,7 @@ export function calculateStudentPrice(student: Student): {
   return {
     price: student.monthlyRate,
     discount: BASE_RATE - student.monthlyRate,
-    isSiblingDiscount: !!student.familyId,
+    isSiblingDiscount: !!student.siblingId,
   }
 }
 

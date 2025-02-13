@@ -5,15 +5,12 @@ import { StudentStatus } from './types/student'
 export interface Student {
   id: string
   name: string
-  className: string
   monthlyRate: number
   hasCustomRate: boolean
-  familyId: string | null
-  familyName: string
-  siblings: number
-  totalFamilyMembers: number
+  subscription: boolean
   status: StudentStatus
   payorId: string | null
+  siblingId: string | null
 }
 
 export interface StudentData {

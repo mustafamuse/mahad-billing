@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       // 4. Get students with family info for metadata
       const students = await tx.student.findMany({
         where: { id: { in: data.studentIds } },
-        include: { familyGroup: true },
+        include: { siblingGroup: true },
       })
 
       // Calculate total monthly rate
@@ -74,13 +74,13 @@ export async function POST(req: Request) {
       )
 
       // Group students by family
-      const familyGroups = students.reduce(
+      const siblingGroups = students.reduce(
         (acc, student) => {
-          if (student.familyId) {
-            if (!acc[student.familyId]) {
-              acc[student.familyId] = []
+          if (student.siblingGroup) {
+            if (!acc[student.siblingGroup.id]) {
+              acc[student.siblingGroup.id] = []
             }
-            acc[student.familyId].push(student)
+            acc[student.siblingGroup.id].push(student)
           }
           return acc
         },
@@ -196,15 +196,14 @@ export async function POST(req: Request) {
               id: s.id,
               name: s.name,
               rate: s.monthlyRate,
-              familyId: s.familyId,
+              familyId: s.siblingGroup?.id,
             }))
           ),
           totalStudents: data.studentIds.length.toString(),
           totalMonthlyRate: totalMonthlyRate.toString(),
-          familyGroupCount: Object.keys(familyGroups).length.toString(),
+          siblingGroupCount: Object.keys(siblingGroups).length.toString(),
           createdAt: new Date().toISOString(),
           environment: process.env.NODE_ENV,
-          version: '2.0.0',
         },
         payment_method_options: {
           us_bank_account: {
@@ -225,7 +224,7 @@ export async function POST(req: Request) {
         status: setupIntent.status,
         paymentMethodTypes: setupIntent.payment_method_types,
         totalMonthlyRate,
-        familyGroupCount: Object.keys(familyGroups).length,
+        siblingGroupCount: Object.keys(siblingGroups).length,
       }
     })
 

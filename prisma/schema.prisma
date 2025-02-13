@@ -8,25 +8,58 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// Education level enum
+enum EducationLevel {
+  HIGH_SCHOOL
+  COLLEGE
+  POST_GRAD
+}
+
+// Grade level enum
+enum GradeLevel {
+  FRESHMAN
+  SOPHOMORE
+  JUNIOR
+  SENIOR
+}
+
 model Student {
-  id                String       @id @default(uuid())
+  id                String          @id @default(uuid())
+  // Personal Info
   name              String
   email             String?
-  className         String
+  phone             String?
+  dateOfBirth       DateTime?
+  
+  // Education Info
+  educationLevel    EducationLevel?
+  gradeLevel        GradeLevel?
+  schoolName        String?         // Name of school/university/college
+  
+  // Graduation Status
+  highSchoolGraduated    Boolean   @default(false)
+  highSchoolGradYear     Int?
+  collegeGraduated       Boolean   @default(false)
+  collegeGradYear        Int?
+  postGradCompleted      Boolean   @default(false)
+  postGradYear           Int?
+  
+  // Existing Fields
+  batchId           String?     
   monthlyRate       Int         @default(150)
   customRate        Boolean     @default(false)
-  discountApplied   Int?
   status            String      @default("registered") // registered, enrolled, on_leave, withdrawn
   payerId           String?     // Optional link to current payer
-  familyId          String?     // For sibling grouping
+  siblingGroupId    String?     // For sibling grouping
   lastPaymentDate   DateTime?   // Track last successful payment
   nextPaymentDue    DateTime?   // Track next payment due
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
+  // Relations
   payer             Payer?      @relation(fields: [payerId], references: [id])
-  familyGroup       FamilyGroup? @relation(fields: [familyId], references: [id])
-  classGroups       ClassGroup[]
+  siblingGroup      Sibling?    @relation(fields: [siblingGroupId], references: [id])
+  batch             Batch?      @relation(fields: [batchId], references: [id])
 
   @@index([status])
 }
@@ -46,7 +79,7 @@ model Payer {
   subscriptions     Subscription[]
 }
 
-model FamilyGroup {
+model Sibling {
   id                String    @id @default(uuid())
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -54,9 +87,11 @@ model FamilyGroup {
   students          Student[]
 }
 
-model ClassGroup {
+model Batch {
   id                String    @id @default(uuid())
-  name              String
+  name              String    @unique // e.g. "Quran Level 1 - Sunday 10AM"
+  startDate         DateTime?
+  endDate           DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

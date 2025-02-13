@@ -1,125 +1,250 @@
+import { EducationLevel, GradeLevel } from '@prisma/client'
+import csvParser from 'csv-parser'
+import * as fs from 'fs'
+
 import { prisma } from '@/lib/db'
 
-import studentsDataRaw from '../lib/data/students.json'
-interface StudentData {
-  id: string
-  name: string
-  className: string
-  monthlyRate: number
-  hasCustomRate: boolean
-  familyId: string | null
-  siblings: string[]
-  totalFamilyMembers: number
+// Formatting functions
+function capitalizeWords(str: string): string {
+  if (!str) return ''
+  return str
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
 }
 
-interface StudentsData {
-  students: { [key: string]: StudentData }
-  constants: {
-    baseRate: number
-    discounts: {
-      siblings: Record<string, number>
-    }
+function formatPhoneNumber(phone: string | null): string | null {
+  if (!phone) return null
+
+  // Remove all non-numeric characters
+  const cleaned = phone.replace(/\D/g, '')
+
+  // Check if it's a 10-digit US number
+  if (cleaned.length === 10) {
+    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`
   }
+
+  // If it's not a standard US number, return the original input
+  return phone
 }
 
-const studentsData = studentsDataRaw as StudentsData
+function formatSchoolName(name: string | null): string | null {
+  if (!name) return null
+
+  // Common abbreviations to handle
+  const abbreviations = ['hs', 'ms', 'jr', 'sr', 'ii', 'iii', 'iv']
+
+  return name
+    .split(' ')
+    .map((word) => {
+      const lower = word.toLowerCase()
+      // Keep abbreviations uppercase
+      if (abbreviations.includes(lower)) {
+        return word.toUpperCase()
+      }
+      // Capitalize first letter of each word
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    })
+    .join(' ')
+}
 
 async function dropTables() {
   console.log('❌ Dropping all table data...')
 
   // Drop tables in order based on foreign key relationships
   await prisma.$transaction([
-    prisma.$executeRaw`DELETE FROM "_ClassGroupToStudent"`, // many-to-many
+    // prisma.$executeRaw`DELETE FROM "_ClassGroupToStudent"`, // many-to-many
     prisma.student.deleteMany(),
-    prisma.familyGroup.deleteMany(),
-    prisma.classGroup.deleteMany(),
+    prisma.subscription.deleteMany(),
+    prisma.payer.deleteMany(),
+    prisma.sibling.deleteMany(),
+    prisma.batch.deleteMany(),
   ])
 
   console.log('✅ All table data has been cleared.')
 }
 
+/**
+ * Calculate age based on a given birth date.
+ */
+function calculateAge(birthDate: Date): number {
+  const today = new Date()
+  let age = today.getFullYear() - birthDate.getFullYear()
+  const monthDiff = today.getMonth() - birthDate.getMonth()
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < birthDate.getDate())
+  ) {
+    age--
+  }
+  return age
+}
+
+/**
+ * Map the CSV "Current School level" value to the EducationLevel enum.
+ * Returns:
+ *  - EducationLevel.COLLEGE if the value is "College"
+ *  - EducationLevel.HIGH_SCHOOL if the value is "Highschool" or "High school"
+ *  - Otherwise (for example, "Currently not in school"), returns null so we can guess using age.
+ */
+function mapEducationLevel(level: string): EducationLevel | null {
+  if (!level) return null
+  const lvl = level.trim().toLowerCase()
+  if (lvl === 'college') {
+    return EducationLevel.COLLEGE
+  } else if (lvl === 'highschool' || lvl === 'high school') {
+    return EducationLevel.HIGH_SCHOOL
+  }
+  return null
+}
+
+/**
+ * Map the CSV "Grade/Year" value to the GradeLevel enum.
+ * For values like "Freshman", "Sophomore", "Junior", "Senior" we return the corresponding enum.
+ * If the value is "Graduated" or "Graduate", we return null so we can mark graduation booleans separately.
+ */
+function mapGradeLevel(grade: string): GradeLevel | null {
+  if (!grade) return null
+  const g = grade.trim().toLowerCase()
+  if (g === 'freshman') return GradeLevel.FRESHMAN
+  if (g === 'sophomore') return GradeLevel.SOPHOMORE
+  if (g === 'junior') return GradeLevel.JUNIOR
+  if (g === 'senior') return GradeLevel.SENIOR
+  return null
+}
+
+/**
+ * Parse a CSV file and return an array of row objects.
+ */
+function parseCSV(filePath: string): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    const results: any[] = []
+    fs.createReadStream(filePath)
+      .pipe(csvParser())
+      .on('data', (data) => results.push(data))
+      .on('end', () => resolve(results))
+      .on('error', (err) => reject(err))
+  })
+}
+
 async function seedData() {
-  console.log('🌱 Starting seed...')
+  let totalRecords = 0
+  let createdCount = 0
+  const errorRecords: { row: any; error: string }[] = []
 
-  const familyGroupMap = new Map<string, string>()
-  const classGroupMap = new Map<string, string>()
+  try {
+    // Adjust the path if needed (assumes the CSV is at the project root)
+    const rows = await parseCSV('batch4.csv')
+    console.log(`Found ${rows.length} rows in CSV.`)
 
-  let familyGroupCount = 0
-  let classGroupCount = 0
-  let studentCount = 0
+    for (const row of rows) {
+      totalRecords++
+      // Format names properly
+      const firstName = capitalizeWords(row['First Name:']?.trim() || '')
+      const lastName = capitalizeWords(row['Last Name:']?.trim() || '')
+      const fullName = `${firstName} ${lastName}`
 
-  for (const studentName of Object.keys(studentsData.students)) {
-    const student = studentsData.students[studentName]
+      const dobValue = row['Date of Birth']?.trim()
+      const dateOfBirth = dobValue ? new Date(dobValue) : null
 
-    // Handle Family Groups
-    let familyGroupId: string | null = null
-    if (student.familyId) {
-      if (!familyGroupMap.has(student.familyId)) {
-        const familyGroup = await prisma.familyGroup.create({
-          data: {},
-        })
-        familyGroupMap.set(student.familyId, familyGroup.id)
-        familyGroupId = familyGroup.id
+      const schoolLevelRaw = row['Current School level']?.trim() || ''
+      const educationLevel = mapEducationLevel(schoolLevelRaw)
 
-        familyGroupCount++
-        console.log(`✅ Created family group with ID: ${familyGroup.id}`)
-      } else {
-        familyGroupId = familyGroupMap.get(student.familyId) ?? null
+      const gradeRaw = row['Grade/Year']?.trim() || ''
+      const gradeLevel = mapGradeLevel(gradeRaw)
+
+      // Format school name
+      const schoolName = formatSchoolName(
+        row['Name of School/College/University']?.trim() || null
+      )
+      const email = row['Email Address:']?.trim()?.toLowerCase() || null
+      // Format phone number
+      const phone = formatPhoneNumber(
+        row['Phone Number: WhatsApp']?.trim() || null
+      )
+
+      // Initialize graduation booleans to their defaults.
+      let highSchoolGraduated = false
+      let collegeGraduated = false
+      let postGradCompleted = false
+
+      // If the Grade/Year indicates graduation...
+      if (
+        gradeRaw.toLowerCase() === 'graduated' ||
+        gradeRaw.toLowerCase() === 'graduate'
+      ) {
+        // Use the mapped education level if available.
+        if (educationLevel === EducationLevel.COLLEGE) {
+          collegeGraduated = true
+        } else if (educationLevel === EducationLevel.HIGH_SCHOOL) {
+          highSchoolGraduated = true
+        } else {
+          // If educationLevel is null (e.g. "Currently not in school"), guess based on age.
+          if (
+            schoolLevelRaw.toLowerCase() === 'currently not in school' &&
+            dateOfBirth
+          ) {
+            const age = calculateAge(dateOfBirth)
+            // Heuristic: if age is less than 21, assume high school graduation; if 21 or older, assume college graduation.
+            if (age < 21) {
+              highSchoolGraduated = true
+            } else {
+              collegeGraduated = true
+            }
+          }
+        }
       }
-    }
 
-    // Handle Class Groups
-    let classGroupId: string | null = null
-    if (student.className) {
-      if (!classGroupMap.has(student.className)) {
-        const classGroup = await prisma.classGroup.create({
+      try {
+        // Create the student record in the database.
+        await prisma.student.create({
           data: {
-            name: student.className,
+            name: fullName,
+            email: email,
+            phone: phone,
+            dateOfBirth: dateOfBirth,
+            educationLevel: educationLevel,
+            gradeLevel: gradeLevel,
+            schoolName: schoolName,
+            highSchoolGraduated: highSchoolGraduated,
+            collegeGraduated: collegeGraduated,
+            postGradCompleted: postGradCompleted,
           },
         })
-        classGroupMap.set(student.className, classGroup.id)
-        classGroupId = classGroup.id
 
-        classGroupCount++
-        console.log(`✅ Created class group: ${student.className}`)
-      } else {
-        classGroupId = classGroupMap.get(student.className) ?? null
+        createdCount++
+        console.log(`Created student record for ${fullName}`)
+      } catch (createError: any) {
+        console.error(
+          `Error creating record for ${fullName}:`,
+          createError.message
+        )
+        errorRecords.push({
+          row: { fullName, email },
+          error: createError.message,
+        })
       }
     }
 
-    // Create Student
-    await prisma.student.create({
-      data: {
-        name: student.name,
-        className: student.className,
-        monthlyRate: student.monthlyRate,
-        customRate: student.hasCustomRate,
-        discountApplied:
-          studentsData.constants.baseRate - student.monthlyRate || 0,
-        familyGroup: familyGroupId
-          ? { connect: { id: familyGroupId } }
-          : undefined,
-        classGroups: {
-          connect: classGroupId ? [{ id: classGroupId }] : [],
-        },
-      },
-    })
-
-    studentCount++
-    console.log(
-      `✅ Created student: ${student.name}, Class: ${student.className}, Family ID: ${
-        familyGroupId || 'No Family'
-      }, Monthly Rate: ${student.monthlyRate}, Custom Rate: ${
-        student.hasCustomRate ? 'Yes' : 'No'
-      }`
-    )
+    // Summary of the seeding process
+    console.log('========== SEEDING SUMMARY ==========')
+    console.log(`Total CSV rows processed: ${totalRecords}`)
+    console.log(`Successfully created records: ${createdCount}`)
+    console.log(`Records that failed: ${errorRecords.length}`)
+    if (errorRecords.length > 0) {
+      console.log('Details of records with errors:')
+      errorRecords.forEach((err, index) => {
+        console.log(
+          `${index + 1}. ${err.row.fullName} (${err.row.email || 'No email'}): ${err.error}`
+        )
+      })
+    }
+    console.log('========== END OF SUMMARY ==========')
+  } catch (err: any) {
+    console.error('Fatal error during seeding:', err)
+  } finally {
+    await prisma.$disconnect()
   }
-
-  console.log('🌟 Seeding Summary:')
-  console.log(`👪 Family Groups created: ${familyGroupCount}`)
-  console.log(`📚 Class Groups created: ${classGroupCount}`)
-  console.log(`🎓 Students created: ${studentCount}`)
-  console.log('✅ Seeding complete!')
 }
 
 async function main() {
