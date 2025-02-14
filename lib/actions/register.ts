@@ -102,14 +102,10 @@ export async function addSibling(studentId: string, siblingId: string) {
     }
 
     if (!student.siblingGroupId && !sibling.siblingGroupId) {
-      const newSiblingGroup = await prisma.sibling.create({
+      await prisma.sibling.create({
         data: { students: { connect: [{ id: studentId }, { id: siblingId }] } },
-        include: { students: { select: { id: true, name: true } } },
       })
-      return { success: true, siblingGroup: newSiblingGroup }
-    }
-
-    if (student.siblingGroupId && !sibling.siblingGroupId) {
+    } else if (student.siblingGroupId && !sibling.siblingGroupId) {
       await prisma.student.update({
         where: { id: siblingId },
         data: { siblingGroupId: student.siblingGroupId },
@@ -119,13 +115,7 @@ export async function addSibling(studentId: string, siblingId: string) {
         where: { id: studentId },
         data: { siblingGroupId: sibling.siblingGroupId },
       })
-    }
-
-    if (
-      student.siblingGroupId &&
-      sibling.siblingGroupId &&
-      student.siblingGroupId !== sibling.siblingGroupId
-    ) {
+    } else if (student.siblingGroupId !== sibling.siblingGroupId) {
       await prisma.$transaction([
         prisma.student.updateMany({
           where: { siblingGroupId: sibling.siblingGroupId },
@@ -135,6 +125,7 @@ export async function addSibling(studentId: string, siblingId: string) {
       ])
     }
 
+    // Always return updated student
     const updatedStudent = await prisma.student.findUnique({
       where: { id: studentId },
       select: {
