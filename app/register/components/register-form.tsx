@@ -121,7 +121,12 @@ export function RegisterForm({
 
       {selectedStudent ? (
         <>
-          <StudentForm student={selectedStudent} onUpdate={handleFormUpdate} />
+          <StudentForm
+            student={selectedStudent}
+            students={students}
+            onUpdate={handleFormUpdate}
+            onStudentUpdate={setSelectedStudent}
+          />
           <div className="flex justify-end gap-4">
             <Button
               variant="outline"

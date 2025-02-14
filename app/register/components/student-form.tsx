@@ -8,16 +8,28 @@ import { useForm } from 'react-hook-form'
 import { Form } from '@/components/ui/form'
 import { RegisterStudent } from '@/lib/actions/register'
 
-import { ContactSection, PersonalSection, EducationSection } from '../fields'
+import {
+  ContactSection,
+  PersonalSection,
+  EducationSection,
+  SiblingSection,
+} from '../fields'
 import { studentFormSchema, StudentFormValues } from '../schema'
 import { getFormInitialValues } from '../utils'
 
 interface StudentFormProps {
   student: RegisterStudent
+  students: RegisterStudent[]
   onUpdate: (values: StudentFormValues) => void
+  onStudentUpdate: (student: RegisterStudent) => void
 }
 
-export function StudentForm({ student, onUpdate }: StudentFormProps) {
+export function StudentForm({
+  student,
+  students,
+  onUpdate,
+  onStudentUpdate,
+}: StudentFormProps) {
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentFormSchema),
     defaultValues: getFormInitialValues(student),
@@ -44,6 +56,17 @@ export function StudentForm({ student, onUpdate }: StudentFormProps) {
           <PersonalSection control={form.control} />
           <ContactSection control={form.control} />
           <EducationSection control={form.control} />
+          <SiblingSection
+            control={form.control}
+            student={student}
+            students={students}
+            onStudentUpdate={(updatedStudent) => {
+              onStudentUpdate({
+                ...student,
+                ...updatedStudent,
+              })
+            }}
+          />
         </form>
       </Form>
     </div>

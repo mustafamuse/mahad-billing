@@ -1,10 +1,22 @@
 'use client'
 
+import { useState } from 'react'
+
 import { CalendarDate } from '@internationalized/date'
 import { EducationLevel, GradeLevel } from '@prisma/client'
+import { X, Loader2, UserPlus, Users } from 'lucide-react'
 import { Control, useFormContext } from 'react-hook-form'
+import { toast } from 'sonner'
 
+import { Button } from '@/components/ui/button'
 import { DateField, DateInput } from '@/components/ui/datefield-rac'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   FormField,
   FormItem,
@@ -20,7 +32,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  RegisterStudent,
+  addSibling,
+  removeSibling,
+} from '@/lib/actions/register'
 
+import { StudentSearch } from './components/student-search'
 import { StudentFormValues } from './schema'
 
 // Reusable Form Input Component
@@ -358,6 +376,152 @@ export function EducationSection({
           />
         </div>
       </div>
+    </div>
+  )
+}
+
+export function SiblingSection({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  control,
+  student,
+  students,
+  onStudentUpdate,
+}: {
+  control: Control<StudentFormValues>
+  student: RegisterStudent
+  students: RegisterStudent[]
+  onStudentUpdate: (updatedStudent: {
+    id: string
+    name?: string
+    siblingGroup?: {
+      students: { id: string; name: string }[]
+    } | null
+  }) => void
+}) {
+  const [showSiblingSearch, setShowSiblingSearch] = useState(false)
+  const [isLoading, setIsLoading] = useState<string | null>(null)
+  const siblings =
+    student.siblingGroup?.students.filter((s) => s.id !== student.id) || []
+
+  const handleAddSibling = async (selected: RegisterStudent) => {
+    try {
+      setIsLoading(selected.id)
+      const result = await addSibling(student.id, selected.id)
+      if (result.success) {
+        toast.success('Sibling added successfully')
+        if (result.student) {
+          onStudentUpdate(result.student)
+          setShowSiblingSearch(false)
+        }
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to add sibling')
+    } finally {
+      setIsLoading(null)
+    }
+  }
+
+  const handleRemoveSibling = async (siblingId: string) => {
+    try {
+      setIsLoading(siblingId)
+      const result = await removeSibling(student.id, siblingId)
+      if (result.success) {
+        toast.success('Sibling removed successfully')
+        if (result.student) {
+          onStudentUpdate(result.student)
+        }
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to remove sibling')
+    } finally {
+      setIsLoading(null)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader
+        title="Sibling Management"
+        description="Manage your sibling relationships at the Mahad"
+      />
+
+      {siblings.length > 0 ? (
+        <div className="rounded-lg border p-4">
+          <div className="mb-4">
+            <h4 className="font-medium">Current Siblings</h4>
+            <p className="text-sm text-muted-foreground">
+              You are in a sibling group with:
+            </p>
+          </div>
+          <div className="space-y-2">
+            {siblings.map((sibling) => (
+              <div
+                key={sibling.id}
+                className="flex items-center justify-between rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50"
+              >
+                <span className="font-medium">{sibling.name}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRemoveSibling(sibling.id)}
+                  disabled={isLoading !== null}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  {isLoading === sibling.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <X className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed p-6 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed">
+            <Users className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <h4 className="mb-2 font-medium">No Siblings Added</h4>
+          <p className="text-sm text-muted-foreground">
+            Add siblings if you have any attending the Mahad.
+          </p>
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowSiblingSearch(true)}
+          disabled={isLoading !== null}
+          className="gap-2"
+        >
+          <UserPlus className="h-4 w-4" />
+          Add Sibling
+        </Button>
+      </div>
+
+      <Dialog open={showSiblingSearch} onOpenChange={setShowSiblingSearch}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Sibling</DialogTitle>
+            <DialogDescription>
+              Search for your sibling's name to add them to your sibling group.
+            </DialogDescription>
+          </DialogHeader>
+          <StudentSearch
+            students={students.filter(
+              (s) =>
+                s.id !== student.id && !siblings.some((sib) => sib.id === s.id)
+            )}
+            selectedStudent={null}
+            onSelect={handleAddSibling}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -83,3 +83,130 @@ export async function updateRegistrationStudent(
 export type RegisterStudent = Awaited<
   ReturnType<typeof getRegistrationStudents>
 >[0]
+
+export async function addSibling(studentId: string, siblingId: string) {
+  try {
+    const [student, sibling] = await Promise.all([
+      prisma.student.findUnique({
+        where: { id: studentId },
+        select: { id: true, siblingGroupId: true },
+      }),
+      prisma.student.findUnique({
+        where: { id: siblingId },
+        select: { id: true, siblingGroupId: true },
+      }),
+    ])
+
+    if (!student || !sibling) {
+      throw new Error('One or both students not found')
+    }
+
+    if (!student.siblingGroupId && !sibling.siblingGroupId) {
+      const newSiblingGroup = await prisma.sibling.create({
+        data: { students: { connect: [{ id: studentId }, { id: siblingId }] } },
+        include: { students: { select: { id: true, name: true } } },
+      })
+      return { success: true, siblingGroup: newSiblingGroup }
+    }
+
+    if (student.siblingGroupId && !sibling.siblingGroupId) {
+      await prisma.student.update({
+        where: { id: siblingId },
+        data: { siblingGroupId: student.siblingGroupId },
+      })
+    } else if (!student.siblingGroupId && sibling.siblingGroupId) {
+      await prisma.student.update({
+        where: { id: studentId },
+        data: { siblingGroupId: sibling.siblingGroupId },
+      })
+    }
+
+    if (
+      student.siblingGroupId &&
+      sibling.siblingGroupId &&
+      student.siblingGroupId !== sibling.siblingGroupId
+    ) {
+      await prisma.$transaction([
+        prisma.student.updateMany({
+          where: { siblingGroupId: sibling.siblingGroupId },
+          data: { siblingGroupId: student.siblingGroupId },
+        }),
+        prisma.sibling.delete({ where: { id: sibling.siblingGroupId } }),
+      ])
+    }
+
+    const updatedStudent = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: {
+        id: true,
+        name: true,
+        siblingGroup: {
+          select: {
+            students: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+    })
+
+    return { success: true, student: updatedStudent }
+  } catch (error) {
+    console.error('Failed to add sibling:', error)
+    throw new Error('Failed to add sibling')
+  }
+}
+
+export async function removeSibling(studentId: string, siblingId: string) {
+  try {
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { id: true, siblingGroupId: true },
+    })
+
+    if (!student || !student.siblingGroupId) {
+      throw new Error('Student or sibling group not found')
+    }
+
+    // Remove sibling from the group
+    await prisma.student.update({
+      where: { id: siblingId },
+      data: { siblingGroupId: null },
+    })
+
+    // Count remaining members in the group
+    const remainingMembers = await prisma.student.count({
+      where: { siblingGroupId: student.siblingGroupId },
+    })
+
+    if (remainingMembers <= 1) {
+      await prisma.$transaction([
+        prisma.student.updateMany({
+          where: { siblingGroupId: student.siblingGroupId },
+          data: { siblingGroupId: null },
+        }),
+        prisma.sibling.delete({ where: { id: student.siblingGroupId } }),
+      ])
+    }
+
+    const updatedStudent = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: {
+        id: true,
+        name: true,
+        siblingGroup: {
+          select: {
+            students: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+    })
+
+    return { success: true, student: updatedStudent }
+  } catch (error) {
+    console.error('Failed to remove sibling:', error)
+    throw new Error('Failed to remove sibling')
+  }
+}
