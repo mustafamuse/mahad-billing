@@ -19,16 +19,21 @@ import {
 } from '@/components/ui/popover'
 import { RegisterStudent } from '@/lib/actions/register'
 import { cn } from '@/lib/utils'
+
 interface StudentSearchProps {
   students: RegisterStudent[]
   selectedStudent: RegisterStudent | null
   onSelect: (student: RegisterStudent) => void
+  placeholder?: string
+  emptyMessage?: string
 }
 
 export function StudentSearch({
   students,
   selectedStudent,
   onSelect,
+  placeholder = 'Search...',
+  emptyMessage = 'No results found.',
 }: StudentSearchProps) {
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
@@ -63,13 +68,13 @@ export function StudentSearch({
           <div className="flex items-center border-b px-3">
             <Search className="h-4 w-4 shrink-0 opacity-50" />
             <CommandInput
-              placeholder="Type a name to search..."
+              placeholder={placeholder}
               className="h-12 flex-1 text-base sm:h-11 sm:text-sm"
               value={searchValue}
               onValueChange={setSearchValue}
             />
           </div>
-          <CommandEmpty>No student found.</CommandEmpty>
+          <CommandEmpty>{emptyMessage}</CommandEmpty>
           <CommandGroup className="max-h-[300px] overflow-auto p-1">
             {students.map((student) => (
               <CommandItem

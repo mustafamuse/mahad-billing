@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { CalendarDate } from '@internationalized/date'
 import { EducationLevel, GradeLevel } from '@prisma/client'
-import { X, Loader2, UserPlus, Users } from 'lucide-react'
+import { X, Loader2, UserPlus, AlertTriangle } from 'lucide-react'
 import { Control, useFormContext } from 'react-hook-form'
 import { toast } from 'sonner'
 
@@ -386,18 +386,7 @@ export function SiblingSection({
   student,
   students,
   onStudentUpdate,
-}: {
-  control: Control<StudentFormValues>
-  student: RegisterStudent
-  students: RegisterStudent[]
-  onStudentUpdate: (updatedStudent: {
-    id: string
-    name?: string
-    siblingGroup?: {
-      students: { id: string; name: string }[]
-    } | null
-  }) => void
-}) {
+}: Props) {
   const [showSiblingSearch, setShowSiblingSearch] = useState(false)
   const [isLoading, setIsLoading] = useState<string | null>(null)
   const siblings =
@@ -440,26 +429,48 @@ export function SiblingSection({
     }
   }
 
+  const filteredStudents = students.filter(
+    (s) =>
+      s.id !== student.id &&
+      !siblings.some((sib) => sib.id === s.id) &&
+      s.name.split(' ').pop() === student.name.split(' ').pop()
+  )
+
   return (
     <div className="space-y-6">
       <SectionHeader
-        title="Sibling Management"
-        description="Manage your sibling relationships at the Mahad"
+        title="Siblings"
+        description="Connect with your siblings at the Mahad"
       />
 
-      {siblings.length > 0 ? (
-        <div className="rounded-lg border p-4">
-          <div className="mb-4">
-            <h4 className="font-medium">Current Siblings</h4>
+      <div className="rounded-lg border bg-card p-4">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h4 className="font-medium">Your Siblings</h4>
             <p className="text-sm text-muted-foreground">
-              You are in a sibling group with:
+              {siblings.length
+                ? `${siblings.length} sibling${siblings.length > 1 ? 's' : ''} connected`
+                : 'No siblings connected'}
             </p>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowSiblingSearch(true)}
+            disabled={isLoading !== null}
+            className="gap-2"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add Sibling
+          </Button>
+        </div>
+
+        {siblings.length > 0 ? (
           <div className="space-y-2">
             {siblings.map((sibling) => (
               <div
                 key={sibling.id}
-                className="flex items-center justify-between rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50"
+                className="flex items-center justify-between rounded-lg border bg-muted/50 p-3"
               >
                 <span className="font-medium">{sibling.name}</span>
                 <Button
@@ -478,47 +489,53 @@ export function SiblingSection({
               </div>
             ))}
           </div>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-dashed p-6 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed">
-            <Users className="h-6 w-6 text-muted-foreground" />
+        ) : (
+          <div className="rounded-lg border border-dashed p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              If you have <strong>siblings</strong> attending the Mahad, let us
+              know here.
+            </p>
           </div>
-          <h4 className="mb-2 font-medium">No Siblings Added</h4>
-          <p className="text-sm text-muted-foreground">
-            Add siblings if you have any attending the Mahad.
-          </p>
-        </div>
-      )}
-
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setShowSiblingSearch(true)}
-          disabled={isLoading !== null}
-          className="gap-2"
-        >
-          <UserPlus className="h-4 w-4" />
-          Add Sibling
-        </Button>
+        )}
       </div>
 
       <Dialog open={showSiblingSearch} onOpenChange={setShowSiblingSearch}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Add Sibling</DialogTitle>
-            <DialogDescription>
-              Search for your sibling's name to add them to your sibling group.
+            <DialogTitle>Add a Sibling</DialogTitle>
+            <DialogDescription className="space-y-3">
+              <div className="mt-2 rounded-md border-l-4 border-orange-200 bg-orange-50/30 p-4 dark:border-orange-400/20 dark:bg-orange-400/5">
+                <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                  <AlertTriangle className="h-4 w-4" />
+                  <p className="text-sm font-semibold">Important Notice</p>
+                </div>
+                <div className="mt-2 text-sm text-orange-600 dark:text-orange-300/90">
+                  <p>Please ensure:</p>
+                  <ul className="mt-1 list-inside space-y-1">
+                    <li>
+                      • You are only adding your{' '}
+                      <strong>"actual siblings"</strong>
+                    </li>
+                    <li>• Your sibling has registered their own account</li>
+                  </ul>
+                </div>
+              </div>
             </DialogDescription>
           </DialogHeader>
+
           <StudentSearch
-            students={students.filter(
-              (s) =>
-                s.id !== student.id && !siblings.some((sib) => sib.id === s.id)
-            )}
+            students={filteredStudents}
             selectedStudent={null}
             onSelect={handleAddSibling}
+            placeholder="Search for your sibling's name..."
+            emptyMessage={
+              <div className="px-2 py-6 text-center">
+                <p className="text-sm font-medium">No siblings found</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Ask your sibling to register first, then they can add you!
+                </p>
+              </div>
+            }
           />
         </DialogContent>
       </Dialog>
