@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 
+import { EducationLevel } from '@prisma/client'
+import { GradeLevel } from '@prisma/client'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -47,7 +49,25 @@ export function RegisterForm({
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   const handleStudentSelect = (student: RegisterStudent) => {
+    console.log('Selected Student Data:', student)
+
+    // Create initial form values from student data
+    const initialFormValues: StudentFormValues = {
+      firstName: student.name.split(' ')[0],
+      lastName: student.name.split(' ').slice(1).join(' '),
+      email: student.email || '',
+      phone: student.phone || '',
+      dateOfBirth: student.dateOfBirth
+        ? new Date(student.dateOfBirth)
+        : new Date(),
+      educationLevel: student.educationLevel as EducationLevel,
+      gradeLevel: student.gradeLevel as GradeLevel,
+      schoolName: student.schoolName || '',
+    }
+    console.log('Initial Form Values:', initialFormValues)
+
     setSelectedStudent(student)
+    setFormValues(initialFormValues)
     setHasChanges(false)
   }
 
@@ -111,6 +131,17 @@ export function RegisterForm({
     }
   }
 
+  const canSaveChanges =
+    // Form is valid and has values
+    formValues &&
+    studentFormSchema.safeParse(formValues).success &&
+    // Either there are changes OR all fields are filled (even if unchanged)
+    (hasChanges ||
+      (formValues &&
+        Object.values(formValues).every(
+          (value) => value !== null && value !== ''
+        )))
+
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <StudentSearch
@@ -137,7 +168,7 @@ export function RegisterForm({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={formStatus === 'submitting' || !hasChanges}
+              disabled={formStatus === 'submitting' || !canSaveChanges}
               className="min-w-[120px]"
             >
               {formStatus === 'submitting' ? (

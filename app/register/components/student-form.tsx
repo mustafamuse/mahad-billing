@@ -60,7 +60,7 @@ export function StudentForm({
             control={form.control}
             student={student}
             students={students}
-            onStudentUpdate={(updatedStudent) => {
+            onStudentUpdate={(updatedStudent: RegisterStudent) => {
               onStudentUpdate({
                 ...student,
                 ...updatedStudent,

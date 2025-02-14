@@ -121,7 +121,7 @@ export async function addSibling(studentId: string, siblingId: string) {
           where: { siblingGroupId: sibling.siblingGroupId },
           data: { siblingGroupId: student.siblingGroupId },
         }),
-        prisma.sibling.delete({ where: { id: sibling.siblingGroupId } }),
+        prisma.sibling.delete({ where: { id: sibling.siblingGroupId! } }),
       ])
     }
 
