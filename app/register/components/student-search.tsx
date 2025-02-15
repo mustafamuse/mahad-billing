@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-import { Check, ChevronsUpDown, Search } from 'lucide-react'
+import { Check, Search } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -25,7 +25,7 @@ interface StudentSearchProps {
   selectedStudent: RegisterStudent | null
   onSelect: (student: RegisterStudent) => void
   placeholder?: string
-  emptyMessage: React.ReactNode
+  emptyMessage: React.ReactNode // Make required since parent handles it
 }
 
 export function StudentSearch({
@@ -57,7 +57,7 @@ export function StudentSearch({
           <span className="truncate text-sm text-muted-foreground sm:text-base">
             {selectedStudent ? selectedStudent.name : 'Search for your name...'}
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent

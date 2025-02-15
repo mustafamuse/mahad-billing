@@ -48,3 +48,5 @@ export interface QueryContext {
   previousStudent?: StudentWithSiblings
   previousStudents?: StudentWithSiblings[]
 }
+
+export type { StudentFormValues } from './schema'

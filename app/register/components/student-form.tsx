@@ -18,12 +18,14 @@ import {
 import { useStudentMutations } from '../hooks/use-student-mutations'
 import { useStudent } from '../hooks/use-students'
 import { studentFormSchema, StudentFormValues } from '../schema'
+import { StudentWithSiblings } from '../types'
 import { getFormInitialValues } from '../utils'
 
 interface StudentFormProps {
-  student: RegisterStudent
+  student: RegisterStudent | null | undefined
   students: RegisterStudent[]
   onStudentUpdate: (student: RegisterStudent) => void
+  isNew?: boolean
 }
 
 function LoadingSkeleton() {
@@ -42,48 +44,58 @@ export function StudentForm({
   student,
   students,
   onStudentUpdate,
+  isNew = false,
 }: StudentFormProps) {
   const {
     data: studentData,
     isLoading,
     error,
-  } = useStudent(student.id, student)
-  console.log('Initial student:', student)
-  console.log('Student data:', studentData)
-  const { updateStudent } = useStudentMutations()
+  } = useStudent(student?.id ?? '', student as StudentWithSiblings | undefined)
+
+  const { updateStudent, createStudent } = useStudentMutations()
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentFormSchema),
-    defaultValues: getFormInitialValues(student),
+    defaultValues: isNew ? {} : getFormInitialValues(student),
     mode: 'onChange',
   })
 
   const { control, handleSubmit, reset } = form
 
   useEffect(() => {
-    if (studentData) {
+    if (!isNew && studentData) {
       form.reset(getFormInitialValues(studentData))
     }
-  }, [studentData, form])
+  }, [studentData, form, isNew])
 
   const onSubmit = async (values: StudentFormValues) => {
     try {
-      const result = await updateStudent.mutateAsync({
-        id: student.id,
-        values,
-      })
-      if (result.success && result.student) {
-        reset(values)
-        onStudentUpdate(result.student)
+      if (isNew) {
+        const result = await createStudent.mutateAsync(values)
+        if (result.success && result.student) {
+          reset(values)
+          onStudentUpdate(result.student)
+        }
+      } else {
+        const result = await updateStudent.mutateAsync({
+          id: student?.id ?? '',
+          values,
+        })
+        if (result.success && result.student) {
+          reset(values)
+          onStudentUpdate(result.student)
+        }
       }
     } catch (error) {
       console.error('Form submission failed:', error)
     }
   }
 
-  if (isLoading) return <LoadingSkeleton />
-  if (error) throw error
-  if (!studentData) return null
+  if (!isNew) {
+    if (isLoading) return <LoadingSkeleton />
+    if (error) throw error
+    if (!studentData) return null
+  }
 
   return (
     <ErrorBoundary>
@@ -97,12 +109,24 @@ export function StudentForm({
             <PersonalSection control={control} />
             <ContactSection control={control} />
             <EducationSection control={control} />
-            <SiblingSection
-              control={control}
-              student={studentData}
-              students={students}
-              onStudentUpdate={onStudentUpdate}
-            />
+            {!isNew && studentData && (
+              <SiblingSection
+                student={{
+                  ...studentData,
+                  id: studentData?.id ?? '',
+                  name: studentData?.name ?? '',
+                  email: studentData?.email ?? null,
+                  phone: studentData?.phone ?? null,
+                  dateOfBirth: studentData?.dateOfBirth ?? null,
+                  educationLevel: studentData?.educationLevel ?? null,
+                  gradeLevel: studentData?.gradeLevel ?? null,
+                  schoolName: studentData?.schoolName ?? null,
+                  siblingGroup: studentData?.siblingGroup ?? null,
+                }}
+                students={students}
+                onStudentUpdate={onStudentUpdate}
+              />
+            )}
           </div>
         </form>
       </Form>

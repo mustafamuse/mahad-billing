@@ -14,7 +14,7 @@ interface ConfirmDialogProps {
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
   title: string
-  description: string
+  description: string | React.ReactNode
 }
 
 export function ConfirmDialog({

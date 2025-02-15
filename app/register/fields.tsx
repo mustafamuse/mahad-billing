@@ -480,7 +480,7 @@ export function SiblingSection({ student, students, onStudentUpdate }: Props) {
     <div className="space-y-6">
       <SectionHeader
         title="Siblings"
-        description="Connect with your siblings at the Mahad"
+        description="Tell us about your siblings at the Mahad"
       />
 
       <div className="rounded-lg border bg-card p-4">
@@ -489,8 +489,8 @@ export function SiblingSection({ student, students, onStudentUpdate }: Props) {
             <h4 className="font-medium">Your Siblings</h4>
             <p className="text-sm text-muted-foreground">
               {siblings.length
-                ? `${siblings.length} sibling${siblings.length > 1 ? 's' : ''} connected`
-                : 'No siblings connected'}
+                ? `${siblings.length} sibling${siblings.length > 1 ? 's' : ''} listed`
+                : 'No siblings listed'}
             </p>
           </div>
           <Button
@@ -526,8 +526,7 @@ export function SiblingSection({ student, students, onStudentUpdate }: Props) {
         ) : (
           <div className="rounded-lg border border-dashed p-4 text-center">
             <p className="text-sm text-muted-foreground">
-              If you have <strong>siblings</strong> attending the Mahad, let us
-              know here.
+              If you have siblings studying at the Mahad, you can add them here
             </p>
           </div>
         )}
@@ -541,18 +540,13 @@ export function SiblingSection({ student, students, onStudentUpdate }: Props) {
               <div className="mt-2 rounded-md border-l-4 border-orange-200 bg-orange-50/30 p-4 dark:border-orange-400/20 dark:bg-orange-400/5">
                 <div className="flex items-center justify-center gap-2 text-orange-700 dark:text-orange-300">
                   <AlertTriangle className="h-4 w-4" />
-                  <span className="text-sm font-semibold">
-                    Important Notice
-                  </span>
+                  <span className="text-sm font-semibold">Important</span>
                 </div>
                 <div className="mt-2 text-center text-sm text-orange-600 dark:text-orange-300/90">
-                  <span>Please ensure:</span>
+                  <span>Please note:</span>
                   <ul className="mt-1 list-none space-y-1">
-                    <li>
-                      • You are only adding your{' '}
-                      <strong>"actual siblings"</strong>
-                    </li>
-                    <li>• Your sibling has registered their own account</li>
+                    <li>• Only add your immediate siblings</li>
+                    <li>• Your sibling must be registered at the Mahad</li>
                   </ul>
                 </div>
               </div>

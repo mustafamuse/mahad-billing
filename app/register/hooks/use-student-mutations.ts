@@ -5,6 +5,7 @@ import {
   updateRegistrationStudent,
   addSibling,
   removeSibling,
+  createRegistrationStudent,
 } from '@/lib/actions/register'
 
 import { queryKeys } from './query-keys'
@@ -14,6 +15,7 @@ import type {
   UpdateStudentVariables,
   ManageSiblingVariables,
   QueryContext,
+  StudentFormValues,
 } from '../types'
 
 export function useStudentMutations() {
@@ -90,13 +92,25 @@ export function useStudentMutations() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({
-        queryKey: ['students'],
+        queryKey: queryKeys.students,
         refetchType: 'active',
       })
 
+      const previousStudents = queryClient.getQueryData(queryKeys.students) as
+        | StudentWithSiblings[]
+        | undefined
+      if (previousStudents && data.student) {
+        queryClient.setQueryData(
+          queryKeys.students,
+          previousStudents.map((s) =>
+            s.id === data.student!.id ? data.student : s
+          )
+        )
+      }
+
       if (data.student) {
         queryClient.invalidateQueries({
-          queryKey: ['student', data.student.id],
+          queryKey: queryKeys.student(data.student.id),
           exact: true,
         })
       }
@@ -116,6 +130,7 @@ export function useStudentMutations() {
         ? addSibling(studentId, siblingId)
         : removeSibling(studentId, siblingId),
     onMutate: async ({ type, studentId, siblingId }) => {
+      // Cancel outgoing refetches
       await queryClient.cancelQueries({
         queryKey: queryKeys.student(studentId),
       })
@@ -123,6 +138,7 @@ export function useStudentMutations() {
         queryKey: queryKeys.students,
       })
 
+      // Snapshot previous values
       const previousStudent = queryClient.getQueryData(
         queryKeys.student(studentId)
       ) as StudentWithSiblings | undefined
@@ -132,6 +148,7 @@ export function useStudentMutations() {
 
       const siblingInfo = previousStudents?.find((s) => s.id === siblingId)
 
+      // Optimistically update
       if (type === 'add') {
         const optimisticUpdate = {
           ...(previousStudent as StudentWithSiblings),
@@ -183,6 +200,7 @@ export function useStudentMutations() {
       return { previousStudent, previousStudents }
     },
     onError: (error, variables, context) => {
+      // Revert optimistic updates on error
       queryClient.setQueryData(
         queryKeys.student(variables.studentId),
         context?.previousStudent
@@ -203,34 +221,67 @@ export function useStudentMutations() {
       )
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ['students'],
-        refetchType: 'active',
-      })
-
-      if (data.student?.id) {
-        queryClient.invalidateQueries({
-          queryKey: ['student', data.student.id],
-          exact: true,
-        })
-        queryClient.invalidateQueries({
-          queryKey: ['student', variables.siblingId],
-          exact: true,
-        })
+      // Update cache with server data
+      if (data.student) {
+        queryClient.setQueryData(
+          queryKeys.student(data.student.id),
+          data.student
+        )
       }
 
-      const message =
+      // Invalidate related queries
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.students,
+      })
+
+      toast.success(
         variables.type === 'add'
-          ? 'Sibling added successfully'
-          : 'Sibling removed successfully'
-      toast.success(message)
+          ? 'Sibling added to your profile'
+          : 'Sibling removed from your profile'
+      )
     },
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 
+  const createStudent = useMutation<
+    StudentMutationResponse,
+    Error,
+    StudentFormValues
+  >({
+    mutationFn: (values) => createRegistrationStudent(values),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.students,
+        refetchType: 'active',
+      })
+
+      const previousStudents = queryClient.getQueryData(queryKeys.students) as
+        | StudentWithSiblings[]
+        | undefined
+      if (data.student) {
+        queryClient.setQueryData(
+          queryKeys.students,
+          previousStudents
+            ? [...previousStudents, data.student]
+            : [data.student]
+        )
+      }
+
+      toast.success('You have successfully registered! 🎉')
+    },
+    onError: (error) => {
+      if (error.message.includes('already exists')) {
+        toast.error('A student with this email already exists')
+        return
+      }
+      toast.error('Failed to create registration. Please try again.')
+    },
+  })
+
   return {
     updateStudent,
     manageSiblings,
+    createStudent,
   }
 }

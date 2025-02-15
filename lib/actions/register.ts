@@ -6,15 +6,28 @@ import { headers } from 'next/headers'
 import { Prisma } from '@prisma/client'
 import { Ratelimit } from '@upstash/ratelimit'
 
+import {
+  studentFormSchema,
+  type StudentFormValues,
+} from '@/app/register/schema'
 import { prisma } from '@/lib/db'
 import { monitoring } from '@/lib/monitoring'
 
 import { redis } from '../utils/redis'
+
 // Create rate limiter
 const ratelimit = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(10, '10 s'), // 10 requests per 10 seconds
 })
+
+// Helper function for consistent capitalization
+function capitalizeNames(firstName: string, lastName: string) {
+  return {
+    firstName: firstName.trim().replace(/\b\w/g, (c) => c.toUpperCase()),
+    lastName: lastName.trim().replace(/\b\w/g, (c) => c.toUpperCase()),
+  }
+}
 
 // Get students for registration
 export async function getRegistrationStudents() {
@@ -83,6 +96,16 @@ export async function updateRegistrationStudent(
       )
     }
 
+    // If name is being updated, capitalize it
+    if (typeof data.name === 'string') {
+      const [firstName, ...lastNames] = data.name.split(' ')
+      const { firstName: capFirst, lastName: capLast } = capitalizeNames(
+        firstName,
+        lastNames.join(' ')
+      )
+      data.name = `${capFirst} ${capLast}`.trim()
+    }
+
     const updatedStudent = await prisma.student.update({
       where: { id },
       data,
@@ -143,9 +166,14 @@ export async function addSibling(studentId: string, siblingId: string) {
       throw new Error('One or both students not found')
     }
 
+    // Create sibling group only when neither student has one
     if (!student.siblingGroupId && !sibling.siblingGroupId) {
       await prisma.sibling.create({
-        data: { students: { connect: [{ id: studentId }, { id: siblingId }] } },
+        data: {
+          students: {
+            connect: [{ id: studentId }, { id: siblingId }],
+          },
+        },
       })
     } else if (student.siblingGroupId && !sibling.siblingGroupId) {
       await prisma.student.update({
@@ -287,5 +315,55 @@ export async function getRegistrationStudent(id: string) {
   } catch (error) {
     console.error('Failed to fetch student:', error)
     throw new Error('Failed to fetch student')
+  }
+}
+
+export async function createRegistrationStudent(data: StudentFormValues) {
+  try {
+    // Validate using schema
+    const validated = studentFormSchema.parse(data)
+
+    // Capitalize names
+    const { firstName, lastName } = capitalizeNames(
+      validated.firstName,
+      validated.lastName
+    )
+
+    const student = await prisma.student.create({
+      data: {
+        name: `${firstName} ${lastName}`.trim(),
+        email: validated.email,
+        phone: validated.phone,
+        dateOfBirth: validated.dateOfBirth,
+        educationLevel: validated.educationLevel,
+        gradeLevel: validated.gradeLevel,
+        schoolName: validated.schoolName,
+      },
+      include: {
+        siblingGroup: {
+          include: {
+            students: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    return {
+      success: true,
+      student,
+    }
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        throw new Error('A student with this email already exists')
+      }
+    }
+    console.error('Failed to create student:', error)
+    throw new Error('Failed to create student registration')
   }
 }
