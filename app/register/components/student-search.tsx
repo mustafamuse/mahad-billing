@@ -25,15 +25,15 @@ interface StudentSearchProps {
   selectedStudent: RegisterStudent | null
   onSelect: (student: RegisterStudent) => void
   placeholder?: string
-  emptyMessage?: string
+  emptyMessage: React.ReactNode
 }
 
 export function StudentSearch({
   students,
   selectedStudent,
   onSelect,
-  placeholder = 'Search...',
-  emptyMessage = 'No results found.',
+  placeholder = 'Search for your name...',
+  emptyMessage,
 }: StudentSearchProps) {
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')

@@ -6,7 +6,6 @@ import { CalendarDate } from '@internationalized/date'
 import { EducationLevel, GradeLevel } from '@prisma/client'
 import { X, Loader2, UserPlus, AlertTriangle } from 'lucide-react'
 import { Control, useFormContext } from 'react-hook-form'
-import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { DateField, DateInput } from '@/components/ui/datefield-rac'
@@ -32,13 +31,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  RegisterStudent,
-  addSibling,
-  removeSibling,
-} from '@/lib/actions/register'
+import { RegisterStudent } from '@/lib/actions/register'
+import { cn } from '@/lib/utils'
 
 import { StudentSearch } from './components/student-search'
+import { useStudentMutations } from './hooks/use-student-mutations'
 import { StudentFormValues } from './schema'
 
 // Reusable Form Input Component
@@ -97,12 +94,36 @@ export function SectionHeader({ title, description }: SectionHeaderProps) {
   )
 }
 
-// Form Sections
-export function PersonalSection({
-  control,
-}: {
+function SectionSkeleton({ inputCount = 2 }: { inputCount?: number }) {
+  return (
+    <div className="space-y-6">
+      <div className="border-b pb-2">
+        <div className="h-5 w-32 animate-pulse rounded bg-muted" />
+        <div className="mt-1 h-4 w-48 animate-pulse rounded bg-muted" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        {Array.from({ length: inputCount }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+            <div className="h-10 animate-pulse rounded bg-muted" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Update props interface for each section
+interface SectionProps {
   control: Control<StudentFormValues>
-}) {
+  isLoading?: boolean
+}
+
+export function PersonalSection({ control, isLoading }: SectionProps) {
+  if (isLoading) {
+    return <SectionSkeleton inputCount={3} />
+  }
+
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -113,14 +134,19 @@ export function PersonalSection({
         <FormField
           control={control}
           name="firstName"
-          render={({ field }) => (
+          render={({ field, fieldState }) => (
             <FormItem>
               <FormLabel>Legal First Name</FormLabel>
               <FormControl>
                 <Input
-                  placeholder="Enter your legal first name"
                   {...field}
                   value={field.value || ''}
+                  placeholder="Enter your legal first name"
+                  aria-invalid={!!fieldState.error}
+                  className={cn(
+                    fieldState.error &&
+                      'border-destructive focus-visible:ring-destructive'
+                  )}
                 />
               </FormControl>
               <p className="text-xs text-muted-foreground">
@@ -133,14 +159,19 @@ export function PersonalSection({
         <FormField
           control={control}
           name="lastName"
-          render={({ field }) => (
+          render={({ field, fieldState }) => (
             <FormItem>
               <FormLabel>Legal Last Name</FormLabel>
               <FormControl>
                 <Input
-                  placeholder="Enter your legal last name"
                   {...field}
                   value={field.value || ''}
+                  placeholder="Enter your legal last name"
+                  aria-invalid={!!fieldState.error}
+                  className={cn(
+                    fieldState.error &&
+                      'border-destructive focus-visible:ring-destructive'
+                  )}
                 />
               </FormControl>
               <p className="text-xs text-muted-foreground">
@@ -154,7 +185,7 @@ export function PersonalSection({
           <FormField
             control={control}
             name="dateOfBirth"
-            render={({ field }) => (
+            render={({ field, fieldState }) => (
               <FormItem className="flex flex-col">
                 <FormLabel>Date of Birth</FormLabel>
                 <FormControl>
@@ -170,16 +201,14 @@ export function PersonalSection({
                     }
                     onChange={(date) => {
                       if (date) {
-                        const jsDate = new Date(
-                          date.year,
-                          date.month - 1,
-                          date.day
+                        field.onChange(
+                          new Date(date.year, date.month - 1, date.day)
                         )
-                        field.onChange(jsDate)
                       } else {
                         field.onChange(null)
                       }
                     }}
+                    aria-invalid={!!fieldState.error}
                     aria-label="Date of Birth"
                   >
                     <DateInput />
@@ -203,11 +232,9 @@ function formatPhoneNumber(value: string): string {
     : cleaned
 }
 
-export function ContactSection({
-  control,
-}: {
-  control: Control<StudentFormValues>
-}) {
+export function ContactSection({ control, isLoading }: SectionProps) {
+  if (isLoading) return <SectionSkeleton inputCount={2} />
+
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -218,7 +245,7 @@ export function ContactSection({
         <FormField
           control={control}
           name="email"
-          render={({ field }) => (
+          render={({ field, fieldState }) => (
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
@@ -226,6 +253,11 @@ export function ContactSection({
                   {...field}
                   placeholder="Enter your email"
                   value={field.value || ''}
+                  aria-invalid={!!fieldState.error}
+                  className={cn(
+                    fieldState.error &&
+                      'border-destructive focus-visible:ring-destructive'
+                  )}
                 />
               </FormControl>
               <p className="text-xs text-muted-foreground">
@@ -238,7 +270,7 @@ export function ContactSection({
         <FormField
           control={control}
           name="phone"
-          render={({ field }) => (
+          render={({ field, fieldState }) => (
             <FormItem>
               <FormLabel>Phone</FormLabel>
               <FormControl>
@@ -251,6 +283,11 @@ export function ContactSection({
                     const formatted = formatPhoneNumber(e.target.value)
                     field.onChange(formatted)
                   }}
+                  aria-invalid={!!fieldState.error}
+                  className={cn(
+                    fieldState.error &&
+                      'border-destructive focus-visible:ring-destructive'
+                  )}
                 />
               </FormControl>
               <p className="text-xs text-muted-foreground">
@@ -272,13 +309,11 @@ const GRADE_LEVEL_LABELS: Record<GradeLevel, string> = {
   SENIOR: 'Senior',
 }
 
-export function EducationSection({
-  control,
-}: {
-  control: Control<StudentFormValues>
-}) {
+export function EducationSection({ control, isLoading }: SectionProps) {
   const { watch, setValue } = useFormContext<StudentFormValues>()
   const educationLevel = watch('educationLevel')
+
+  if (isLoading) return <SectionSkeleton inputCount={3} />
 
   return (
     <div className="space-y-6">
@@ -290,7 +325,7 @@ export function EducationSection({
         <FormField
           control={control}
           name="educationLevel"
-          render={({ field }) => (
+          render={({ field, fieldState }) => (
             <FormItem>
               <FormLabel>Education Level</FormLabel>
               <Select
@@ -303,7 +338,13 @@ export function EducationSection({
                 }}
               >
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger
+                    aria-invalid={!!fieldState.error}
+                    className={cn(
+                      fieldState.error &&
+                        'border-destructive focus-visible:ring-destructive'
+                    )}
+                  >
                     <SelectValue placeholder="Select education level" />
                   </SelectTrigger>
                 </FormControl>
@@ -325,7 +366,7 @@ export function EducationSection({
         <FormField
           control={control}
           name="gradeLevel"
-          render={({ field }) => (
+          render={({ field, fieldState }) => (
             <FormItem>
               <FormLabel>Grade Level</FormLabel>
               <Select
@@ -334,7 +375,13 @@ export function EducationSection({
                 disabled={educationLevel === EducationLevel.POST_GRAD}
               >
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger
+                    aria-invalid={!!fieldState.error}
+                    className={cn(
+                      fieldState.error &&
+                        'border-destructive focus-visible:ring-destructive'
+                    )}
+                  >
                     <SelectValue placeholder="Select grade level" />
                   </SelectTrigger>
                 </FormControl>
@@ -357,14 +404,19 @@ export function EducationSection({
           <FormField
             control={control}
             name="schoolName"
-            render={({ field }) => (
+            render={({ field, fieldState }) => (
               <FormItem>
                 <FormLabel>School Name</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="Enter school name"
                     {...field}
                     value={field.value || ''}
+                    placeholder="Enter school name"
+                    aria-invalid={!!fieldState.error}
+                    className={cn(
+                      fieldState.error &&
+                        'border-destructive focus-visible:ring-destructive'
+                    )}
                   />
                 </FormControl>
                 <p className="text-xs text-muted-foreground">
@@ -380,61 +432,69 @@ export function EducationSection({
   )
 }
 
-export function SiblingSection({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  control,
-  student,
-  students,
-  onStudentUpdate,
-}: Props) {
+interface Props {
+  student: RegisterStudent
+  students: RegisterStudent[]
+  onStudentUpdate: (student: RegisterStudent) => void
+}
+
+function SiblingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+      <div className="rounded-lg border bg-card p-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-32 animate-pulse rounded bg-muted" />
+          </div>
+          <div className="h-9 w-24 animate-pulse rounded bg-muted" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function SiblingSection({ student, students, onStudentUpdate }: Props) {
+  const { manageSiblings } = useStudentMutations()
   const [showSiblingSearch, setShowSiblingSearch] = useState(false)
-  const [isLoading, setIsLoading] = useState<string | null>(null)
   const siblings =
-    student.siblingGroup?.students.filter((s) => s.id !== student.id) || []
+    student.siblingGroup?.students.filter(
+      (s: { id: string }) => s.id !== student.id
+    ) || []
 
   const handleAddSibling = async (selected: RegisterStudent) => {
-    try {
-      setIsLoading(selected.id)
-      const result = await addSibling(student.id, selected.id)
-      if (result.success) {
-        toast.success('Sibling added successfully')
-        if (result.student) {
-          onStudentUpdate(result.student)
-          setShowSiblingSearch(false)
-        }
-      }
-    } catch (error) {
-      console.error(error)
-      toast.error('Failed to add sibling')
-    } finally {
-      setIsLoading(null)
+    const result = await manageSiblings.mutateAsync({
+      type: 'add',
+      studentId: student.id,
+      siblingId: selected.id,
+    })
+    if (result.success && result.student) {
+      onStudentUpdate(result.student)
     }
   }
 
   const handleRemoveSibling = async (siblingId: string) => {
-    try {
-      setIsLoading(siblingId)
-      const result = await removeSibling(student.id, siblingId)
-      if (result.success) {
-        toast.success('Sibling removed successfully')
-        if (result.student) {
-          onStudentUpdate(result.student)
-        }
-      }
-    } catch (error) {
-      console.error(error)
-      toast.error('Failed to remove sibling')
-    } finally {
-      setIsLoading(null)
+    const result = await manageSiblings.mutateAsync({
+      type: 'remove',
+      studentId: student.id,
+      siblingId,
+    })
+    if (result.success && result.student) {
+      onStudentUpdate(result.student)
     }
   }
 
   const filteredStudents = students.filter(
-    (s) =>
+    (s: { id: string; name: string }) =>
       s.id !== student.id &&
-      !siblings.some((sib) => sib.id === s.id) &&
+      !siblings.some((sib: { id: string }) => sib.id === s.id) &&
       s.name.split(' ').pop() === student.name.split(' ').pop()
   )
+
+  if (manageSiblings.isPending) {
+    return <SiblingSkeleton />
+  }
 
   return (
     <div className="space-y-6">
@@ -457,11 +517,22 @@ export function SiblingSection({
             type="button"
             variant="outline"
             onClick={() => setShowSiblingSearch(true)}
-            disabled={isLoading !== null}
+            disabled={manageSiblings.isPending}
             className="gap-2"
           >
-            <UserPlus className="h-4 w-4" />
-            Add Sibling
+            {manageSiblings.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {manageSiblings.variables?.type === 'add'
+                  ? 'Adding...'
+                  : 'Removing...'}
+              </>
+            ) : (
+              <>
+                <UserPlus className="h-4 w-4" />
+                Add Sibling
+              </>
+            )}
           </Button>
         </div>
 
@@ -477,10 +548,11 @@ export function SiblingSection({
                   variant="ghost"
                   size="sm"
                   onClick={() => handleRemoveSibling(sibling.id)}
-                  disabled={isLoading !== null}
+                  disabled={manageSiblings.isPending}
                   className="text-muted-foreground hover:text-destructive"
                 >
-                  {isLoading === sibling.id ? (
+                  {manageSiblings.isPending &&
+                  sibling.id === manageSiblings.variables?.siblingId ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <X className="h-4 w-4" />

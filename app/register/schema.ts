@@ -6,47 +6,51 @@ import { z } from 'zod'
 export const studentFormSchema = z.object({
   firstName: z
     .string()
-    .min(2, { message: 'First name must be at least 2 characters' })
-    .regex(/^[a-zA-Z\s-]+$/, {
-      message: 'First name can only contain letters, spaces, and hyphens',
-    }),
+    .min(2, 'First name must be at least 2 characters')
+    .max(50, 'First name must be less than 50 characters')
+    .regex(
+      /^[a-zA-Z\s-]+$/,
+      'First name can only contain letters, spaces, and hyphens'
+    ),
   lastName: z
     .string()
-    .min(2, { message: 'Last name must be at least 2 characters' })
-    .regex(/^[a-zA-Z\s-]+$/, {
-      message: 'Last name can only contain letters, spaces, and hyphens',
-    }),
+    .min(2, 'Last name must be at least 2 characters')
+    .max(50, 'Last name must be less than 50 characters')
+    .regex(
+      /^[a-zA-Z\s-]+$/,
+      'Last name can only contain letters, spaces, and hyphens'
+    ),
   email: z
     .string()
-    .email({ message: 'Please enter a valid email address' })
-    .min(1, { message: 'Email is required' }),
+    .email('Please enter a valid email address')
+    .min(5, 'Email must be at least 5 characters')
+    .max(100, 'Email must be less than 100 characters'),
   phone: z
     .string()
-    .min(1, { message: 'Phone number is required' })
-    .regex(/^\d{3}-\d{3}-\d{4}$/, {
-      message: 'Phone number must be in XXX-XXX-XXXX format',
-    }),
-  schoolName: z
-    .string()
-    .min(2, { message: 'School name must be at least 2 characters' })
-    .max(100, { message: 'School name cannot exceed 100 characters' }),
+    .regex(
+      /^\d{3}-\d{3}-\d{4}$/,
+      'Please enter a valid phone number (XXX-XXX-XXXX)'
+    ),
+  dateOfBirth: z
+    .date()
+    .min(new Date('1990-01-01'), 'Date of birth must be after 1990')
+    .max(new Date(), 'Date of birth cannot be in the future'),
   educationLevel: z.nativeEnum(EducationLevel, {
-    errorMap: () => ({ message: 'Please select your education level' }),
+    required_error: 'Please select your education level',
   }),
   gradeLevel: z
     .nativeEnum(GradeLevel, {
-      errorMap: () => ({ message: 'Please select your grade level' }),
+      required_error: 'Please select your grade level',
     })
     .nullable(),
-  dateOfBirth: z
-    .date({
-      required_error: 'Date of birth is required',
-      invalid_type_error: 'Please enter a valid date',
-    })
-    .max(new Date(), { message: 'Date of birth cannot be in the future' })
-    .min(new Date('1900-01-01'), {
-      message: 'Please enter a valid date of birth',
-    }),
+  schoolName: z
+    .string()
+    .min(2, 'School name must be at least 2 characters')
+    .max(100, 'School name must be less than 100 characters')
+    .regex(
+      /^[a-zA-Z0-9\s-.']+$/,
+      'School name can only contain letters, numbers, spaces, hyphens, periods, and apostrophes'
+    ),
 })
 
 // Types

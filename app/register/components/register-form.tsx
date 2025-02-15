@@ -2,26 +2,18 @@
 
 import { useState } from 'react'
 
-import { EducationLevel } from '@prisma/client'
-import { GradeLevel } from '@prisma/client'
-import { Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
-import { z } from 'zod'
-
+import { ErrorBoundary } from '@/components/error-boundary'
 import { Button } from '@/components/ui/button'
-import {
-  RegisterStudent,
-  updateRegistrationStudent,
-} from '@/lib/actions/register'
+import type { RegisterStudent } from '@/lib/actions/register'
 
 import { ConfirmDialog } from './confirm-dialog'
-import { StudentFormValues, studentFormSchema } from '../schema'
 import { StudentForm } from './student-form'
 import { StudentSearch } from './student-search'
+import { useStudentMutations } from '../hooks/use-student-mutations'
+import { useStudents } from '../hooks/use-students'
 
 interface RegisterFormProps {
-  students: RegisterStudent[]
-  onStudentsUpdate?: (students: RegisterStudent[]) => void
+  initialStudents: RegisterStudent[]
 }
 
 function EmptyState() {
@@ -35,188 +27,102 @@ function EmptyState() {
   )
 }
 
-export function RegisterForm({
-  students,
-  onStudentsUpdate,
-}: RegisterFormProps) {
+function RegisterFormSkeleton() {
+  return (
+    <div className="mx-auto max-w-3xl space-y-8">
+      <div className="h-12 animate-pulse rounded bg-muted" />
+      <div className="h-[400px] animate-pulse rounded-lg border bg-card" />
+    </div>
+  )
+}
+
+export function RegisterForm({ initialStudents }: RegisterFormProps) {
+  const { data: students, isLoading } = useStudents(initialStudents)
+  const { updateStudent } = useStudentMutations()
+
   const [selectedStudent, setSelectedStudent] =
     useState<RegisterStudent | null>(null)
-  const [hasChanges, setHasChanges] = useState(false)
-  const [formValues, setFormValues] = useState<StudentFormValues | null>(null)
-  const [formStatus, setFormStatus] = useState<
-    'idle' | 'submitting' | 'success' | 'error'
-  >('idle')
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
+  if (isLoading) {
+    return <RegisterFormSkeleton />
+  }
+
   const handleStudentSelect = (student: RegisterStudent) => {
-    console.log('Selected Student Data:', student)
-
-    // Create initial form values from student data
-    const initialFormValues: StudentFormValues = {
-      firstName: student.name.split(' ')[0],
-      lastName: student.name.split(' ').slice(1).join(' '),
-      email: student.email || '',
-      phone: student.phone || '',
-      dateOfBirth: student.dateOfBirth
-        ? new Date(student.dateOfBirth)
-        : new Date(),
-      educationLevel: student.educationLevel as EducationLevel,
-      gradeLevel: student.gradeLevel as GradeLevel,
-      schoolName: student.schoolName || '',
-    }
-    console.log('Initial Form Values:', initialFormValues)
-
     setSelectedStudent(student)
-    setFormValues(initialFormValues)
-    setHasChanges(false)
   }
 
-  const handleFormUpdate = async (values: StudentFormValues) => {
-    if (!selectedStudent) return
-    setHasChanges(true)
-    setFormValues(values)
-  }
-
-  const handleSubmit = async () => {
-    if (!selectedStudent || !formValues) return
-
-    try {
-      setFormStatus('submitting')
-
-      // Add this console.log to check form values
-      console.log('Form Values:', formValues)
-
-      await studentFormSchema.parseAsync(formValues)
-
-      const { student } = await updateRegistrationStudent(selectedStudent.id, {
-        name: `${formValues.firstName} ${formValues.lastName}`.trim(),
-        email: formValues.email,
-        phone: formValues.phone,
-        dateOfBirth: formValues.dateOfBirth,
-        educationLevel: formValues.educationLevel,
-        gradeLevel: formValues.gradeLevel, // Make sure this is being sent
-        schoolName: formValues.schoolName,
-      })
-
-      // Add this to verify the response
-      console.log('Updated Student:', student)
-
-      setFormStatus('success')
-      toast.success('Changes saved successfully')
-      setHasChanges(false)
-
-      // Update local state with new data
-      if (onStudentsUpdate) {
-        const updatedStudents = students.map((s) =>
-          s.id === student.id ? student : s
-        )
-        onStudentsUpdate(updatedStudents)
-      }
-
-      setSelectedStudent(student)
-    } catch (err) {
-      setFormStatus('error')
-      handleFormError(err)
-    } finally {
-      setFormStatus('idle')
-    }
-  }
-
-  // Handle cancel with unsaved changes
   const handleCancel = () => {
-    if (hasChanges) {
+    if (updateStudent.isPending) return
+
+    if (hasFormChanges) {
       setShowConfirmDialog(true)
     } else {
       setSelectedStudent(null)
     }
   }
 
-  const canSaveChanges =
-    // Form is valid and has values
-    formValues &&
-    studentFormSchema.safeParse(formValues).success &&
-    // Either there are changes OR all fields are filled (even if unchanged)
-    (hasChanges ||
-      (formValues &&
-        Object.values(formValues).every(
-          (value) => value !== null && value !== ''
-        )))
+  // Compute if form has changes
+  const hasFormChanges =
+    selectedStudent &&
+    (selectedStudent.name.split(' ')[0] !==
+      selectedStudent.name.split(' ')[0] ||
+      selectedStudent.name.split(' ').slice(1).join(' ') !==
+        selectedStudent.name.split(' ').slice(1).join(' ') ||
+      selectedStudent.email !== selectedStudent.email ||
+      selectedStudent.phone !== selectedStudent.phone ||
+      selectedStudent.schoolName !== selectedStudent.schoolName ||
+      selectedStudent.educationLevel !== selectedStudent.educationLevel ||
+      selectedStudent.gradeLevel !== selectedStudent.gradeLevel ||
+      selectedStudent.dateOfBirth?.toISOString() !==
+        selectedStudent.dateOfBirth?.toISOString())
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
-      <StudentSearch
-        students={students}
-        selectedStudent={selectedStudent}
-        onSelect={handleStudentSelect}
-      />
+    <ErrorBoundary>
+      <div className="mx-auto max-w-3xl space-y-8">
+        <StudentSearch
+          students={students || []}
+          selectedStudent={selectedStudent}
+          onSelect={handleStudentSelect}
+          emptyMessage={
+            <div className="px-2 py-6 text-center">
+              <p className="text-sm text-muted-foreground">No students found</p>
+            </div>
+          }
+        />
 
-      {selectedStudent ? (
-        <>
-          <StudentForm
-            student={selectedStudent}
-            students={students}
-            onUpdate={handleFormUpdate}
-            onStudentUpdate={setSelectedStudent}
-          />
-          <div className="flex justify-end gap-4">
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              disabled={formStatus === 'submitting'}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={formStatus === 'submitting' || !canSaveChanges}
-              className="min-w-[120px]"
-            >
-              {formStatus === 'submitting' ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Changes'
-              )}
-            </Button>
-          </div>
-        </>
-      ) : (
-        <EmptyState />
-      )}
+        {selectedStudent ? (
+          <>
+            <StudentForm
+              student={selectedStudent}
+              students={students || []}
+              onStudentUpdate={setSelectedStudent}
+            />
+            <div className="flex justify-end gap-4">
+              <Button
+                variant="outline"
+                onClick={handleCancel}
+                disabled={updateStudent.isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </>
+        ) : (
+          <EmptyState />
+        )}
 
-      <ConfirmDialog
-        open={showConfirmDialog}
-        onOpenChange={setShowConfirmDialog}
-        onConfirm={() => {
-          setSelectedStudent(null)
-          setShowConfirmDialog(false)
-        }}
-        title="Unsaved Changes"
-        description="You have unsaved changes. Are you sure you want to leave?"
-      />
-    </div>
-  )
-}
-
-export function handleFormError(err: unknown) {
-  if (err instanceof z.ZodError) {
-    const errors = err.errors.map((e) => e.message)
-    toast.error(
-      <div className="space-y-2">
-        <p className="font-medium">Please fix the following:</p>
-        <ul className="list-disc pl-4 text-sm">
-          {errors.map((error, i) => (
-            <li key={i}>{error}</li>
-          ))}
-        </ul>
+        <ConfirmDialog
+          open={showConfirmDialog}
+          onOpenChange={setShowConfirmDialog}
+          onConfirm={() => {
+            setSelectedStudent(null)
+            setShowConfirmDialog(false)
+          }}
+          title="Unsaved Changes"
+          description="You have unsaved changes. Are you sure you want to leave?"
+        />
       </div>
-    )
-    return
-  }
-
-  toast.error(
-    err instanceof Error ? err.message : 'An unexpected error occurred'
+    </ErrorBoundary>
   )
 }
