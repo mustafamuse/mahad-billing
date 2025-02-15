@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { CalendarDate } from '@internationalized/date'
 import { EducationLevel, GradeLevel } from '@prisma/client'
-import { X, Loader2, UserPlus, AlertTriangle } from 'lucide-react'
+import { X, UserPlus, AlertTriangle } from 'lucide-react'
 import { Control, useFormContext } from 'react-hook-form'
 
 import { Button } from '@/components/ui/button'
@@ -438,23 +438,6 @@ interface Props {
   onStudentUpdate: (student: RegisterStudent) => void
 }
 
-function SiblingSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
-      <div className="rounded-lg border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-            <div className="h-3 w-32 animate-pulse rounded bg-muted" />
-          </div>
-          <div className="h-9 w-24 animate-pulse rounded bg-muted" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export function SiblingSection({ student, students, onStudentUpdate }: Props) {
   const { manageSiblings } = useStudentMutations()
   const [showSiblingSearch, setShowSiblingSearch] = useState(false)
@@ -471,6 +454,7 @@ export function SiblingSection({ student, students, onStudentUpdate }: Props) {
     })
     if (result.success && result.student) {
       onStudentUpdate(result.student)
+      setShowSiblingSearch(false)
     }
   }
 
@@ -491,10 +475,6 @@ export function SiblingSection({ student, students, onStudentUpdate }: Props) {
       !siblings.some((sib: { id: string }) => sib.id === s.id) &&
       s.name.split(' ').pop() === student.name.split(' ').pop()
   )
-
-  if (manageSiblings.isPending) {
-    return <SiblingSkeleton />
-  }
 
   return (
     <div className="space-y-6">
@@ -517,22 +497,10 @@ export function SiblingSection({ student, students, onStudentUpdate }: Props) {
             type="button"
             variant="outline"
             onClick={() => setShowSiblingSearch(true)}
-            disabled={manageSiblings.isPending}
             className="gap-2"
           >
-            {manageSiblings.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {manageSiblings.variables?.type === 'add'
-                  ? 'Adding...'
-                  : 'Removing...'}
-              </>
-            ) : (
-              <>
-                <UserPlus className="h-4 w-4" />
-                Add Sibling
-              </>
-            )}
+            <UserPlus className="h-4 w-4" />
+            Add Sibling
           </Button>
         </div>
 
@@ -548,15 +516,9 @@ export function SiblingSection({ student, students, onStudentUpdate }: Props) {
                   variant="ghost"
                   size="sm"
                   onClick={() => handleRemoveSibling(sibling.id)}
-                  disabled={manageSiblings.isPending}
                   className="text-muted-foreground hover:text-destructive"
                 >
-                  {manageSiblings.isPending &&
-                  sibling.id === manageSiblings.variables?.siblingId ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <X className="h-4 w-4" />
-                  )}
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             ))}
