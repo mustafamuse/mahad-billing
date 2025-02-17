@@ -4,9 +4,9 @@ import { getRegistrationStudents } from '@/lib/actions/register'
 
 import { RegisterForm } from './components/register-form'
 import { Providers } from './providers'
-
+export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
-  title: 'Student Registration - Irshād 4',
+  title: 'Student Registration',
   description:
     'Update your student information and manage sibling relationships.',
 }

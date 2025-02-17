@@ -1,7 +1,5 @@
 'use client'
 
-import { useState } from 'react'
-
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -22,14 +20,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { useEnrollment } from '@/contexts/enrollment-context'
 import {
   enrollmentSchema,
@@ -40,13 +31,7 @@ import { type Relationship } from '@/lib/types'
 
 export function PayorDetailsStep() {
   const {
-    state: {
-      selectedStudents,
-      hasViewedTerms,
-      isTermsModalOpen,
-      payorDetails,
-      isProcessing,
-    },
+    state: { selectedStudents, isTermsModalOpen, payorDetails, isProcessing },
     actions: {
       previousStep,
       nextStep,
@@ -68,15 +53,39 @@ export function PayorDetailsStep() {
     reValidateMode: 'onChange',
   })
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [showErrors, setShowErrors] = useState(true)
-
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
-      await prepareSetup({
-        ...values,
-        studentIds: selectedStudents.map((s) => s.id),
+      console.log('Submit handler:', {
+        rawValues: values,
+        termsAccepted: values.termsAccepted,
+        formState: {
+          isValid: form.formState.isValid,
+          errors: form.formState.errors,
+          dirtyFields: form.formState.dirtyFields,
+        },
       })
+
+      if (!values.termsAccepted) {
+        console.log('Terms not accepted, showing toast')
+        toast.error('Please accept the terms and conditions')
+        return
+      }
+
+      const payload = {
+        payerDetails: {
+          firstName: values.firstName,
+          lastName: values.lastName,
+          email: values.email,
+          phone: values.phone,
+          relationship: values.relationship,
+        },
+        studentIds: selectedStudents.map((s) => s.id),
+        termsAccepted: values.termsAccepted,
+      }
+
+      console.log('Sending payload:', payload)
+
+      await prepareSetup(payload)
       nextStep()
     } catch (error) {
       console.error('Failed to prepare setup:', error)
@@ -124,7 +133,7 @@ export function PayorDetailsStep() {
                 })
               }}
               error={
-                showErrors && form.formState.errors.relationship
+                form.formState.errors.relationship
                   ? form.formState.errors.relationship.message
                   : undefined
               }
@@ -138,63 +147,57 @@ export function PayorDetailsStep() {
                     shouldValidate: true,
                   })
                 })
-                updatePayorDetails(values)
+                updatePayorDetails({
+                  ...values,
+                  relationship: values.relationship as Relationship,
+                })
               }}
-              showErrors={showErrors}
+              showErrors={!!form.formState.errors.termsAccepted}
               errors={form.formState.errors}
             />
 
-            <div className="flex items-start space-x-3">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div>
-                      <Checkbox
-                        checked={form.watch('termsAccepted')}
-                        onCheckedChange={(checked) => {
-                          if (!hasViewedTerms) {
-                            toggleTermsModal()
-                            return
-                          }
-                          form.setValue('termsAccepted', checked as boolean, {
-                            shouldValidate: true,
-                          })
-                        }}
-                        disabled={!hasViewedTerms}
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={5}>
-                    <p>Please read the terms and conditions first</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <div className="space-y-1 leading-none">
-                <Label className="text-base font-normal">
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="terms"
+                  {...form.register('termsAccepted')}
+                  checked={form.watch('termsAccepted')}
+                  onCheckedChange={(checked) => {
+                    console.log('Checkbox changed:', {
+                      checked,
+                      beforeValue: form.getValues('termsAccepted'),
+                    })
+
+                    form.setValue('termsAccepted', checked === true, {
+                      shouldValidate: true,
+                    })
+
+                    console.log('After setValue:', {
+                      formValue: form.getValues('termsAccepted'),
+                      watchValue: form.watch('termsAccepted'),
+                    })
+                  }}
+                />
+                <label
+                  htmlFor="terms"
+                  className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
                   I agree to the{' '}
                   <Button
                     type="button"
                     variant="link"
-                    className="h-auto p-0 text-primary underline decoration-primary underline-offset-4 hover:text-primary/80"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      toggleTermsModal()
-                    }}
+                    className="h-auto p-0 text-sm font-medium underline"
+                    onClick={() => toggleTermsModal()}
                   >
                     Terms and Conditions
                   </Button>
-                  {!hasViewedTerms && (
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      (click to review)
-                    </span>
-                  )}
-                </Label>
-                {showErrors && form.formState.errors.termsAccepted && (
-                  <p className="text-sm text-destructive">
-                    {form.formState.errors.termsAccepted.message}
-                  </p>
-                )}
+                </label>
               </div>
+              {form.formState.errors.termsAccepted && (
+                <p className="text-sm text-destructive">
+                  {form.formState.errors.termsAccepted.message}
+                </p>
+              )}
             </div>
           </CardContent>
 

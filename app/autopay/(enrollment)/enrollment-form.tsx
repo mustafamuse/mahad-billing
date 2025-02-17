@@ -9,25 +9,20 @@ import {
   EnrollmentProvider,
   useEnrollment,
 } from '@/contexts/enrollment-context'
-import { type Student } from '@/lib/types'
 
-interface EnrollmentFormProps {
-  students: Student[]
-}
-
-export function EnrollmentForm({ students }: EnrollmentFormProps) {
+export function EnrollmentForm() {
   return (
     <EnrollmentProvider>
       <div className="mx-auto max-w-3xl space-y-8">
         <EnrollmentHeader />
-        <EnrollmentSteps students={students} />
+        <EnrollmentSteps />
       </div>
       <Footer showButtons={true} />
     </EnrollmentProvider>
   )
 }
 
-function EnrollmentSteps({ students }: { students: Student[] }) {
+function EnrollmentSteps() {
   const { state } = useEnrollment()
 
   console.log('EnrollmentSteps render', {
@@ -38,7 +33,7 @@ function EnrollmentSteps({ students }: { students: Student[] }) {
   // Render the appropriate step based on state.step
   switch (state.step) {
     case 0:
-      return <StudentSelectionStep students={students} />
+      return <StudentSelectionStep />
     case 1:
       return <PayorDetailsStep />
     case 2:

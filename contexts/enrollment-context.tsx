@@ -5,8 +5,9 @@ import { createContext, useContext, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { toast } from 'sonner'
 
+import { StudentDTO } from '@/lib/actions/get-students'
 import { type EnrollmentFormValues } from '@/lib/schemas/enrollment'
-import { PayorDetails, type Student } from '@/lib/types'
+import { PayorDetails } from '@/lib/types'
 
 // 1. Define Types
 type EnrollmentStatus = 'draft' | 'confirming' | 'confirmed' | 'failed'
@@ -23,7 +24,7 @@ interface PrepareSetupResponse {
 
 interface EnrollmentState {
   step: number
-  selectedStudents: Student[]
+  selectedStudents: StudentDTO[]
   payorDetails: PayorDetails | null
   status: EnrollmentStatus
   clientSecret: string | null
@@ -39,18 +40,21 @@ interface EnrollmentActions {
   setStep: (step: number) => void
   previousStep: () => void
   nextStep: () => void
-  updateSelectedStudents: (students: Student[]) => void
+  updateSelectedStudents: (students: StudentDTO[]) => void
   updatePayorDetails: (details: PayorDetails) => void
   finalizeEnrollment: (values: EnrollmentFormValues) => Promise<void>
   handleTermsAgreement: (form: UseFormReturn<EnrollmentFormValues>) => void
   toggleTermsModal: () => void
   prepareSetup: (data: {
-    firstName: string
-    lastName: string
-    email: string
-    phone: string
-    relationship: string
+    payerDetails: {
+      firstName: string
+      lastName: string
+      email: string
+      phone: string
+      relationship: string
+    }
     studentIds: string[]
+    termsAccepted: boolean
   }) => Promise<void>
   resetForm: () => void
 }
@@ -86,7 +90,10 @@ export function EnrollmentProvider({
 }: {
   children: React.ReactNode
 }) {
-  const [state, setState] = useState<EnrollmentState>(initialState)
+  const [state, setState] = useState<EnrollmentState>({
+    ...initialState,
+    selectedStudents: [] as StudentDTO[],
+  })
 
   // 5. Define Actions
   const actions: EnrollmentActions = {
@@ -102,7 +109,7 @@ export function EnrollmentProvider({
       setState((prev) => ({ ...prev, step: prev.step + 1 }))
     },
 
-    updateSelectedStudents: (students: Student[]) => {
+    updateSelectedStudents: (students: StudentDTO[]) => {
       setState((prev) => ({ ...prev, selectedStudents: students }))
     },
 

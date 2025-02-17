@@ -4,6 +4,7 @@ import { twMerge } from 'tailwind-merge'
 
 import { LogEventData } from '@/app/api/webhook/types'
 
+import { StudentDTO } from './actions/get-students'
 import { BASE_RATE } from './data'
 import { Student } from './types'
 
@@ -18,7 +19,7 @@ export function getFamilyDiscount(totalFamilyMembers: number): number {
   return 0
 }
 
-export function calculateTotal(students: Student[]): number {
+export function calculateTotal(students: StudentDTO[]): number {
   return students.reduce((total, student) => total + student.monthlyRate, 0)
 }
 

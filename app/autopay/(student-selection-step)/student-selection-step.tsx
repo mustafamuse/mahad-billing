@@ -21,14 +21,12 @@ import {
 } from '@/components/ui/card'
 import { useEnrollment } from '@/contexts/enrollment-context'
 import { useStudentSelection } from '@/hooks/use-student-selection'
-import { type Student } from '@/lib/types'
 
-interface StudentSelectionStepProps {
-  students: Student[]
-}
+import { useEligibleStudents } from '../hooks/use-eligible-students'
 
-export function StudentSelectionStep({ students }: StudentSelectionStepProps) {
+export function StudentSelectionStep() {
   const [open, setOpen] = useState(false)
+  const { data: students, isLoading, error } = useEligibleStudents()
   const {
     state: { selectedStudents, isProcessing },
     actions: { nextStep, updateSelectedStudents },
@@ -88,9 +86,9 @@ export function StudentSelectionStep({ students }: StudentSelectionStepProps) {
         <CardContent className="space-y-4 p-4 sm:p-6">
           <div className="space-y-4">
             <StudentSearchCombobox
-              students={students}
-              isLoading={false}
-              error={null}
+              students={students || []}
+              isLoading={isLoading}
+              error={error?.message || null}
               open={open}
               onOpenChange={setOpen}
               onSelect={handleStudentSelect}

@@ -19,7 +19,6 @@ interface StatusMessagesProps {
 
 export function StatusMessages({ status, bankDetails }: StatusMessagesProps) {
   console.log('Status Messages - Current Status:', status)
-  console.log('Status Messages - Bank Details:', bankDetails)
 
   const baseCardClass = cn(
     'rounded-lg md:rounded-xl',

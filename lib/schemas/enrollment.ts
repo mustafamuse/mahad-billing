@@ -1,54 +1,45 @@
 import { z } from 'zod'
 
-const relationshipTypes = [
-  'self',
-  'father',
-  'mother',
-  'sibling',
-  'uncle',
-  'aunt',
-  'step-father',
-  'step-mother',
-  'other',
-] as const
-
-export type RelationshipType = (typeof relationshipTypes)[number]
-
 // Base schema for payor details
-const payorDetailsSchema = z.object({
-  firstName: z.string().min(1, "Payor's first name is required"),
-  lastName: z.string().min(1, "Payor's last name is required"),
-  email: z
-    .string()
-    .min(1, "Payor's email is required")
-    .email('Please enter a valid email address'),
+export const payerDetailsSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Invalid email address'),
   phone: z
     .string()
     .min(1, "Payor's phone number is required")
     .refine((val) => val.replace(/\D/g, '').length === 10, {
       message: 'Phone number must be exactly 10 digits',
     }),
-  relationship: z.enum(relationshipTypes, {
-    required_error: 'Please select your relationship to the student',
-  }),
+  relationship: z.string().min(1, 'Relationship is required'),
 })
 
 // Schema for prepare-setup endpoint
-export const prepareSetupSchema = payorDetailsSchema.extend({
-  studentIds: z.array(z.string()).min(1, 'Please select at least one student'),
+export const prepareSetupSchema = z.object({
+  payerDetails: payerDetailsSchema,
+  studentIds: z.array(z.string()).min(1, 'At least one student is required'),
+  termsAccepted: z.boolean().refine((val) => val === true, {
+    message: 'Terms must be accepted',
+  }),
 })
 
+export type PrepareSetupInput = z.infer<typeof prepareSetupSchema>
+
 // Schema for the enrollment form
-export const enrollmentSchema = payorDetailsSchema.extend({
-  students: z.array(z.string()).min(1, 'Please select at least one student'),
+export const enrollmentSchema = z.object({
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().email('Invalid email address'),
+  phone: z.string().min(10, 'Phone number is required'),
+  relationship: z.string().min(1, 'Relationship is required'),
   termsAccepted: z.boolean().refine((val) => val === true, {
     message: 'You must accept the terms and conditions',
   }),
-  setupIntentId: z.string().optional(),
+  students: z.array(z.string()).min(1, 'Please select at least one student'),
 })
 
 // Schema for the API request
-export const EnrollmentApiSchema = payorDetailsSchema.extend({
+export const EnrollmentApiSchema = payerDetailsSchema.extend({
   studentIds: z.array(z.string()).min(1, 'Please select at least one student'),
 })
 

@@ -16,7 +16,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { PayorDetails, type Student } from '@/lib/types'
+import { StudentDTO } from '@/lib/actions/get-students'
+import { PayorDetails } from '@/lib/types'
 
 // Get the publishable key from env
 const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -27,7 +28,7 @@ if (!publishableKey) {
 interface ClientPaymentFormProps {
   clientSecret: string
   payorDetails: PayorDetails
-  selectedStudents: Student[]
+  selectedStudents: StudentDTO[]
   onAddStudents: () => void
 }
 
