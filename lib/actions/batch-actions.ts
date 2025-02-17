@@ -48,3 +48,54 @@ export async function createBatch(name: string) {
     throw new Error('Failed to create batch')
   }
 }
+
+export async function assignStudentsToBatch(
+  batchId: string,
+  studentIds: string[]
+) {
+  try {
+    console.log('📝 Assigning students:', {
+      batchId,
+      studentCount: studentIds.length,
+      studentIds,
+    })
+
+    await prisma.student.updateMany({
+      where: {
+        id: {
+          in: studentIds,
+        },
+      },
+      data: {
+        batchId,
+      },
+    })
+
+    // Verify the update
+    const updatedStudents = await prisma.student.findMany({
+      where: {
+        id: {
+          in: studentIds,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        batchId: true,
+      },
+    })
+
+    console.log('✅ Assignment result:', {
+      expected: studentIds.length,
+      updated: updatedStudents.filter((s) => s.batchId === batchId).length,
+      students: updatedStudents,
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error('❌ Failed to assign students:', error)
+    throw new Error(
+      error instanceof Error ? error.message : 'Failed to assign students'
+    )
+  }
+}

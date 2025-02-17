@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { createBatch } from '@/lib/actions/batch-actions'
 
+import { AssignStudentsDialog } from './assign-students'
 import { useBatches } from '../hooks/use-batches'
 
 export function BatchManagement() {
@@ -39,26 +40,29 @@ export function BatchManagement() {
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleCreateBatch} className="flex items-end gap-4">
-        <div className="flex-1 space-y-2">
-          <label
-            htmlFor="name"
-            className="text-sm font-medium text-muted-foreground"
-          >
-            Batch Name
-          </label>
-          <Input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Enter batch name..."
-            disabled={isLoading}
-          />
-        </div>
-        <Button type="submit" disabled={!name || isLoading}>
-          Create Batch
-        </Button>
-      </form>
+      <div className="flex items-end justify-between gap-4">
+        <form onSubmit={handleCreateBatch} className="flex items-end gap-4">
+          <div className="flex-1 space-y-2">
+            <label
+              htmlFor="name"
+              className="text-sm font-medium text-muted-foreground"
+            >
+              Batch Name
+            </label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter batch name..."
+              disabled={isLoading}
+            />
+          </div>
+          <Button type="submit" disabled={!name || isLoading}>
+            Create Batch
+          </Button>
+        </form>
+        <AssignStudentsDialog />
+      </div>
 
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Current Batches</h2>
