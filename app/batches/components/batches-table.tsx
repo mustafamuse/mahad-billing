@@ -10,6 +10,7 @@ import {
   flexRender,
 } from '@tanstack/react-table'
 
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -31,6 +32,80 @@ import type { BatchStudentData } from '@/lib/actions/get-batch-data'
 import { columns } from './columns'
 import { useBatchData } from '../hooks/use-batch-data'
 import { useBatches } from '../hooks/use-batches'
+
+interface FilterPreset {
+  id: string
+  name: string
+  filters: {
+    batch: string
+    status: string
+    sibling: 'all' | 'with' | 'without'
+    search: string
+  }
+}
+
+const COMMON_FILTERS: FilterPreset[] = [
+  {
+    id: 'unassigned-new',
+    name: '🆕 New Unassigned Students',
+    filters: {
+      batch: 'none',
+      status: 'registered',
+      sibling: 'all',
+      search: '',
+    },
+  },
+  {
+    id: 'unassigned-enrolled',
+    name: '📝 Enrolled Without Batch',
+    filters: {
+      batch: 'none',
+      status: 'enrolled',
+      sibling: 'all',
+      search: '',
+    },
+  },
+  {
+    id: 'siblings-unassigned',
+    name: '👥 Siblings Needing Batch',
+    filters: {
+      batch: 'none',
+      status: 'all',
+      sibling: 'with',
+      search: '',
+    },
+  },
+  {
+    id: 'on-leave',
+    name: '🌴 Students On Leave',
+    filters: {
+      batch: 'all',
+      status: 'on_leave',
+      sibling: 'all',
+      search: '',
+    },
+  },
+  {
+    id: 'withdrawn-with-batch',
+    name: '⚠️ Withdrawn (In Batch)',
+    filters: {
+      batch: 'all',
+      status: 'withdrawn',
+      sibling: 'all',
+      search: '',
+    },
+  },
+  {
+    id: 'active-no-siblings',
+    name: '👤 Active Solo Students',
+    filters: {
+      batch: 'all',
+      status: 'enrolled',
+      sibling: 'without',
+      search: '',
+    },
+  },
+]
 
 export function BatchesTable() {
   const { data: students = [], isLoading, error } = useBatchData()
@@ -88,6 +163,32 @@ export function BatchesTable() {
     [students]
   )
 
+  // Check if any filters are active
+  const hasActiveFilters = useMemo(
+    () =>
+      batchFilter !== 'all' ||
+      statusFilter !== 'all' ||
+      siblingFilter !== 'all' ||
+      globalFilter !== '',
+    [batchFilter, statusFilter, siblingFilter, globalFilter]
+  )
+
+  // Apply preset filter
+  const applyPreset = (preset: FilterPreset) => {
+    setBatchFilter(preset.filters.batch)
+    setStatusFilter(preset.filters.status)
+    setSiblingFilter(preset.filters.sibling)
+    setGlobalFilter(preset.filters.search)
+  }
+
+  // Clear all filters
+  const clearFilters = () => {
+    setBatchFilter('all')
+    setStatusFilter('all')
+    setSiblingFilter('all')
+    setGlobalFilter('')
+  }
+
   const table = useReactTable<BatchStudentData>({
     data: filteredData,
     columns,
@@ -123,91 +224,116 @@ export function BatchesTable() {
   return (
     <div className="space-y-4">
       <TableSummary data={students} />
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <Input
-            placeholder="Filter students..."
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            className="max-w-sm"
-          />
+      <div className="flex flex-col gap-4">
+        {/* Filter Actions Row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Filter students..."
+              value={globalFilter}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              className="w-[300px]"
+            />
+            <Select
+              value=""
+              onValueChange={(value) => {
+                const preset = COMMON_FILTERS.find((f) => f.id === value)
+                if (preset) applyPreset(preset)
+              }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Quick Filters" />
+              </SelectTrigger>
+              <SelectContent>
+                {COMMON_FILTERS.map((preset) => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {hasActiveFilters && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground">
+                Showing {filteredData.length} of {students.length} students
+              </span>
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                Clear Filters
+              </Button>
+            </div>
+          )}
         </div>
-        <div className="w-[200px]">
-          <Select value={batchFilter} onValueChange={setBatchFilter}>
-            <SelectTrigger>
-              <SelectValue placeholder="All Batches">
-                {batchFilter === 'all'
-                  ? 'All Batches'
-                  : batchFilter === 'none'
-                    ? `Unassigned (${unassignedCount})`
-                    : (batches.find((b) => b.id === batchFilter)?.name ??
-                      'Unassigned')}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Batches</SelectItem>
-              <SelectItem value="none" className="font-medium text-orange-600">
-                Unassigned ({unassignedCount})
-              </SelectItem>
-              {batches.map((batch) => (
-                <SelectItem key={batch.id} value={batch.id}>
-                  {batch.name} ({batch.studentCount})
+
+        {/* Main Filters Row */}
+        <div className="flex items-center gap-4">
+          <div className="w-[200px]">
+            <Select value={batchFilter} onValueChange={setBatchFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Batches">
+                  {batchFilter === 'all'
+                    ? 'All Batches'
+                    : batchFilter === 'none'
+                      ? `Unassigned (${unassignedCount})`
+                      : (batches.find((b) => b.id === batchFilter)?.name ??
+                        'Unassigned')}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Batches</SelectItem>
+                <SelectItem
+                  value="none"
+                  className="font-medium text-orange-600"
+                >
+                  Unassigned ({unassignedCount})
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                {batches.map((batch) => (
+                  <SelectItem key={batch.id} value={batch.id}>
+                    {batch.name} ({batch.studentCount})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-[200px]">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue defaultValue="all">
+                  {statusFilter === 'all' ? 'All Statuses' : statusFilter}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="registered">Registered</SelectItem>
+                <SelectItem value="enrolled">Enrolled</SelectItem>
+                <SelectItem value="on_leave">On Leave</SelectItem>
+                <SelectItem value="withdrawn">Withdrawn</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-[200px]">
+            <Select
+              value={siblingFilter}
+              onValueChange={(value: 'all' | 'with' | 'without') =>
+                setSiblingFilter(value)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue defaultValue="all">
+                  {siblingFilter === 'all'
+                    ? 'All Students'
+                    : `With ${siblingFilter === 'with' ? '' : 'out'} Siblings`}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Students</SelectItem>
+                <SelectItem value="with">With Siblings</SelectItem>
+                <SelectItem value="without">Without Siblings</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <div className="w-[200px]">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger>
-              <SelectValue defaultValue="all">
-                {statusFilter === 'all' ? 'All Statuses' : statusFilter}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="registered">Registered</SelectItem>
-              <SelectItem value="enrolled">Enrolled</SelectItem>
-              <SelectItem value="on_leave">On Leave</SelectItem>
-              <SelectItem value="withdrawn">Withdrawn</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-[200px]">
-          <Select
-            value={siblingFilter}
-            onValueChange={(value: 'all' | 'with' | 'without') =>
-              setSiblingFilter(value)
-            }
-          >
-            <SelectTrigger>
-              <SelectValue defaultValue="all">
-                {siblingFilter === 'all'
-                  ? 'All Students'
-                  : `With ${siblingFilter === 'with' ? '' : 'out'} Siblings`}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Students</SelectItem>
-              <SelectItem value="with">With Siblings</SelectItem>
-              <SelectItem value="without">Without Siblings</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <button
-          onClick={() => {
-            console.log('📊 Current Table State:', {
-              totalStudents: students.length,
-              filteredStudents: rows.length,
-              currentFilter: statusFilter,
-              globalFilter,
-              firstStudent: students[0],
-            })
-          }}
-          className="px-4 py-2 text-sm text-muted-foreground hover:bg-accent"
-        >
-          Debug Table
-        </button>
       </div>
 
       <div className="rounded-md border">
