@@ -1,19 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client'
 
 import { useEffect, useState } from 'react'
 
-import { format } from 'date-fns'
-import { Trash2 } from 'lucide-react'
+import { format, parseISO } from 'date-fns'
+import { AlertCircle, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import {
   getDuplicateStudents,
   deleteDuplicateRecords,
@@ -38,6 +32,22 @@ interface DuplicateGroup {
   duplicateRecords: DuplicateStudent[]
   hasSiblingGroup: boolean
   differences: FieldDifferences | null
+}
+
+function formatDate(dateString: string) {
+  try {
+    return format(parseISO(dateString), 'MMM d, yyyy')
+  } catch (e) {
+    return dateString
+  }
+}
+
+function formatDateOfBirth(dateString: string) {
+  try {
+    return format(parseISO(dateString), 'MMM d, yyyy')
+  } catch (e) {
+    return dateString.split('T')[0]
+  }
 }
 
 export function DuplicateStudents() {
@@ -85,7 +95,16 @@ export function DuplicateStudents() {
     }
   }
 
-  if (isLoading) return <div>Checking for duplicates...</div>
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Checking for duplicates...
+        </div>
+      </div>
+    )
+  }
   if (error) return <div>Error: {error}</div>
   if (!duplicates.length) {
     console.log('ℹ️ No duplicates found')
@@ -93,76 +112,66 @@ export function DuplicateStudents() {
   }
 
   return (
-    <Card className="bg-amber-50 dark:bg-amber-950">
-      <CardHeader>
-        <CardTitle className="text-amber-900 dark:text-amber-100">
-          Duplicate Student Records Found
-        </CardTitle>
-        <CardDescription>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">
           {duplicates.length} student(s) have multiple records
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {duplicates.map((group) => (
-            <div
-              key={group.email}
-              className="rounded-lg bg-white p-4 shadow-sm dark:bg-gray-800"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium text-amber-900 dark:text-amber-100">
-                  {group.email} ({group.count} records)
-                  {group.hasSiblingGroup && (
-                    <span className="ml-2 text-sm text-blue-500">
-                      Has sibling group
-                    </span>
-                  )}
-                </h3>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleDelete(group)}
-                  className="flex items-center gap-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete {
-                    group.duplicateRecords.length
-                  } duplicates
-                </Button>
-              </div>
+        </p>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="w-full transition-all duration-200 hover:bg-red-600 sm:w-auto"
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete {duplicates.length} duplicates
+        </Button>
+      </div>
 
-              {/* Record to keep */}
-              <div className="mt-4 rounded-md bg-green-50 p-2 dark:bg-green-900/20">
-                <p className="font-medium text-green-700 dark:text-green-300">
+      {duplicates.map((group) => (
+        <div
+          key={group.email}
+          className="rounded-lg border bg-background p-3 transition-all duration-200 hover:shadow-md sm:p-4"
+        >
+          <div className="space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <h3 className="font-medium">
+                  {group.email} ({group.count} records)
+                </h3>
+                {group.hasSiblingGroup && (
+                  <span className="text-sm text-blue-600">
+                    Has sibling group
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-md border bg-green-50/50 p-3">
+                <h4 className="text-sm font-medium text-green-900">
                   Record to keep:
-                </p>
-                <div className="mt-1 flex items-center justify-between text-sm">
-                  <span>{group.keepRecord.name}</span>
-                  <span className="text-muted-foreground">
-                    Created:{' '}
-                    {format(
-                      new Date(group.keepRecord.createdAt),
-                      'MMM d, yyyy'
-                    )}
+                </h4>
+                <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-medium">{group.keepRecord.name}</span>
+                  <span className="text-sm text-muted-foreground">
+                    Created: {formatDate(group.keepRecord.createdAt)}
                   </span>
                 </div>
               </div>
 
-              {/* Duplicate records */}
-              <div className="mt-2">
-                <p className="text-sm font-medium text-red-700 dark:text-red-300">
+              <div className="rounded-md border bg-red-50/50 p-3">
+                <h4 className="text-sm font-medium text-red-900">
                   Records to delete:
-                </p>
-                <div className="mt-1 space-y-1">
-                  {group.duplicateRecords.map((student) => (
+                </h4>
+                <div className="mt-2 space-y-2">
+                  {group.duplicateRecords.map((record, index) => (
                     <div
-                      key={student.id}
-                      className="flex items-center justify-between text-sm"
+                      key={record.id}
+                      className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <span>{student.name}</span>
-                      <span className="text-muted-foreground">
-                        Created:{' '}
-                        {format(new Date(student.createdAt), 'MMM d, yyyy')}
+                      <span className="font-medium">{record.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        Created: {formatDate(record.createdAt)}
                       </span>
                     </div>
                   ))}
@@ -170,18 +179,30 @@ export function DuplicateStudents() {
               </div>
 
               {group.differences && (
-                <div className="mt-2 rounded-md bg-red-50 p-2 text-sm dark:bg-red-900/20">
-                  <p className="font-medium text-red-700 dark:text-red-300">
+                <div className="rounded-md border bg-muted/50 p-3">
+                  <h4 className="flex items-center gap-2 text-sm font-medium">
+                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
                     Fields with different values:
-                  </p>
-                  <ul className="mt-1 list-inside list-disc">
+                  </h4>
+                  <ul className="mt-3 space-y-3">
                     {Object.entries(group.differences).map(
                       ([field, values]) => (
-                        <li
-                          key={field}
-                          className="text-red-600 dark:text-red-400"
-                        >
-                          {field}: {Array.from(values).join(' | ')}
+                        <li key={field} className="flex flex-col space-y-1.5">
+                          <span className="text-sm font-medium capitalize text-muted-foreground">
+                            {field}
+                          </span>
+                          <div className="flex flex-wrap gap-2 text-sm">
+                            {Array.from(values).map((value, i) => (
+                              <span
+                                key={`${field}-${i}`}
+                                className="rounded bg-muted px-2 py-1"
+                              >
+                                {field.toLowerCase().includes('date')
+                                  ? formatDateOfBirth(value)
+                                  : value}
+                              </span>
+                            ))}
+                          </div>
                         </li>
                       )
                     )}
@@ -189,9 +210,9 @@ export function DuplicateStudents() {
                 </div>
               )}
             </div>
-          ))}
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      ))}
+    </div>
   )
 }

@@ -270,13 +270,13 @@ export function BatchesTable() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Summary Cards with improved grid and mobile layout */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {/* Total Students Card */}
+    <div className="space-y-4 sm:space-y-6">
+      {/* Summary Cards - Improved mobile grid */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
+        {/* Total Students - Full width on mobile */}
         <div className="motion-safe:animate-duration-500 rounded-lg border bg-card p-4 shadow-sm transition-all duration-300 ease-in-out hover:scale-[1.02] hover:shadow-md motion-safe:animate-fade-in sm:p-6">
           <div className="flex items-start justify-between">
-            <div>
+            <div className="flex-1">
               <div className="text-sm font-medium text-muted-foreground">
                 Total Students
               </div>
@@ -289,7 +289,7 @@ export function BatchesTable() {
                 </div>
               </div>
             </div>
-            <Users className="h-5 w-5 text-muted-foreground sm:h-8 sm:w-8" />
+            <Users className="h-5 w-5 shrink-0 text-muted-foreground sm:h-8 sm:w-8" />
           </div>
         </div>
 
@@ -355,15 +355,15 @@ export function BatchesTable() {
           </div>
         </div>
 
-        {/* Status Distribution - Spans 2 columns on larger screens */}
-        <div className="motion-safe:animate-delay-300 motion-safe:animate-duration-500 col-span-1 rounded-lg border bg-card p-4 shadow-sm transition-all duration-300 ease-in-out hover:scale-[1.02] hover:shadow-md motion-safe:animate-fade-in sm:col-span-2 sm:p-6">
+        {/* Status Distribution - Full width on mobile */}
+        <div className="col-span-1 rounded-lg border bg-card p-4 shadow-sm sm:col-span-2 lg:col-span-2">
           <div className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">
               Status Distribution
             </span>
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
             {Object.entries(stats.byStatus).map(([status, count], index) => (
               <div
                 key={status}
@@ -380,12 +380,12 @@ export function BatchesTable() {
         </div>
       </div>
 
-      {/* Filter Section - Improved mobile layout */}
-      <div className="motion-safe:animate-delay-500 motion-safe:animate-duration-500 rounded-lg border bg-card p-4 shadow-sm motion-safe:animate-fade-in sm:p-6">
-        <div className="flex flex-col gap-4 sm:gap-6">
-          {/* Top row with search and quick filters */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      {/* Filter Section - Better mobile layout */}
+      <div className="rounded-lg border bg-card p-3 sm:p-4 lg:p-6">
+        <div className="flex flex-col gap-3 sm:gap-4 lg:gap-6">
+          {/* Search and Quick Filters */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Input
                 placeholder="Filter students..."
                 value={globalFilter}
@@ -395,27 +395,16 @@ export function BatchesTable() {
               <Select
                 value=""
                 onValueChange={(value) => {
-                  // Find the preset from either common or batch filters
                   const preset =
                     allFilters.common.find((f) => f.id === value) ||
                     allFilters.batches.find((f) => f.id === value)
-
-                  if (preset) {
-                    // Apply the filter preset
-                    applyPreset(preset)
-
-                    // If it's a batch filter, ensure we update the batch filter state
-                    if (preset.id.startsWith('batch-')) {
-                      const batchId = preset.id.replace('batch-', '')
-                      setBatchFilter(batchId)
-                    }
-                  }
+                  if (preset) applyPreset(preset)
                 }}
               >
                 <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Quick Filters" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="end" className="w-[280px]">
                   {allFilters.batches.length > 0 && (
                     <SelectGroup>
                       <SelectLabel>Batch Filters</SelectLabel>
@@ -450,19 +439,25 @@ export function BatchesTable() {
             </div>
 
             {hasActiveFilters && (
-              <div className="flex items-center justify-between gap-4 sm:justify-end">
-                <span className="text-sm text-muted-foreground">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:gap-4">
+                <span className="text-center text-sm text-muted-foreground sm:text-left">
                   Showing {filteredData.length} of {students.length} students
                 </span>
-                <Button variant="outline" size="sm" onClick={clearFilters}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="w-full sm:w-auto"
+                >
                   Clear Filters
                 </Button>
               </div>
             )}
           </div>
 
-          {/* Bottom row with main filters - Improved mobile layout */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-4">
+          {/* Main Filters */}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
+            {/* Each filter takes full width on mobile */}
             <div className="w-full">
               <Select value={batchFilter} onValueChange={setBatchFilter}>
                 <SelectTrigger>
@@ -532,49 +527,51 @@ export function BatchesTable() {
         </div>
       </div>
 
-      {/* Table section */}
-      <div className="rounded-lg border shadow-sm">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {flexRender(
-                      header.column.columnDef.header,
-                      header.getContext()
-                    )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {filteredData.length > 0 ? (
-              rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+      {/* Table Section - Horizontal scroll on mobile */}
+      <div className="-mx-4 overflow-x-auto sm:mx-0 sm:rounded-lg sm:border sm:shadow-sm">
+        <div className="min-w-full">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id}>
                       {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
+                        header.column.columnDef.header,
+                        header.getContext()
                       )}
-                    </TableCell>
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No students found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {filteredData.length > 0 ? (
+                rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center"
+                  >
+                    No students found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   )
