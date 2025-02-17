@@ -35,16 +35,26 @@ export function BatchesTable() {
   const { data: students = [], isLoading, error } = useBatchData()
   const [globalFilter, setGlobalFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [siblingFilter, setSiblingFilter] = useState<
+    'all' | 'with' | 'without'
+  >('all')
 
   const filteredData = useMemo(() => {
     let result = students
 
-    // First apply status filter
+    // Apply status filter
     if (statusFilter !== 'all') {
       result = result.filter((student) => student.status === statusFilter)
     }
 
-    // Then apply global search filter
+    // Apply sibling filter
+    if (siblingFilter !== 'all') {
+      result = result.filter((student) =>
+        siblingFilter === 'with' ? student.siblingGroup : !student.siblingGroup
+      )
+    }
+
+    // Apply global search filter
     if (globalFilter) {
       const searchTerm = globalFilter.toLowerCase()
       result = result.filter(
@@ -57,7 +67,7 @@ export function BatchesTable() {
     }
 
     return result
-  }, [students, statusFilter, globalFilter])
+  }, [students, statusFilter, siblingFilter, globalFilter])
 
   const table = useReactTable<BatchStudentData>({
     data: filteredData,
@@ -93,6 +103,7 @@ export function BatchesTable() {
 
   return (
     <div className="space-y-4">
+      <TableSummary data={students} />
       <div className="flex items-center gap-4">
         <div className="flex-1">
           <Input
@@ -115,6 +126,24 @@ export function BatchesTable() {
               <SelectItem value="enrolled">Enrolled</SelectItem>
               <SelectItem value="on_leave">On Leave</SelectItem>
               <SelectItem value="withdrawn">Withdrawn</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-[200px]">
+          <Select value={siblingFilter} onValueChange={setSiblingFilter}>
+            <SelectTrigger>
+              <SelectValue defaultValue="all">
+                {siblingFilter === 'all'
+                  ? 'All Students'
+                  : siblingFilter === 'with'
+                    ? 'With Siblings'
+                    : 'Without Siblings'}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Students</SelectItem>
+              <SelectItem value="with">With Siblings</SelectItem>
+              <SelectItem value="without">Without Siblings</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -176,6 +205,78 @@ export function BatchesTable() {
             )}
           </TableBody>
         </Table>
+      </div>
+    </div>
+  )
+}
+
+function TableSummary({ data }: { data: BatchStudentData[] }) {
+  const stats = useMemo(
+    () => ({
+      total: data.length,
+      byStatus: data.reduce(
+        (acc, student) => {
+          acc[student.status] = (acc[student.status] || 0) + 1
+          return acc
+        },
+        {} as Record<string, number>
+      ),
+      withBatch: data.filter((s) => s.batch).length,
+      siblingGroups: {
+        studentsWithSiblings: data.filter((s) => s.siblingGroup).length,
+        totalGroups: new Set(
+          data.filter((s) => s.siblingGroup).map((s) => s.siblingGroup!.id)
+        ).size,
+      },
+    }),
+    [data]
+  )
+
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="rounded-lg border p-3">
+        <div className="text-sm font-medium text-muted-foreground">
+          Total Students
+        </div>
+        <div className="text-2xl font-bold">{stats.total}</div>
+      </div>
+      <div className="rounded-lg border p-3">
+        <div className="text-sm font-medium text-muted-foreground">
+          In Batches
+        </div>
+        <div className="text-2xl font-bold">{stats.withBatch}</div>
+      </div>
+      <div className="rounded-lg border p-3">
+        <div className="text-sm font-medium text-muted-foreground">
+          Siblings
+        </div>
+        <div className="mt-1 space-y-1 text-sm">
+          <div className="flex justify-between">
+            <span>Students:</span>
+            <span className="font-medium">
+              {stats.siblingGroups.studentsWithSiblings}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span>Groups:</span>
+            <span className="font-medium">
+              {stats.siblingGroups.totalGroups}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-lg border p-3">
+        <div className="text-sm font-medium text-muted-foreground">
+          By Status
+        </div>
+        <div className="mt-1 space-y-1 text-sm">
+          {Object.entries(stats.byStatus).map(([status, count]) => (
+            <div key={status} className="flex justify-between">
+              <span className="capitalize">{status}:</span>
+              <span className="font-medium">{count}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
