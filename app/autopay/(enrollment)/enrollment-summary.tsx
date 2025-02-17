@@ -1,11 +1,11 @@
 import { UserPlus2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Student } from '@/lib/types'
+import { StudentDTO } from '@/lib/actions/get-students'
 import { calculateTotal } from '@/lib/utils'
 
 interface EnrollmentSummaryProps {
-  selectedStudents: Student[]
+  selectedStudents: StudentDTO[]
   onAddStudents?: () => void
 }
 

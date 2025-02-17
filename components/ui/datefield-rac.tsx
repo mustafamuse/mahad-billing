@@ -17,12 +17,20 @@ interface DateFieldProps {
   onChange?: (date: DateValue | null) => void
   className?: string
   children?: React.ReactNode
+  label?: string
+  'aria-label'?: string
 }
 
-function DateField({ className, ...props }: DateFieldProps) {
+function DateField({
+  className,
+  label,
+  'aria-label': ariaLabel,
+  ...props
+}: DateFieldProps) {
   return (
     <AriaDateField
       className={cn('flex flex-col gap-1', className)}
+      aria-label={ariaLabel || label}
       {...props}
     />
   )

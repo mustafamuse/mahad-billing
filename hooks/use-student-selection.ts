@@ -1,17 +1,17 @@
 'use client'
 
-import { type Student } from '@/lib/types'
+import { StudentDTO } from '@/lib/actions/get-students'
 
 interface UseStudentSelectionProps {
-  selectedStudents: Student[]
-  updateSelectedStudents: (students: Student[]) => void
+  selectedStudents: StudentDTO[]
+  updateSelectedStudents: (students: StudentDTO[]) => void
 }
 
 export function useStudentSelection({
   selectedStudents,
   updateSelectedStudents,
 }: UseStudentSelectionProps) {
-  const handleStudentSelect = (student: Student) => {
+  const handleStudentSelect = (student: StudentDTO) => {
     if (!selectedStudents.find((s) => s.id === student.id)) {
       const newStudents = [...selectedStudents, student]
       updateSelectedStudents(newStudents)

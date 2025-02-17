@@ -28,17 +28,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Student } from '@/lib/types'
+import { StudentDTO } from '@/lib/actions/get-students'
 import { StudentStatus } from '@/lib/types/student'
 import { cn } from '@/lib/utils'
 
 interface StudentSearchComboboxProps {
-  students: Student[]
+  students: StudentDTO[]
   isLoading: boolean
   error: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSelect: (student: Student) => void
+  onSelect: (student: StudentDTO) => void
   isStudentSelected: (studentId: string) => boolean
 }
 
@@ -53,10 +53,18 @@ export function StudentSearchCombobox({
 }: StudentSearchComboboxProps) {
   const [searchValue, setSearchValue] = useState('')
 
-  const handleSelect = (student: Student) => {
+  const handleSelect = (student: StudentDTO) => {
     onSelect(student)
     setSearchValue('') // Clear search input after selection
     onOpenChange(false) // Close popover after selection
+  }
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
+
+  if (error) {
+    return <div>Error loading students</div>
   }
 
   return (
@@ -92,77 +100,70 @@ export function StudentSearchCombobox({
           </div>
           <CommandEmpty>No student found.</CommandEmpty>
           <CommandGroup className="max-h-[300px] overflow-auto p-1">
-            {error ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                Failed to load students. Please try again.
-              </div>
-            ) : (
-              students.map((student) => {
-                const isSelected = isStudentSelected(student.id)
-                const isDisabled = student.status !== StudentStatus.REGISTERED
+            {students?.map((student) => {
+              const isSelected = isStudentSelected(student.id)
+              const isDisabled = student.status !== StudentStatus.REGISTERED
 
-                return (
-                  <CommandItem
-                    key={student.id}
-                    onSelect={() => !isDisabled && handleSelect(student)}
-                    className={cn(
-                      'px-2 py-3 text-base sm:py-2 sm:text-sm',
-                      isDisabled && 'cursor-not-allowed opacity-50'
-                    )}
-                    disabled={isDisabled}
-                  >
-                    <div className="flex w-full items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Check
-                          className={cn(
-                            'h-4 w-4 shrink-0',
-                            isSelected ? 'opacity-100' : 'opacity-0'
-                          )}
-                        />
-                        <span className="truncate">{student.name}</span>
-                      </div>
-
-                      {student.status !== StudentStatus.REGISTERED && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="flex shrink-0 items-center gap-1 text-muted-foreground">
-                                {student.status === StudentStatus.ENROLLED ? (
-                                  <>
-                                    <CheckCircle2 className="h-4 w-4" />
-                                    <span className="text-xs">Enrolled</span>
-                                  </>
-                                ) : student.status ===
-                                  StudentStatus.ON_LEAVE ? (
-                                  <>
-                                    <Clock className="h-4 w-4" />
-                                    <span className="text-xs">On Leave</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <XCircle className="h-4 w-4" />
-                                    <span className="text-xs">Withdrawn</span>
-                                  </>
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                {student.status === StudentStatus.ENROLLED
-                                  ? 'This student is already enrolled in the program'
-                                  : student.status === StudentStatus.ON_LEAVE
-                                    ? 'This student is currently on leave'
-                                    : 'This student has withdrawn from the program'}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
+              return (
+                <CommandItem
+                  key={student.id}
+                  onSelect={() => !isDisabled && handleSelect(student)}
+                  className={cn(
+                    'px-2 py-3 text-base sm:py-2 sm:text-sm',
+                    isDisabled && 'cursor-not-allowed opacity-50'
+                  )}
+                  disabled={isDisabled}
+                >
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Check
+                        className={cn(
+                          'h-4 w-4 shrink-0',
+                          isSelected ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      <span className="truncate">{student.name}</span>
                     </div>
-                  </CommandItem>
-                )
-              })
-            )}
+
+                    {student.status !== StudentStatus.REGISTERED && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex shrink-0 items-center gap-1 text-muted-foreground">
+                              {student.status === StudentStatus.ENROLLED ? (
+                                <>
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  <span className="text-xs">Enrolled</span>
+                                </>
+                              ) : student.status === StudentStatus.ON_LEAVE ? (
+                                <>
+                                  <Clock className="h-4 w-4" />
+                                  <span className="text-xs">On Leave</span>
+                                </>
+                              ) : (
+                                <>
+                                  <XCircle className="h-4 w-4" />
+                                  <span className="text-xs">Withdrawn</span>
+                                </>
+                              )}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>
+                              {student.status === StudentStatus.ENROLLED
+                                ? 'This student is already enrolled in the program'
+                                : student.status === StudentStatus.ON_LEAVE
+                                  ? 'This student is currently on leave'
+                                  : 'This student has withdrawn from the program'}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                </CommandItem>
+              )
+            })}
           </CommandGroup>
         </Command>
       </PopoverContent>

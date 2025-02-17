@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import React from 'react'
 
 import { SubscriptionStatus } from '@prisma/client'
 import { useQuery } from '@tanstack/react-query'
@@ -462,8 +463,8 @@ export function SubscriptionTable() {
             </TableHeader>
             <TableBody>
               {filteredAndSortedData.map((student) => (
-                <>
-                  <TableRow key={student.id} className="group">
+                <React.Fragment key={student.id}>
+                  <TableRow className="group">
                     <TableCell>
                       <Button
                         variant="ghost"
@@ -565,7 +566,7 @@ export function SubscriptionTable() {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </TableBody>
           </Table>

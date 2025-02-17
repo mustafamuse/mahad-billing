@@ -2,11 +2,11 @@ import { X } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { StudentDTO } from '@/lib/actions/get-students'
 import { BASE_RATE } from '@/lib/data'
-import { Student } from '@/lib/types'
 
 interface StudentCardProps {
-  student: Student
+  student: StudentDTO
   onRemove: (studentId: string) => void
 }
 
@@ -16,7 +16,7 @@ export function StudentCard({ student, onRemove }: StudentCardProps) {
       <div className="flex flex-col">
         <span className="text-sm font-medium sm:text-base">{student.name}</span>
         <div className="flex flex-wrap items-center gap-2">
-          {student.siblingId ? (
+          {student.siblingGroupId ? (
             <>
               <span className="text-xs text-muted-foreground line-through sm:text-sm">
                 ${BASE_RATE}

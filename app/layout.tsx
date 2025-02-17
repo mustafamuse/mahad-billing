@@ -4,6 +4,8 @@ import { Toaster } from 'sonner'
 import { EnrollmentProvider } from '@/contexts/enrollment-context'
 import { ThemeProvider } from '@/lib/theme-provider'
 
+import { Providers } from './providers'
+
 import './globals.css'
 
 export const metadata = {
@@ -27,15 +29,17 @@ export default function RootLayout({
       </head>
 
       <body suppressHydrationWarning>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <EnrollmentProvider>{children}</EnrollmentProvider>
-          <Toaster richColors position="top-right" />
-        </ThemeProvider>
+        <Providers>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <EnrollmentProvider>{children}</EnrollmentProvider>
+            <Toaster richColors position="top-right" />
+          </ThemeProvider>
+        </Providers>
         <Analytics />
       </body>
     </html>
