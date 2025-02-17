@@ -37,10 +37,27 @@ export function BatchesTable() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
   const filteredData = useMemo(() => {
-    return statusFilter === 'all'
-      ? students
-      : students.filter((student) => student.status === statusFilter)
-  }, [students, statusFilter])
+    let result = students
+
+    // First apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter((student) => student.status === statusFilter)
+    }
+
+    // Then apply global search filter
+    if (globalFilter) {
+      const searchTerm = globalFilter.toLowerCase()
+      result = result.filter(
+        (student) =>
+          student.name.toLowerCase().includes(searchTerm) ||
+          student.email?.toLowerCase().includes(searchTerm) ||
+          student.phone?.toLowerCase().includes(searchTerm) ||
+          student.batch?.name.toLowerCase().includes(searchTerm)
+      )
+    }
+
+    return result
+  }, [students, statusFilter, globalFilter])
 
   const table = useReactTable<BatchStudentData>({
     data: filteredData,

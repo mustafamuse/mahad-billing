@@ -31,46 +31,74 @@ export interface BatchStudentData {
 
 export async function getBatchData(): Promise<BatchStudentData[]> {
   try {
-    const students = await prisma.student.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        status: true,
-        educationLevel: true,
-        gradeLevel: true,
-        createdAt: true,
-        batch: {
+    const students = await Promise.all(
+      (
+        await prisma.student.findMany({
           select: {
             id: true,
             name: true,
-            startDate: true,
-            endDate: true,
-          },
-        },
-        siblingGroup: {
-          select: {
-            id: true,
-            students: {
-              where: {
-                NOT: {
-                  id: { equals: prisma.student.fields.id },
-                },
-              },
+            email: true,
+            phone: true,
+            status: true,
+            educationLevel: true,
+            gradeLevel: true,
+            createdAt: true,
+            batch: {
               select: {
                 id: true,
                 name: true,
-                status: true,
+                startDate: true,
+                endDate: true,
+              },
+            },
+            siblingGroup: {
+              select: {
+                id: true,
+                students: {
+                  where: {
+                    NOT: {
+                      id: { equals: '' },
+                    },
+                  },
+                  select: {
+                    id: true,
+                    name: true,
+                    status: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
+          orderBy: {
+            createdAt: 'desc',
+          },
+        })
+      ).map(async (student) => {
+        if (student.siblingGroup) {
+          const siblings = await prisma.student.findMany({
+            where: {
+              siblingGroupId: student.siblingGroup.id,
+              NOT: {
+                id: student.id,
+              },
+            },
+            select: {
+              id: true,
+              name: true,
+              status: true,
+            },
+          })
+          return {
+            ...student,
+            siblingGroup: {
+              ...student.siblingGroup,
+              students: siblings,
+            },
+          }
+        }
+        return student
+      })
+    )
 
     // Define the type for our plain student object
     type PlainStudent = {

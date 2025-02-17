@@ -6,11 +6,6 @@ import { format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { BatchStudentData } from '@/lib/actions/get-batch-data'
 
-// Helper to get first name
-function getFirstName(fullName: string) {
-  return fullName.split(' ')[0]
-}
-
 export const columns: ColumnDef<BatchStudentData>[] = [
   {
     accessorKey: 'name',
@@ -48,11 +43,12 @@ export const columns: ColumnDef<BatchStudentData>[] = [
       const siblings = row.original.siblingGroup?.students.filter(
         (s) => s.id !== row.original.id
       )
+
       return siblings?.length ? (
         <div className="flex flex-wrap gap-1">
           {siblings.map((sibling) => (
             <Badge key={sibling.id} variant="outline" className="text-xs">
-              {getFirstName(sibling.name)}
+              {sibling.name.split(' ')[0]}
             </Badge>
           ))}
         </div>
