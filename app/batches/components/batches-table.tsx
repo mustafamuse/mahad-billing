@@ -30,14 +30,17 @@ import type { BatchStudentData } from '@/lib/actions/get-batch-data'
 
 import { columns } from './columns'
 import { useBatchData } from '../hooks/use-batch-data'
+import { useBatches } from '../hooks/use-batches'
 
 export function BatchesTable() {
   const { data: students = [], isLoading, error } = useBatchData()
+  const { data: batches = [] } = useBatches()
   const [globalFilter, setGlobalFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [siblingFilter, setSiblingFilter] = useState<
     'all' | 'with' | 'without'
   >('all')
+  const [batchFilter, setBatchFilter] = useState<string>('all')
 
   const filteredData = useMemo(() => {
     let result = students
@@ -54,6 +57,17 @@ export function BatchesTable() {
       )
     }
 
+    // Apply batch filter
+    if (batchFilter !== 'all') {
+      if (batchFilter === 'none') {
+        // Show students with no batch assigned
+        result = result.filter((student) => !student.batch)
+      } else {
+        // Show students in the selected batch
+        result = result.filter((student) => student.batch?.id === batchFilter)
+      }
+    }
+
     // Apply global search filter
     if (globalFilter) {
       const searchTerm = globalFilter.toLowerCase()
@@ -67,7 +81,12 @@ export function BatchesTable() {
     }
 
     return result
-  }, [students, statusFilter, siblingFilter, globalFilter])
+  }, [students, statusFilter, siblingFilter, batchFilter, globalFilter])
+
+  const unassignedCount = useMemo(
+    () => students.filter((s) => !s.batch).length,
+    [students]
+  )
 
   const table = useReactTable<BatchStudentData>({
     data: filteredData,
@@ -114,6 +133,31 @@ export function BatchesTable() {
           />
         </div>
         <div className="w-[200px]">
+          <Select value={batchFilter} onValueChange={setBatchFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="All Batches">
+                {batchFilter === 'all'
+                  ? 'All Batches'
+                  : batchFilter === 'none'
+                    ? `Unassigned (${unassignedCount})`
+                    : (batches.find((b) => b.id === batchFilter)?.name ??
+                      'Unassigned')}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Batches</SelectItem>
+              <SelectItem value="none" className="font-medium text-orange-600">
+                Unassigned ({unassignedCount})
+              </SelectItem>
+              {batches.map((batch) => (
+                <SelectItem key={batch.id} value={batch.id}>
+                  {batch.name} ({batch.studentCount})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="w-[200px]">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger>
               <SelectValue defaultValue="all">
@@ -140,9 +184,7 @@ export function BatchesTable() {
               <SelectValue defaultValue="all">
                 {siblingFilter === 'all'
                   ? 'All Students'
-                  : siblingFilter === 'with'
-                    ? 'With Siblings'
-                    : 'Without Siblings'}
+                  : `With ${siblingFilter === 'with' ? '' : 'out'} Siblings`}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -227,6 +269,7 @@ function TableSummary({ data }: { data: BatchStudentData[] }) {
         {} as Record<string, number>
       ),
       withBatch: data.filter((s) => s.batch).length,
+      unassigned: data.filter((s) => !s.batch).length,
       siblingGroups: {
         studentsWithSiblings: data.filter((s) => s.siblingGroup).length,
         totalGroups: new Set(
@@ -281,6 +324,23 @@ function TableSummary({ data }: { data: BatchStudentData[] }) {
               <span className="font-medium">{count}</span>
             </div>
           ))}
+        </div>
+      </div>
+      <div className="rounded-lg border p-3">
+        <div className="text-sm font-medium text-muted-foreground">
+          Batch Status
+        </div>
+        <div className="mt-1 space-y-1 text-sm">
+          <div className="flex justify-between">
+            <span>In Batches:</span>
+            <span className="font-medium">{stats.withBatch}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Unassigned:</span>
+            <span className="font-medium text-orange-600">
+              {stats.unassigned}
+            </span>
+          </div>
         </div>
       </div>
     </div>
