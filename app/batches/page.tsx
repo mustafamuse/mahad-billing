@@ -2,7 +2,10 @@ import { Suspense } from 'react'
 
 import { Metadata } from 'next'
 
+import { Separator } from '@/components/ui/separator'
+
 import { Providers } from '../providers'
+import { BatchManagement } from './components/batch-management'
 import { BatchesTable } from './components/batches-table'
 import { DuplicateStudents } from './components/duplicate-students'
 import { BatchErrorBoundary } from './components/error-boundary'
@@ -32,6 +35,14 @@ export default function BatchesPage() {
             Manage student batches and view registrations
           </p>
         </div>
+
+        <BatchErrorBoundary>
+          <Suspense fallback={<Loading />}>
+            <BatchManagement />
+          </Suspense>
+        </BatchErrorBoundary>
+
+        <Separator className="my-8" />
 
         <BatchErrorBoundary>
           <Suspense fallback={<Loading />}>

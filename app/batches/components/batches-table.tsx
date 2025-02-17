@@ -130,7 +130,12 @@ export function BatchesTable() {
           </Select>
         </div>
         <div className="w-[200px]">
-          <Select value={siblingFilter} onValueChange={setSiblingFilter}>
+          <Select
+            value={siblingFilter}
+            onValueChange={(value: 'all' | 'with' | 'without') =>
+              setSiblingFilter(value)
+            }
+          >
             <SelectTrigger>
               <SelectValue defaultValue="all">
                 {siblingFilter === 'all'
