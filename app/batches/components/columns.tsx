@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 
 import { Badge } from '@/components/ui/badge'
 import { BatchStudentData } from '@/lib/actions/get-batch-data'
+import { getStudentCompleteness } from '@/lib/utils/student-validation'
 
 export const columns: ColumnDef<BatchStudentData>[] = [
   {
@@ -73,5 +74,38 @@ export const columns: ColumnDef<BatchStudentData>[] = [
         {row.original.status}
       </Badge>
     ),
+  },
+  {
+    id: 'completeness',
+    header: 'Info Status',
+    cell: ({ row }) => {
+      const student = row.original
+      const { isComplete, missingFields } = getStudentCompleteness(student)
+
+      return (
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={isComplete ? 'secondary' : 'destructive'}
+            className="whitespace-nowrap"
+          >
+            {isComplete ? '✅ Complete' : '❌ Incomplete'}
+          </Badge>
+          {!isComplete && (
+            <span className="text-xs text-muted-foreground">
+              {missingFields.includes('needs review')
+                ? 'Needs review'
+                : `Missing: ${missingFields.join(', ')}`}
+            </span>
+          )}
+        </div>
+      )
+    },
+    filterFn: (row, _, filterValue) => {
+      if (filterValue === 'incomplete') {
+        const { isComplete } = getStudentCompleteness(row.original)
+        return !isComplete
+      }
+      return true
+    },
   },
 ]

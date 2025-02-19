@@ -9,159 +9,82 @@ export interface BatchStudentData {
   name: string
   email: string | null
   phone: string | null
-  status: 'registered' | 'enrolled' | 'on_leave' | 'withdrawn'
+  dateOfBirth: string | null
   educationLevel: EducationLevel | null
   gradeLevel: GradeLevel | null
-  createdAt: string // ISO string
+  schoolName: string | null
+  status: string
+  createdAt: string
+  updatedAt: string
   batch: {
     id: string
     name: string
-    startDate: string | null // ISO string
-    endDate: string | null // ISO string
+    startDate: string | null
+    endDate: string | null
   } | null
   siblingGroup: {
     id: string
     students: {
       id: string
       name: string
-      status: 'registered' | 'enrolled' | 'on_leave' | 'withdrawn'
+      status: string
     }[]
   } | null
 }
 
 export async function getBatchData(): Promise<BatchStudentData[]> {
   try {
-    const students = await Promise.all(
-      (
-        await prisma.student.findMany({
+    const students = await prisma.student.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        dateOfBirth: true,
+        educationLevel: true,
+        gradeLevel: true,
+        schoolName: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        batch: {
           select: {
             id: true,
             name: true,
-            email: true,
-            phone: true,
-            status: true,
-            educationLevel: true,
-            gradeLevel: true,
-            createdAt: true,
-            batch: {
+            startDate: true,
+            endDate: true,
+          },
+        },
+        siblingGroup: {
+          select: {
+            id: true,
+            students: {
               select: {
                 id: true,
                 name: true,
-                startDate: true,
-                endDate: true,
-              },
-            },
-            siblingGroup: {
-              select: {
-                id: true,
-                students: {
-                  where: {
-                    NOT: {
-                      id: { equals: '' },
-                    },
-                  },
-                  select: {
-                    id: true,
-                    name: true,
-                    status: true,
-                  },
-                },
+                status: true,
               },
             },
           },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        })
-      ).map(async (student) => {
-        if (student.siblingGroup) {
-          const siblings = await prisma.student.findMany({
-            where: {
-              siblingGroupId: student.siblingGroup.id,
-              NOT: {
-                id: student.id,
-              },
-            },
-            select: {
-              id: true,
-              name: true,
-              status: true,
-            },
-          })
-          return {
-            ...student,
-            siblingGroup: {
-              ...student.siblingGroup,
-              students: siblings,
-            },
-          }
-        }
-        return student
-      })
-    )
+        },
+      },
+    })
 
-    // Define the type for our plain student object
-    type PlainStudent = {
-      id: string
-      name: string
-      email: string | null
-      phone: string | null
-      status: string
-      educationLevel: EducationLevel | null
-      gradeLevel: GradeLevel | null
-      createdAt: string
-      batch: {
-        id: string
-        name: string
-        startDate: string | null
-        endDate: string | null
-      } | null
-      siblingGroup: {
-        id: string
-        students: {
-          id: string
-          name: string
-          status: string
-        }[]
-      } | null
-    }
-
-    // Convert Prisma objects to plain objects with proper typing
-    const plainStudents: PlainStudent[] = students.map((student) => ({
-      id: student.id,
-      name: student.name,
-      email: student.email,
-      phone: student.phone,
-      status: student.status,
-      educationLevel: student.educationLevel,
-      gradeLevel: student.gradeLevel,
+    return students.map((student) => ({
+      ...student,
+      dateOfBirth: student.dateOfBirth?.toISOString() ?? null,
       createdAt: student.createdAt.toISOString(),
+      updatedAt: student.updatedAt.toISOString(),
       batch: student.batch
         ? {
-            id: student.batch.id,
-            name: student.batch.name,
+            ...student.batch,
             startDate: student.batch.startDate?.toISOString() ?? null,
             endDate: student.batch.endDate?.toISOString() ?? null,
           }
         : null,
-      siblingGroup: student.siblingGroup
-        ? {
-            id: student.siblingGroup.id,
-            students: student.siblingGroup.students.map((s) => ({
-              id: s.id,
-              name: s.name,
-              status: s.status,
-            })),
-          }
-        : null,
     }))
-
-    // Single log at the end
-    console.log('📊 Students fetched:', { count: plainStudents.length })
-
-    return plainStudents as BatchStudentData[]
   } catch (error) {
-    console.error('❌ Server Error:', error)
+    console.error('Failed to fetch students:', error)
     throw new Error('Failed to fetch students')
   }
 }

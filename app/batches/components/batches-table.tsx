@@ -8,8 +8,13 @@ import {
   getFilteredRowModel,
   getSortedRowModel,
   flexRender,
+  ColumnFiltersState,
+  VisibilityState,
 } from '@tanstack/react-table'
-import { Users, GraduationCap, Users2, BarChart3 } from 'lucide-react'
+import { format } from 'date-fns'
+import { saveAs } from 'file-saver'
+import { Users, GraduationCap, Users2, BarChart3, Download } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,7 +35,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { exportIncompleteStudents } from '@/lib/actions/batch-actions'
 import type { BatchStudentData } from '@/lib/actions/get-batch-data'
+import { getStudentCompleteness } from '@/lib/utils/student-validation'
 
 import { columns } from './columns'
 import { useBatchData } from '../hooks/use-batch-data'
@@ -140,6 +147,9 @@ export function BatchesTable() {
     'all' | 'with' | 'without'
   >('all')
   const [batchFilter, setBatchFilter] = useState<string>('all')
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
 
   const allFilters = useMemo(() => getFilters(batches), [batches])
 
@@ -181,8 +191,23 @@ export function BatchesTable() {
       )
     }
 
+    // Apply incomplete filter
+    if (showIncompleteOnly) {
+      result = result.filter((student) => {
+        const { isComplete } = getStudentCompleteness(student)
+        return !isComplete
+      })
+    }
+
     return result
-  }, [students, statusFilter, siblingFilter, batchFilter, globalFilter])
+  }, [
+    students,
+    statusFilter,
+    siblingFilter,
+    batchFilter,
+    globalFilter,
+    showIncompleteOnly,
+  ])
 
   const unassignedCount = useMemo(
     () => students.filter((s) => !s.batch).length,
@@ -198,6 +223,14 @@ export function BatchesTable() {
       globalFilter !== '',
     [batchFilter, statusFilter, siblingFilter, globalFilter]
   )
+
+  // Add incomplete count calculation
+  const incompleteCount = useMemo(() => {
+    return students.filter((student) => {
+      const { isComplete } = getStudentCompleteness(student)
+      return !isComplete
+    }).length
+  }, [students])
 
   // Apply preset filter
   const applyPreset = (preset: FilterPreset) => {
@@ -215,6 +248,33 @@ export function BatchesTable() {
     setGlobalFilter('')
   }
 
+  const handleExport = async () => {
+    try {
+      const b64 = await exportIncompleteStudents()
+
+      // Convert base64 to blob
+      const byteCharacters = atob(b64)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+
+      const blob = new Blob([byteArray], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8',
+      })
+
+      saveAs(
+        blob,
+        `incomplete-students-${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+      )
+      toast.success('Export completed successfully')
+    } catch (error) {
+      console.error('Export failed:', error)
+      toast.error('Failed to export incomplete students')
+    }
+  }
+
   const table = useReactTable<BatchStudentData>({
     data: filteredData,
     columns,
@@ -223,8 +283,19 @@ export function BatchesTable() {
     getSortedRowModel: getSortedRowModel(),
     state: {
       globalFilter,
+      columnFilters,
+      columnVisibility,
     },
     onGlobalFilterChange: setGlobalFilter,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
+    filterFns: {
+      incomplete: (row, _, filterValue) => {
+        if (!filterValue) return true
+        const { isComplete } = getStudentCompleteness(row.original)
+        return !isComplete
+      },
+    },
   })
 
   const rows = table.getCoreRowModel().rows
@@ -392,6 +463,40 @@ export function BatchesTable() {
                 onChange={(e) => setGlobalFilter(e.target.value)}
                 className="w-full sm:w-[300px]"
               />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowIncompleteOnly(!showIncompleteOnly)}
+                  className={showIncompleteOnly ? 'bg-muted' : ''}
+                >
+                  Show Incomplete ({incompleteCount})
+                </Button>
+                {showIncompleteOnly && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExport}
+                    className="duration-300 animate-in fade-in slide-in-from-left-5"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export {incompleteCount}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {hasActiveFilters && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="whitespace-nowrap"
+                >
+                  Clear Filters
+                </Button>
+              )}
               <Select
                 value=""
                 onValueChange={(value) => {
@@ -437,22 +542,6 @@ export function BatchesTable() {
                 </SelectContent>
               </Select>
             </div>
-
-            {hasActiveFilters && (
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:gap-4">
-                <span className="text-center text-sm text-muted-foreground sm:text-left">
-                  Showing {filteredData.length} of {students.length} students
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="w-full sm:w-auto"
-                >
-                  Clear Filters
-                </Button>
-              </div>
-            )}
           </div>
 
           {/* Main Filters */}
