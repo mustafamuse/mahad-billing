@@ -167,103 +167,72 @@ export async function getBatchData(): Promise<BatchStudentData[]> {
 }
 
 export async function getDuplicateStudents() {
-  try {
-    const students = await prisma.student.findMany({
-      where: {
-        email: {
-          not: null,
+  const duplicates = await prisma.student.groupBy({
+    by: ['email'],
+    having: {
+      email: {
+        _count: {
+          gt: 1,
         },
       },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        dateOfBirth: true,
-        educationLevel: true,
-        gradeLevel: true,
-        schoolName: true,
-        status: true,
-        createdAt: true,
-        siblingGroupId: true,
-        siblingGroup: {
-          select: {
-            id: true,
-            students: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
+    },
+  })
+
+  const duplicateGroups = await Promise.all(
+    duplicates.map(async ({ email }) => {
+      if (!email) return null // Skip null emails
+
+      const records = await prisma.student.findMany({
+        where: { email },
+        include: {
+          siblingGroup: true,
         },
-      },
-    })
-
-    const plainStudents = students.map((student) => ({
-      ...student,
-      createdAt: student.createdAt.toISOString(),
-      dateOfBirth: student.dateOfBirth?.toISOString() || null,
-    }))
-
-    const groupedByEmail = plainStudents.reduce(
-      (acc, student) => {
-        const email = student.email as string
-        if (!acc[email]) {
-          acc[email] = []
-        }
-        acc[email].push(student)
-        return acc
-      },
-      {} as Record<string, typeof plainStudents>
-    )
-
-    const duplicates = Object.entries(groupedByEmail)
-      .filter(([_, students]) => students.length > 1)
-      .map(([email, students]) => {
-        const sortedStudents = students.sort((a, b) => {
-          if (a.siblingGroupId && !b.siblingGroupId) return -1
-          if (!a.siblingGroupId && b.siblingGroupId) return 1
-          return (
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          )
-        })
-
-        const keepRecord = sortedStudents[0]
-        const duplicateRecords = sortedStudents.slice(1)
-
-        const differences: Record<string, Set<any>> = {}
-        const fields = Object.keys(students[0]) as Array<
-          keyof (typeof students)[0]
-        >
-
-        fields
-          .filter(
-            (k) =>
-              !['id', 'createdAt', 'siblingGroup', 'siblingGroupId'].includes(k)
-          )
-          .forEach((field) => {
-            const values = new Set(students.map((s) => s[field]))
-            if (values.size > 1) {
-              differences[field] = values
-            }
-          })
-
-        return {
-          email,
-          count: students.length,
-          keepRecord,
-          duplicateRecords,
-          hasSiblingGroup: !!keepRecord.siblingGroupId,
-          differences: Object.keys(differences).length > 0 ? differences : null,
-        }
+        orderBy: [
+          { siblingGroup: { id: 'desc' } },
+          { updatedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
       })
 
-    return duplicates
-  } catch (error) {
-    console.error('❌ Error in getDuplicateStudents:', error)
-    throw error
-  }
+      if (!records.length) return null
+
+      const [keepRecord, ...duplicateRecords] = records
+
+      // Find differences between records
+      const differences: Record<string, Set<string>> = {}
+      const fields = ['name', 'dateOfBirth', 'status'] as const
+
+      fields.forEach((field) => {
+        const values = new Set(records.map((r) => String(r[field] || '')))
+        if (values.size > 1) differences[field] = values
+      })
+
+      return {
+        email,
+        count: records.length,
+        keepRecord: {
+          ...keepRecord,
+          createdAt: keepRecord.createdAt.toISOString(),
+          updatedAt: keepRecord.updatedAt.toISOString(),
+        },
+        duplicateRecords: duplicateRecords.map((record) => ({
+          ...record,
+          createdAt: record.createdAt.toISOString(),
+          updatedAt: record.updatedAt.toISOString(),
+        })),
+        hasSiblingGroup: !!keepRecord.siblingGroup,
+        hasRecentActivity:
+          new Date().getTime() - keepRecord.updatedAt.getTime() <
+          30 * 24 * 60 * 60 * 1000,
+        differences,
+        lastUpdated: keepRecord.updatedAt.toISOString(),
+      }
+    })
+  )
+
+  return duplicateGroups.filter(
+    (group): group is NonNullable<typeof group> => group !== null
+  )
 }
 
 export async function deleteDuplicateRecords(recordIds: string[]) {
