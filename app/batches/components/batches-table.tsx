@@ -183,14 +183,43 @@ export function BatchesTable() {
 
     // Apply global search filter
     if (globalFilter) {
-      const searchTerm = globalFilter.toLowerCase()
-      result = result.filter(
-        (student) =>
-          student.name.toLowerCase().includes(searchTerm) ||
-          student.email?.toLowerCase().includes(searchTerm) ||
-          student.phone?.toLowerCase().includes(searchTerm) ||
-          student.batch?.name.toLowerCase().includes(searchTerm)
-      )
+      const searchTerm = globalFilter.toLowerCase().trim()
+
+      result = result.filter((student) => {
+        // Search by name (split into parts)
+        const nameParts = student.name.toLowerCase().split(' ')
+        const nameMatch = nameParts.some((part) => part.includes(searchTerm))
+
+        // Search by email
+        const emailMatch = (student.email?.toLowerCase() || '').includes(
+          searchTerm
+        )
+
+        // Search by phone (with or without formatting)
+        const phoneMatch = (student.phone?.replace(/\D/g, '') || '').includes(
+          searchTerm.replace(/\D/g, '')
+        )
+
+        // Search by batch name
+        const batchMatch = (student.batch?.name.toLowerCase() || '').includes(
+          searchTerm
+        )
+
+        // Debug log
+        console.log('Searching:', {
+          student: student.name,
+          searchTerm,
+          matches: {
+            name: nameMatch,
+            email: emailMatch,
+            phone: phoneMatch,
+            batch: batchMatch,
+          },
+        })
+
+        // Return true if any field matches
+        return nameMatch || emailMatch || phoneMatch || batchMatch
+      })
     }
 
     // Apply incomplete filter

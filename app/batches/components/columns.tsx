@@ -18,6 +18,17 @@ export const columns: ColumnDef<BatchStudentData>[] = [
     header: 'Email',
   },
   {
+    accessorKey: 'phone',
+    header: 'Phone',
+    cell: ({ row }) => {
+      const phone = row.original.phone
+      if (!phone) return <span className="text-muted-foreground">-</span>
+
+      const formatted = phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')
+      return <span className="font-mono">{formatted}</span>
+    },
+  },
+  {
     accessorKey: 'batch',
     header: 'Batch',
     cell: ({ row }) => {
