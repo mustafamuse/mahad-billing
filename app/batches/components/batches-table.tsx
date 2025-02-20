@@ -40,6 +40,7 @@ import { exportIncompleteStudents } from '@/lib/actions/batch-actions'
 import type { BatchStudentData } from '@/lib/actions/get-batch-data'
 import { getStudentCompleteness } from '@/lib/utils/student-validation'
 
+import { BatchContactsExport } from './batch-contacts-export'
 import { columns } from './columns'
 import { useBatchData } from '../hooks/use-batch-data'
 import { useBatches } from '../hooks/use-batches'
@@ -663,6 +664,11 @@ export function BatchesTable() {
             </TableBody>
           </Table>
         </div>
+      </div>
+
+      {/* Contacts Export Section */}
+      <div className="rounded-lg border bg-card p-3 sm:p-4 lg:p-6">
+        <BatchContactsExport students={students} batches={batches} />
       </div>
     </div>
   )
