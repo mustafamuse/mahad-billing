@@ -2,7 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 
 import { EnrollmentProvider } from '@/contexts/enrollment-context'
-import { ThemeProvider } from '@/lib/theme-provider'
+import { ThemeProvider } from '@/providers/theme-provider'
 
 import { Providers } from './providers'
 

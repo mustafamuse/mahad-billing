@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 
 import { Badge } from '@/components/ui/badge'
 import { BatchStudentData } from '@/lib/actions/get-batch-data'
+import { getBatchStyle } from '@/lib/config/batch-styles'
 import { getStudentCompleteness } from '@/lib/utils/student-validation'
 
 export const columns: ColumnDef<BatchStudentData>[] = [
@@ -21,19 +22,25 @@ export const columns: ColumnDef<BatchStudentData>[] = [
     header: 'Batch',
     cell: ({ row }) => {
       const batch = row.original.batch
-      return batch ? (
-        <div className="space-y-1">
-          <Badge variant="secondary" className="font-medium">
+      if (!batch)
+        return <span className="text-xs text-muted-foreground">Unassigned</span>
+
+      const style = getBatchStyle(batch.name)
+
+      return (
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={style.variant}
+            className={`whitespace-nowrap px-2 py-0.5 text-xs font-medium ${style.className}`}
+          >
             {batch.name}
           </Badge>
           {batch.startDate && (
-            <div className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {format(new Date(batch.startDate), 'MMM d, yyyy')}
-            </div>
+            </span>
           )}
         </div>
-      ) : (
-        <span className="text-muted-foreground">Unassigned</span>
       )
     },
   },

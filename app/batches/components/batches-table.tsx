@@ -16,6 +16,7 @@ import { saveAs } from 'file-saver'
 import { Users, GraduationCap, Users2, BarChart3, Download } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -541,6 +542,7 @@ export function BatchesTable() {
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              <ThemeToggle />
             </div>
           </div>
 
