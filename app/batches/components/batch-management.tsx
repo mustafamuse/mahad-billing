@@ -27,6 +27,7 @@ import {
 import { createBatch } from '@/lib/actions/batch-actions'
 
 import { AssignStudentsDialog } from './assign-students'
+import { DeleteStudentSheet } from './delete-student-sheet'
 import { useBatches } from '../hooks/use-batches'
 
 export function BatchManagement() {
@@ -61,10 +62,12 @@ export function BatchManagement() {
     <div className="space-y-6">
       {/* Header with Actions */}
       <div className="flex items-center justify-between">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Batch Management</h1>
-          <p className="text-muted-foreground">
-            Manage student batches and view registrations
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold tracking-tight">
+            Batch Management
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Create and manage student batches
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -117,6 +120,8 @@ export function BatchManagement() {
               Assign Students
             </Button>
           </AssignStudentsDialog>
+
+          <DeleteStudentSheet />
         </div>
       </div>
 

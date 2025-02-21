@@ -25,3 +25,44 @@ export function getStudentStatusDisplay(status: StudentStatus): string {
       return 'Unknown'
   }
 }
+
+export interface StudentDetails {
+  student: {
+    id: string
+    name: string
+    email?: string
+    phone?: string
+    status: string
+    monthlyRate: number
+    customRate: boolean
+    educationLevel?: string
+    gradeLevel?: string
+    schoolName?: string
+  }
+  associations: {
+    batch?: {
+      id: string
+      name: string
+    }
+    payer?: {
+      id: string
+      name: string
+      email: string
+      activeSubscriptions: number
+      totalStudents: number
+    }
+    siblingGroup?: {
+      id: string
+      students: Array<{
+        id: string
+        name: string
+      }>
+    }
+  }
+}
+
+export interface DeleteWarnings {
+  hasSiblings: boolean
+  isOnlyStudentForPayer: boolean
+  hasActiveSubscription: boolean
+}
