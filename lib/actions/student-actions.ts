@@ -1,7 +1,5 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
-
 import { prisma } from '@/lib/db'
 import type { StudentDetails, DeleteWarnings } from '@/lib/types/student'
 
@@ -179,6 +177,4 @@ export async function deleteStudent(studentId: string): Promise<void> {
       })
     }
   })
-
-  revalidatePath('/batches')
 }
