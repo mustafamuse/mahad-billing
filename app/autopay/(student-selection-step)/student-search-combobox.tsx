@@ -40,6 +40,7 @@ interface StudentSearchComboboxProps {
   onOpenChange: (open: boolean) => void
   onSelect: (student: StudentDTO) => void
   isStudentSelected: (studentId: string) => boolean
+  className?: string
 }
 
 export function StudentSearchCombobox({

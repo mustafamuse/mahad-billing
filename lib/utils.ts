@@ -5,8 +5,6 @@ import { twMerge } from 'tailwind-merge'
 import { LogEventData } from '@/app/api/webhook/types'
 
 import { StudentDTO } from './actions/get-students'
-import { BASE_RATE } from './data'
-import { Student } from './types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -29,18 +27,6 @@ export function formatCurrency(amount: number): string {
     currency: 'USD',
     minimumFractionDigits: 2,
   }).format(amount)
-}
-
-export function calculateStudentPrice(student: Student): {
-  price: number
-  discount: number
-  isSiblingDiscount: boolean
-} {
-  return {
-    price: student.monthlyRate,
-    discount: BASE_RATE - student.monthlyRate,
-    isSiblingDiscount: !!student.siblingId,
-  }
 }
 
 export const formatDiscountType = (type: string, amount: number) => {

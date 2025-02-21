@@ -1,6 +1,6 @@
 'use client'
 
-import { FieldErrors } from 'react-hook-form'
+import { UseFormReturn } from 'react-hook-form'
 
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,7 +15,7 @@ import { EnrollmentFormValues } from '@/lib/schemas/enrollment'
 import { cn } from '@/lib/utils'
 
 interface RelationshipSelectProps {
-  value: string
+  value: string | undefined
   onChange: (value: string) => void
   error?: string
 }
@@ -67,39 +67,37 @@ export function RelationshipSelect({
 }
 
 interface PayorDetailsFieldsProps {
-  values: Partial<EnrollmentFormValues>
-  onChange: (values: Partial<EnrollmentFormValues>) => void
-  showErrors?: boolean
-  errors?: FieldErrors<EnrollmentFormValues>
+  form: UseFormReturn<EnrollmentFormValues>
+  onRelationshipChange?: (newValues: Partial<EnrollmentFormValues>) => void
 }
 
 export function PayorDetailsFields({
-  values,
-  onChange,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  showErrors = false,
-  errors,
+  form,
+  onRelationshipChange,
 }: PayorDetailsFieldsProps) {
-  const handleChange =
-    (field: keyof EnrollmentFormValues) =>
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value
-      onChange({
-        ...values,
-        [field]: value,
-      })
-    }
+  const {
+    register,
+    formState: { errors },
+  } = form
 
   return (
     <div className="space-y-4">
+      <RelationshipSelect
+        value={form.watch('relationship')}
+        onChange={(value) => {
+          // Call parent handler for auto-fill logic
+          onRelationshipChange?.({ relationship: value })
+        }}
+        error={errors.relationship?.message}
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="firstName">First Name</Label>
           <Input
             id="firstName"
             placeholder="Enter first name"
-            value={values.firstName || ''}
-            onChange={handleChange('firstName')}
+            value={form.watch('firstName') || ''}
+            {...register('firstName')}
             className={cn(errors?.firstName && 'border-destructive')}
             aria-invalid={errors?.firstName ? 'true' : 'false'}
             aria-describedby={errors?.firstName ? 'firstName-error' : undefined}
@@ -115,8 +113,8 @@ export function PayorDetailsFields({
           <Input
             id="lastName"
             placeholder="Enter last name"
-            value={values.lastName || ''}
-            onChange={handleChange('lastName')}
+            value={form.watch('lastName') || ''}
+            {...register('lastName')}
             className={cn(errors?.lastName && 'border-destructive')}
             aria-invalid={errors?.lastName ? 'true' : 'false'}
             aria-describedby={errors?.lastName ? 'lastName-error' : undefined}
@@ -134,8 +132,8 @@ export function PayorDetailsFields({
           id="email"
           type="email"
           placeholder="Enter email address"
-          value={values.email || ''}
-          onChange={handleChange('email')}
+          value={form.watch('email') || ''}
+          {...register('email')}
           className={cn(errors?.email && 'border-destructive')}
           aria-invalid={errors?.email ? 'true' : 'false'}
           aria-describedby={errors?.email ? 'email-error' : undefined}
@@ -151,13 +149,23 @@ export function PayorDetailsFields({
         <Input
           id="phone"
           type="tel"
-          placeholder="Enter phone number (10 digits)"
-          value={values.phone || ''}
-          onChange={handleChange('phone')}
+          placeholder="XXX-XXX-XXXX"
+          value={form.watch('phone') || ''}
+          {...register('phone', {
+            onChange: (e) => {
+              // Format the phone number as user types
+              const value = e.target.value.replace(/\D/g, '') // Remove non-digits
+              if (value.length <= 10) {
+                const formatted = value.replace(
+                  /(\d{3})(\d{3})(\d{4})/,
+                  '$1-$2-$3'
+                )
+                e.target.value = formatted
+              }
+            },
+          })}
           className={cn(errors?.phone && 'border-destructive')}
           aria-invalid={errors?.phone ? 'true' : 'false'}
-          aria-describedby={errors?.phone ? 'phone-error' : undefined}
-          pattern="[0-9]{10}"
         />
         {errors?.phone && (
           <p id="phone-error" className="text-sm text-destructive">

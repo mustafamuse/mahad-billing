@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
 
   // Protected routes that require authentication/authorization
   const protectedRoutes = [
-    '/autopay',
+    '/batches',
     '/admin-access',
     '/dashboard',
     '/admin/dashboard',
@@ -20,18 +20,6 @@ export function middleware(request: NextRequest) {
   // If it's not a protected route, allow access
   if (!isProtectedRoute) {
     return NextResponse.next()
-  }
-
-  // Handle admin routes
-  if (path.startsWith('/admin')) {
-    // Redirect to admin access page if trying to access admin routes
-    return NextResponse.redirect(new URL('/admin-access', request.url))
-  }
-
-  // Handle autopay route - redirect to homepage or login
-  if (path.startsWith('/autopay')) {
-    // You can change this to redirect to a login page if you have one
-    return NextResponse.redirect(new URL('/', request.url))
   }
 
   return NextResponse.next()

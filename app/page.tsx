@@ -257,7 +257,7 @@ export default function HomePage() {
               Simple Pricing
             </h2>
             <p className="max-w-[85%] leading-normal text-muted-foreground sm:text-lg sm:leading-7">
-              Transparent pricing with family discounts available.
+              Transparent pricing with progressive family discounts.
             </p>
           </div>
           <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-2">
@@ -273,7 +273,7 @@ export default function HomePage() {
                   </span>
                 </div>
                 <p className="mt-4 text-muted-foreground">
-                  Per student with family discounts available:
+                  Standard rate per student includes:
                 </p>
                 <ul className="mt-4 space-y-3 text-sm">
                   {[
@@ -281,7 +281,7 @@ export default function HomePage() {
                     'Expert instructors',
                     'Modern facilities',
                     'Flexible payment options',
-                    'Family discount available',
+                    'Family discount eligible',
                   ].map((feature) => (
                     <li key={feature} className="flex items-center">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
@@ -295,7 +295,7 @@ export default function HomePage() {
                   asChild
                   className="w-full bg-primary/90 hover:bg-primary"
                 >
-                  <Link href="/autopay">Start Application</Link>
+                  <Link href="/register">Start Registration</Link>
                 </Button>
               </div>
             </Card>
@@ -303,39 +303,60 @@ export default function HomePage() {
             <Card className="flex flex-col">
               <div className="flex-1 p-6">
                 <h3 className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
-                  Family Discount
+                  Family Discount Program
                 </h3>
-                <div className="mt-4 flex items-baseline text-6xl font-bold">
-                  $10
-                  <span className="ml-1 text-xl font-normal text-muted-foreground">
-                    off
-                  </span>
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-baseline">
+                    <span className="text-2xl font-bold">
+                      Progressive Savings
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground">
+                    Our tiered discount system rewards larger families:
+                  </p>
                 </div>
-                <p className="mt-4 text-muted-foreground">
-                  Per additional student enrolled:
-                </p>
-                <ul className="mt-4 space-y-3 text-sm">
+                <ul className="mt-6 space-y-4">
                   {[
-                    'Automatic discount applied',
-                    'No maximum limit',
-                    'Applies to siblings',
-                    'Monthly billing',
-                    'Easy management',
-                  ].map((feature) => (
-                    <li key={feature} className="flex items-center">
-                      <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      {feature}
+                    {
+                      title: '2 Siblings Enrolled',
+                      rate: '$140/month each',
+                      savings: 'Save $10 per student',
+                    },
+                    {
+                      title: '3 Siblings Enrolled',
+                      rate: '$135/month each',
+                      savings: 'Save $15 per student',
+                    },
+                    {
+                      title: '4+ Siblings Enrolled',
+                      rate: '$130/month each',
+                      savings: 'Save $20 per student',
+                    },
+                  ].map((tier) => (
+                    <li key={tier.title} className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 shrink-0 text-primary" />
+                        <span className="font-medium">{tier.title}</span>
+                      </div>
+                      <div className="ml-6 text-sm text-muted-foreground">
+                        <div>{tier.rate}</div>
+                        <div className="text-primary">{tier.savings}</div>
+                      </div>
                     </li>
                   ))}
                 </ul>
               </div>
               <div className="p-6 pt-0">
                 <Button variant="outline" asChild className="w-full">
-                  <Link href="/payment-faq">View Payment Details</Link>
+                  <Link href="/register">Register Now</Link>
                 </Button>
               </div>
             </Card>
           </div>
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            New students must complete registration before setting up automatic
+            payments
+          </p>
         </section>
 
         {/* Contact Section */}

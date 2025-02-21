@@ -67,24 +67,29 @@ export function StudentSelectionStep() {
   }
 
   return (
-    <div>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
       <EnrollmentStepsProgress currentStep={0} />
-      <Card className="border-0 sm:border">
+      <Card className="mt-4 border-border bg-card/30 backdrop-blur-sm sm:mt-6">
         <CardHeader className="space-y-2 p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl">
+          <CardTitle className="text-xl font-semibold text-foreground sm:text-2xl">
             Select Your Name
           </CardTitle>
-          <CardDescription className="text-sm sm:text-base">
+          <CardDescription className="text-sm text-muted-foreground sm:text-base">
             Choose the students you want to enroll in the mahad autopay system.
             Press{' '}
-            <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+            <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
               <span className="text-xs">⌘</span>K
             </kbd>{' '}
             to search.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4 p-4 sm:p-6">
-          <div className="space-y-4">
+
+        <CardContent className="space-y-4 p-4 sm:space-y-6 sm:p-6">
+          <div className="relative">
             <StudentSearchCombobox
               students={students || []}
               isLoading={isLoading}
@@ -94,48 +99,42 @@ export function StudentSelectionStep() {
               onSelect={handleStudentSelect}
               isStudentSelected={isStudentSelected}
             />
+          </div>
 
-            <div
-              className="space-y-3"
-              role="list"
-              aria-label="Selected students"
-            >
-              {selectedStudents.length === 0 ? (
-                <EmptySelection />
-              ) : (
-                <AnimatePresence mode="popLayout">
-                  {selectedStudents.map((student) => (
-                    <motion.div
-                      key={student.id}
-                      layout
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{
-                        type: 'spring',
-                        stiffness: 500,
-                        damping: 30,
-                      }}
-                    >
-                      <StudentCard
-                        student={student}
-                        onRemove={handleStudentRemove}
-                      />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              )}
-            </div>
+          <div className="space-y-4">
+            {selectedStudents.length === 0 ? (
+              <EmptySelection />
+            ) : (
+              <AnimatePresence mode="popLayout">
+                {selectedStudents.map((student) => (
+                  <motion.div
+                    key={student.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  >
+                    <StudentCard
+                      student={student}
+                      onRemove={handleStudentRemove}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            )}
+          </div>
 
+          <div className="mt-6 rounded-lg border border-gray-800 bg-gray-900/50 p-6">
             <EnrollmentSummary selectedStudents={selectedStudents} />
           </div>
         </CardContent>
-        <CardFooter className="p-4 sm:p-6">
+
+        <CardFooter className="border-t border-border p-4 sm:p-6">
           <Button
+            className="h-12 w-full text-base"
             type="button"
-            className="h-12 w-full text-base font-medium"
             disabled={selectedStudents.length === 0 || isProcessing}
-            aria-label="Continue to payment details"
             onClick={onSubmit}
           >
             {isProcessing ? (
@@ -149,6 +148,6 @@ export function StudentSelectionStep() {
           </Button>
         </CardFooter>
       </Card>
-    </div>
+    </motion.div>
   )
 }

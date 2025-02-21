@@ -11,7 +11,6 @@ import {
   type StudentFormValues,
 } from '@/app/register/schema'
 import { prisma } from '@/lib/db'
-import { monitoring } from '@/lib/monitoring'
 
 import { redis } from '../utils/redis'
 
@@ -31,24 +30,10 @@ function capitalizeNames(firstName: string, lastName: string) {
 
 // Get students for registration
 export async function getRegistrationStudents() {
+  const CUTOFF_DATE = new Date('2024-02-13')
+
   try {
-    const ip = headers().get('x-forwarded-for') ?? '127.0.0.1'
-    const { success, reset } = await ratelimit.limit(ip)
-
-    // Log rate limit event
-    await monitoring.logRateLimit({
-      ip,
-      endpoint: 'getRegistrationStudents',
-      success,
-      timestamp: Date.now(),
-      resetTime: reset,
-    })
-
-    if (!success) {
-      throw new Error('Too many requests. Please try again in a few seconds.')
-    }
-
-    return await prisma.student.findMany({
+    const students = await prisma.student.findMany({
       select: {
         id: true,
         name: true,
@@ -58,13 +43,11 @@ export async function getRegistrationStudents() {
         educationLevel: true,
         gradeLevel: true,
         schoolName: true,
+        updatedAt: true,
         siblingGroup: {
           select: {
             students: {
-              select: {
-                id: true,
-                name: true,
-              },
+              select: { id: true, name: true },
             },
           },
         },
@@ -73,6 +56,35 @@ export async function getRegistrationStudents() {
         name: 'asc',
       },
     })
+
+    // Filter out students who completed registration after cutoff
+    return students
+      .filter((student) => {
+        const hasCompletedRegistration =
+          student.email &&
+          student.phone &&
+          student.dateOfBirth &&
+          student.educationLevel &&
+          student.gradeLevel &&
+          student.schoolName
+
+        const wasUpdatedAfterCutoff = student.updatedAt > CUTOFF_DATE
+
+        // If student completed registration after cutoff, exclude them
+        if (hasCompletedRegistration && wasUpdatedAfterCutoff) {
+          console.log('Student excluded from list:', {
+            id: student.id,
+            name: student.name,
+            updatedAt: student.updatedAt,
+            reason: 'Completed registration after cutoff date',
+          })
+          return false
+        }
+
+        return true
+      })
+
+      .map(({ updatedAt: _, ...student }) => student) // Remove updatedAt from returned data
   } catch (error) {
     console.error('Failed to fetch students:', error)
     throw new Error('Failed to fetch students')
@@ -291,8 +303,10 @@ export async function removeSibling(studentId: string, siblingId: string) {
 }
 
 export async function getRegistrationStudent(id: string) {
+  const CUTOFF_DATE = new Date('2024-02-13')
+
   try {
-    return await prisma.student.findUnique({
+    const student = await prisma.student.findUnique({
       where: { id },
       select: {
         id: true,
@@ -303,6 +317,7 @@ export async function getRegistrationStudent(id: string) {
         educationLevel: true,
         gradeLevel: true,
         schoolName: true,
+        updatedAt: true,
         siblingGroup: {
           select: {
             students: {
@@ -312,6 +327,34 @@ export async function getRegistrationStudent(id: string) {
         },
       },
     })
+
+    if (!student) return null
+
+    // Check if student has completed registration after cutoff date
+    const hasCompletedRegistration =
+      student.email &&
+      student.phone &&
+      student.dateOfBirth &&
+      student.educationLevel &&
+      student.gradeLevel &&
+      student.schoolName
+
+    const wasUpdatedAfterCutoff = student.updatedAt > CUTOFF_DATE
+
+    // If student completed registration after cutoff, don't return them
+    if (hasCompletedRegistration && wasUpdatedAfterCutoff) {
+      console.log('Student excluded:', {
+        id: student.id,
+        name: student.name,
+        updatedAt: student.updatedAt,
+        reason: 'Completed registration after cutoff date',
+      })
+      return null
+    }
+
+    // Return student without the updatedAt field
+    const { updatedAt: _, ...studentData } = student
+    return studentData
   } catch (error) {
     console.error('Failed to fetch student:', error)
     throw new Error('Failed to fetch student')

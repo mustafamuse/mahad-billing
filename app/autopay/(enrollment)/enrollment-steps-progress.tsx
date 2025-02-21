@@ -10,58 +10,64 @@ export function EnrollmentStepsProgress({ currentStep }: StepsProgressProps) {
   // Convert 0-based step to 1-based for visual representation
   const displayStep = currentStep + 1
 
+  const steps = [
+    { id: 1, label: 'Student Info', icon: UserRound },
+    { id: 2, label: 'Contact Info', icon: UserRound },
+    { id: 3, label: 'Payment Setup', icon: Banknote },
+  ]
+
   return (
-    <div className="mb-8 flex justify-center">
-      <div className="flex items-center space-x-2">
-        {/* Student Info Step (Step 0) */}
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-full ${displayStep > 1 ? 'bg-green-100 text-green-600' : displayStep === 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-        >
-          {displayStep > 1 ? (
-            <BadgeCheck className="h-5 w-5" />
-          ) : (
-            <UserRound className="h-5 w-5" />
-          )}
-        </div>
-        <div
-          className={`text-sm font-medium ${displayStep >= 1 ? 'text-foreground' : 'text-muted-foreground'}`}
-        >
-          Student Info
-        </div>
-        <div className="h-0.5 w-12 bg-gray-200" />
+    <div className="flex justify-center px-4">
+      <div className="flex w-full max-w-md items-center justify-between">
+        {steps.map((step, index) => (
+          <React.Fragment key={step.id}>
+            {/* Step Circle */}
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                  displayStep > step.id
+                    ? 'bg-green-100 text-green-600'
+                    : displayStep === step.id
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {displayStep > step.id ? (
+                  <BadgeCheck className="h-5 w-5" />
+                ) : (
+                  <step.icon className="h-5 w-5" />
+                )}
+              </div>
+              {/* Step Label - Hide on mobile */}
+              <span
+                className={`hidden text-xs font-medium sm:block ${
+                  displayStep >= step.id
+                    ? 'text-foreground'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
 
-        {/* Contact Info Step (Step 1) */}
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-full ${displayStep > 2 ? 'bg-green-100 text-green-600' : displayStep === 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-        >
-          {displayStep > 2 ? (
-            <BadgeCheck className="h-5 w-5" />
-          ) : (
-            <UserRound className="h-5 w-5" />
-          )}
-        </div>
-        <div
-          className={`text-sm font-medium ${displayStep >= 2 ? 'text-foreground' : 'text-muted-foreground'}`}
-        >
-          Contact Info
-        </div>
-        <div className="h-0.5 w-12 bg-gray-200" />
-
-        {/* Payment Setup Step (Step 2) */}
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-full ${displayStep > 3 ? 'bg-green-100 text-green-600' : displayStep === 3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-        >
-          {displayStep > 3 ? (
-            <BadgeCheck className="h-5 w-5" />
-          ) : (
-            <Banknote className="h-5 w-5" />
-          )}
-        </div>
-        <div
-          className={`text-sm font-medium ${displayStep >= 3 ? 'text-foreground' : 'text-muted-foreground'}`}
-        >
-          Payment Setup
-        </div>
+            {/* Connector Line - Don't show after last step */}
+            {index < steps.length - 1 && (
+              <div className="h-[2px] flex-1 bg-muted">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{
+                    width:
+                      displayStep > step.id
+                        ? '100%'
+                        : displayStep === step.id
+                          ? '50%'
+                          : '0%',
+                  }}
+                />
+              </div>
+            )}
+          </React.Fragment>
+        ))}
       </div>
     </div>
   )

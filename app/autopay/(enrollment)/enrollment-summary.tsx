@@ -18,7 +18,7 @@ export function EnrollmentSummary({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold">Enrollment Summary</h3>
+        <h3 className="font-semibold text-white">Enrollment Summary</h3>
         {hasStudents && onAddStudents && (
           <Button
             variant="ghost"
@@ -33,27 +33,25 @@ export function EnrollmentSummary({
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <span className="text-sm text-muted-foreground">
-            Students Enrolled
-          </span>
+          <span className="text-sm text-gray-400">Students Enrolled</span>
           {hasStudents ? (
             <ul className="space-y-1.5">
               {selectedStudents.map((student) => (
                 <li
                   key={student.id}
-                  className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-md bg-[#0f1729] p-4 text-sm"
                 >
-                  <span className="font-medium">{student.name}</span>
-                  <span className="font-medium tabular-nums text-primary">
+                  <span className="font-medium text-white">{student.name}</span>
+                  <span className="font-medium tabular-nums text-white">
                     ${student.monthlyRate}/mo
                   </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <div className="flex flex-col items-center justify-center rounded-md border-2 border-dashed py-8 text-center">
-              <UserPlus2 className="h-8 w-8 text-muted-foreground/50" />
-              <p className="mt-2 text-sm font-medium text-muted-foreground">
+            <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-gray-800 py-8 text-center">
+              <UserPlus2 className="h-8 w-8 text-gray-600" />
+              <p className="mt-2 text-sm font-medium text-gray-400">
                 No students selected
               </p>
               {onAddStudents && (
@@ -71,15 +69,15 @@ export function EnrollmentSummary({
         </div>
 
         {hasStudents && (
-          <div className="flex items-center justify-between rounded-md bg-primary/5 px-3 py-3">
-            <span className="text-base font-medium">Monthly Total</span>
+          <div className="flex items-center justify-between rounded-md bg-[#0f1729] p-4">
+            <span className="text-base font-medium text-white">
+              Monthly Total
+            </span>
             <div className="text-right">
-              <span className="text-xl font-bold tabular-nums text-primary">
+              <span className="text-xl font-bold tabular-nums text-white">
                 ${calculateTotal(selectedStudents)}
               </span>
-              <span className="ml-1 text-sm text-muted-foreground">
-                per month
-              </span>
+              <span className="ml-1 text-sm text-gray-400">per month</span>
             </div>
           </div>
         )}

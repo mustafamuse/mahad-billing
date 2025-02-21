@@ -34,6 +34,7 @@ interface EnrollmentState {
   hasViewedTerms: boolean
   isTermsModalOpen: boolean
   error: string | null
+  formData: Partial<EnrollmentFormValues>
 }
 
 interface EnrollmentActions {
@@ -57,11 +58,13 @@ interface EnrollmentActions {
     termsAccepted: boolean
   }) => Promise<void>
   resetForm: () => void
+  updateFormData: (data: Partial<EnrollmentFormValues>) => void
 }
 
 interface EnrollmentContextType {
   state: EnrollmentState
   actions: EnrollmentActions
+  form?: UseFormReturn<EnrollmentFormValues>
 }
 
 // 2. Create Context
@@ -82,6 +85,7 @@ const initialState: EnrollmentState = {
   hasViewedTerms: false,
   isTermsModalOpen: false,
   error: null,
+  formData: {},
 }
 
 // 4. Provider Component
@@ -201,6 +205,10 @@ export function EnrollmentProvider({
 
     resetForm: () => {
       setState(initialState)
+    },
+
+    updateFormData: (data: Partial<EnrollmentFormValues>) => {
+      setState((prev) => ({ ...prev, formData: { ...prev.formData, ...data } }))
     },
   }
 

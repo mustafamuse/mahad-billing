@@ -11,7 +11,6 @@ import {
   Clock,
   GraduationCap,
   Users,
-  AlertTriangle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -285,20 +284,20 @@ export default function ProgramsPage() {
                   <Users className="h-5 w-5 text-primary" />
                   <h3 className="text-lg font-semibold">Instructors</h3>
                 </div>
-                <ul className="space-y-3">
-                  <li>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="font-medium">Sheikh Nuur Hassan</div>
+                  </div>
+                  <div>
+                    <div className="font-medium">Sheikh Abdiaziz Omar</div>
+                  </div>
+                  <div>
                     <div className="font-medium">Sheikh Ibrahim Ali</div>
-                    <div className="text-sm text-muted-foreground">
-                      ihanifali18@gmail.com
-                    </div>
-                  </li>
-                  <li>
+                  </div>
+                  <div>
                     <div className="font-medium">Sheikh Mustafa Muse</div>
-                    <div className="text-sm text-muted-foreground">
-                      umpp101@gmail.com
-                    </div>
-                  </li>
-                </ul>
+                  </div>
+                </div>
               </Card>
 
               <Card className="p-6">
@@ -477,17 +476,6 @@ export default function ProgramsPage() {
                         </ul>
                       </div>
                     ))}
-                  </div>
-                  <div className="mt-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-                    <div className="flex items-center gap-2 font-medium text-destructive">
-                      <AlertTriangle className="h-5 w-5" />
-                      <span>Academic Integrity</span>
-                    </div>
-                    <p className="mt-2 text-sm text-destructive">
-                      Cheating of any kind is strictly prohibited and will
-                      result in an automatic zero grade. Multiple violations may
-                      lead to program dismissal.
-                    </p>
                   </div>
                 </div>
               </Card>

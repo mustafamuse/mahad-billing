@@ -5,6 +5,7 @@ import { cache } from 'react'
 import { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/db'
+import { BASE_RATE } from '@/lib/types'
 import { StudentStatus } from '@/lib/types/student'
 
 // Use string literal for subscription status
@@ -61,6 +62,8 @@ export interface StudentDTO {
   siblingGroupId: string | null
   batchId: string | null
   batchName: string | null
+  email: string | null
+  phone: string | null
   // Computed fields
   isEligibleForAutopay: boolean
   hasActiveSubscription: boolean
@@ -81,24 +84,40 @@ interface StudentQueryOptions {
 async function mapToDTO(student: StudentWithRelations): Promise<StudentDTO> {
   const siblingCount = student.siblingGroup?.students.length ?? 0
   const hasActiveSubscription = (student.payer?.subscriptions.length ?? 0) > 0
-  const familyDiscountAmount = siblingCount > 1 ? student.monthlyRate * 0.1 : 0
+
+  // Calculate tiered discount based on number of siblings
+  let discount = 0
+  if (!student.customRate && siblingCount > 1) {
+    // Tiered discount calculation:
+    // 2 siblings → $10 off each ($140 per student)
+    // 3 siblings → $15 off each ($135 per student)
+    // 4 siblings → $20 off each ($130 per student)
+    discount = (siblingCount - 1) * 5 + 5
+  }
+
+  // Use custom rate if set, otherwise apply BASE_RATE with discount
+  const calculatedRate = student.customRate
+    ? student.monthlyRate
+    : BASE_RATE - discount
 
   return {
     id: student.id,
     name: student.name,
-    monthlyRate: student.monthlyRate,
+    monthlyRate: calculatedRate,
     hasCustomRate: student.customRate,
     status: student.status as StudentStatus,
     payorId: student.payerId,
     siblingGroupId: student.siblingGroupId,
     batchId: student.batch?.id ?? null,
     batchName: student.batch?.name ?? null,
+    email: student.email,
+    phone: student.phone,
     // Computed fields
     isEligibleForAutopay: !hasActiveSubscription,
     hasActiveSubscription,
     familyDiscount: {
-      applied: siblingCount > 1,
-      amount: familyDiscountAmount,
+      applied: siblingCount > 1 && !student.customRate,
+      amount: discount,
       siblingCount,
     },
   }
