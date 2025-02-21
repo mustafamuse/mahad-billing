@@ -365,3 +365,5 @@ export interface SubscriptionResponse {
     collectionRate: number
   }
 }
+
+export const BASE_RATE = 150

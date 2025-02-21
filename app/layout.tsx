@@ -5,7 +5,6 @@ import { EnrollmentProvider } from '@/contexts/enrollment-context'
 import { ThemeProvider } from '@/providers/theme-provider'
 
 import { Providers } from './providers'
-
 import './globals.css'
 
 export const metadata = {
@@ -27,14 +26,13 @@ export default function RootLayout({
           content="width=device-width, initial-scale=1, minimum-scale=1"
         />
       </head>
-
       <body suppressHydrationWarning>
         <Providers>
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
+            defaultTheme="dark"
+            enableSystem={false}
+            forcedTheme="dark"
           >
             <EnrollmentProvider>{children}</EnrollmentProvider>
             <Toaster richColors position="top-right" />

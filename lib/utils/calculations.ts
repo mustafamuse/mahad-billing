@@ -1,11 +1,4 @@
 // Utility: Get family discount based on number of family members
-export function getFamilyDiscount(totalFamilyMembers: number): number {
-  if (totalFamilyMembers >= 4) return 30
-
-  if (totalFamilyMembers >= 3) return 20
-  if (totalFamilyMembers === 2) return 10
-  return 0
-}
 
 // Utility: Calculate total monthly rate for students
 // export function calculateTotal(students: Student[]): number {
