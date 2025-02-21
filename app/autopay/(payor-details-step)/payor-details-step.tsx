@@ -5,10 +5,7 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
 import { EnrollmentStepsProgress } from '@/app/autopay/(enrollment)/enrollment-steps-progress'
-import {
-  PayorDetailsFields,
-  RelationshipSelect,
-} from '@/app/autopay/(payor-details-step)/payor-details-fields'
+import { PayorDetailsFields } from '@/app/autopay/(payor-details-step)/payor-details-fields'
 import { TermsModal } from '@/app/autopay/(payor-details-step)/terms-modal'
 import { Button } from '@/components/ui/button'
 import {
@@ -52,6 +49,183 @@ export function PayorDetailsStep() {
     mode: 'onChange',
     reValidateMode: 'onChange',
   })
+
+  const handleChange = (newValues: Partial<EnrollmentFormValues>) => {
+    // Debug logging for all changes
+    console.log('handleChange called with:', {
+      newValues,
+      currentFormValues: form.getValues(),
+      selectedStudents,
+      formState: {
+        isDirty: form.formState.isDirty,
+        isValid: form.formState.isValid,
+        errors: form.formState.errors,
+      },
+    })
+
+    // If relationship is changing to "self"
+    if (newValues.relationship === 'self') {
+      console.log('Self relationship selected:', {
+        studentCount: selectedStudents.length,
+        students: selectedStudents.map((s) => ({
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          phone: s.phone,
+        })),
+      })
+
+      // Only auto-fill if exactly one student is selected
+      if (selectedStudents.length === 1) {
+        const student = selectedStudents[0]
+
+        console.log('Attempting to auto-fill with student data:', {
+          student,
+          hasEmail: Boolean(student.email),
+          hasPhone: Boolean(student.phone),
+          nameParts: student.name.split(' '),
+        })
+
+        // Validate student data before auto-filling
+        if (!student.email || !student.phone) {
+          console.log('Missing required student data:', {
+            email: student.email,
+            phone: student.phone,
+            missingFields: {
+              email: !student.email,
+              phone: !student.phone,
+            },
+          })
+          toast.error(
+            'Some required information is missing from your student profile. Please fill in the details manually.',
+            {
+              description: [
+                !student.email && 'Email address is missing',
+                !student.phone && 'Phone number is missing',
+              ]
+                .filter(Boolean)
+                .join(', '),
+            }
+          )
+          // Still set relationship but don't auto-fill invalid data
+          form.setValue('relationship', 'self')
+          return
+        }
+
+        // Split name and validate
+        const nameParts = student.name.split(' ')
+        console.log('Name parsing:', {
+          original: student.name,
+          parts: nameParts,
+          isValid: nameParts.length >= 2,
+        })
+
+        if (nameParts.length < 2) {
+          toast.error(
+            'Unable to auto-fill name fields. Please enter them manually.'
+          )
+          form.setValue('relationship', 'self')
+          return
+        }
+
+        const [firstName, ...lastNameParts] = nameParts
+        const lastName = lastNameParts.join(' ')
+
+        const fieldsToSet = {
+          relationship: 'self' as const,
+          firstName,
+          lastName,
+          email: student.email,
+          phone: student.phone,
+        }
+
+        console.log('Setting form values:', {
+          fieldsToSet,
+          previousValues: form.getValues(),
+        })
+
+        // Update form with validation
+        Object.entries(fieldsToSet).forEach(([field, value]) => {
+          form.setValue(field as keyof EnrollmentFormValues, value, {
+            shouldValidate: true,
+            shouldDirty: true,
+            shouldTouch: true,
+          })
+        })
+
+        // Show success message
+        toast.success('Information auto-filled from your student profile')
+
+        // After setting form values, sync with enrollment context
+        const currentValues = form.getValues()
+        updatePayorDetails({
+          firstName: currentValues.firstName,
+          lastName: currentValues.lastName,
+          email: currentValues.email,
+          phone: currentValues.phone,
+          relationship: currentValues.relationship as Relationship,
+        })
+        return
+      } else if (selectedStudents.length > 1) {
+        toast.warning(
+          'Auto-fill is only available when enrolling as a single student'
+        )
+        form.setValue('relationship', 'self')
+        return
+      }
+    }
+
+    // If changing from "self" to something else, clear the fields
+    if (
+      form.getValues('relationship') === 'self' &&
+      newValues.relationship !== 'self'
+    ) {
+      const fieldsToReset = [
+        'firstName',
+        'lastName',
+        'email',
+        'phone',
+      ] as const satisfies readonly (keyof EnrollmentFormValues)[]
+
+      fieldsToReset.forEach((field) => {
+        form.setValue(field, '', {
+          shouldValidate: true,
+          shouldDirty: true,
+          shouldTouch: true,
+        })
+      })
+      form.setValue('relationship', newValues.relationship as Relationship)
+
+      // After resetting, sync with enrollment context
+      updatePayorDetails({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        relationship: newValues.relationship as Relationship,
+      })
+    }
+
+    // For other relationship changes
+    if (newValues.relationship) {
+      form.setValue('relationship', newValues.relationship as Relationship)
+
+      // Sync the relationship change with context
+      const currentValues = form.getValues()
+      updatePayorDetails({
+        ...currentValues,
+        relationship: newValues.relationship as Relationship,
+      })
+    }
+
+    // Log form state after all changes
+    console.log('Form state after changes:', {
+      values: form.getValues(),
+      isDirty: form.formState.isDirty,
+      isValid: form.formState.isValid,
+      errors: form.formState.errors,
+    })
+  }
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
@@ -121,39 +295,9 @@ export function PayorDetailsStep() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4 p-4 sm:p-6">
-            <RelationshipSelect
-              value={form.watch('relationship')}
-              onChange={(value) => {
-                form.setValue('relationship', value as Relationship, {
-                  shouldValidate: true,
-                })
-                updatePayorDetails({
-                  ...payorDetails,
-                  relationship: value as Relationship,
-                })
-              }}
-              error={
-                form.formState.errors.relationship
-                  ? form.formState.errors.relationship.message
-                  : undefined
-              }
-            />
-
             <PayorDetailsFields
-              values={form.watch()}
-              onChange={(values) => {
-                Object.entries(values).forEach(([key, value]) => {
-                  form.setValue(key as keyof EnrollmentFormValues, value, {
-                    shouldValidate: true,
-                  })
-                })
-                updatePayorDetails({
-                  ...values,
-                  relationship: values.relationship as Relationship,
-                })
-              }}
-              showErrors={!!form.formState.errors.termsAccepted}
-              errors={form.formState.errors}
+              form={form}
+              onRelationshipChange={handleChange}
             />
 
             <div className="space-y-2">

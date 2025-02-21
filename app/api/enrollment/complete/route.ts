@@ -77,12 +77,23 @@ export async function POST(req: Request) {
         (result) => (result as PromiseFulfilledResult<any>).value.student
       )
 
-      // 7. Create or update payer record
+      // 7. Find existing payer by email OR stripeCustomerId
       let payer = await tx.payer.findFirst({
-        where: { stripeCustomerId: setupIntent.customer as string },
+        where: {
+          OR: [
+            { email: payerDetails.email },
+            { stripeCustomerId: setupIntent.customer as string },
+          ],
+        },
       })
 
       if (!payer) {
+        // Create new payer if neither email nor stripeCustomerId exists
+        console.log('Creating new payer:', {
+          email: payerDetails.email,
+          stripeCustomerId: setupIntent.customer,
+        })
+
         payer = await tx.payer.create({
           data: {
             name: `${payerDetails.firstName} ${payerDetails.lastName}`,
@@ -95,18 +106,27 @@ export async function POST(req: Request) {
         })
       } else {
         // Update existing payer with new details
-        await tx.payer.update({
+        console.log('Updating existing payer:', {
+          id: payer.id,
+          email: payerDetails.email,
+          stripeCustomerId: setupIntent.customer,
+        })
+
+        payer = await tx.payer.update({
           where: { id: payer.id },
           data: {
             name: `${payerDetails.firstName} ${payerDetails.lastName}`,
-            email: payerDetails.email,
             phone: payerDetails.phone,
             relationship: payerDetails.relationship,
+            // Update stripeCustomerId if it's different
+            ...(payer.stripeCustomerId !== setupIntent.customer && {
+              stripeCustomerId: setupIntent.customer as string,
+            }),
           },
         })
       }
 
-      // 8. Update students with new payer
+      // 8. Update students with payer
       await tx.student.updateMany({
         where: { id: { in: studentIds } },
         data: {
@@ -207,7 +227,11 @@ export async function POST(req: Request) {
       ...result,
     })
   } catch (error) {
-    console.error('Enrollment completion failed:', error)
+    console.error('Enrollment completion failed:', {
+      error,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    })
 
     if (error instanceof z.ZodError) {
       const validationError = new ValidationError('Invalid enrollment data')

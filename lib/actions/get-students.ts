@@ -62,6 +62,8 @@ export interface StudentDTO {
   siblingGroupId: string | null
   batchId: string | null
   batchName: string | null
+  email: string | null
+  phone: string | null
   // Computed fields
   isEligibleForAutopay: boolean
   hasActiveSubscription: boolean
@@ -108,6 +110,8 @@ async function mapToDTO(student: StudentWithRelations): Promise<StudentDTO> {
     siblingGroupId: student.siblingGroupId,
     batchId: student.batch?.id ?? null,
     batchName: student.batch?.name ?? null,
+    email: student.email,
+    phone: student.phone,
     // Computed fields
     isEligibleForAutopay: !hasActiveSubscription,
     hasActiveSubscription,

@@ -8,9 +8,10 @@ export const payerDetailsSchema = z.object({
   phone: z
     .string()
     .min(1, "Payor's phone number is required")
-    .refine((val) => val.replace(/\D/g, '').length === 10, {
-      message: 'Phone number must be exactly 10 digits',
-    }),
+    .regex(
+      /^\d{3}-\d{3}-\d{4}$/,
+      'Phone number must be in format: XXX-XXX-XXXX'
+    ),
   relationship: z.string().min(1, 'Relationship is required'),
 })
 
