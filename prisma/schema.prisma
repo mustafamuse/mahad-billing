@@ -3,19 +3,187 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-// Education level enum
+model Subject {
+  id          String          @id @default(uuid())
+  name        String          @unique
+  description String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  schedules   ClassSchedule[]
+}
+
+model Semester {
+  id        String          @id @default(uuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  schedules ClassSchedule[]
+}
+
+model ClassSchedule {
+  id         String         @id @default(uuid())
+  batchId    String
+  subjectId  String
+  semesterId String
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  batch      Batch          @relation(fields: [batchId], references: [id])
+  semester   Semester       @relation(fields: [semesterId], references: [id])
+  subject    Subject        @relation(fields: [subjectId], references: [id])
+  sessions   ClassSession[]
+
+  @@index([batchId, subjectId])
+  @@index([semesterId])
+}
+
+model ClassSession {
+  id              String        @id @default(uuid())
+  classScheduleId String
+  date            DateTime
+  startTime       DateTime
+  endTime         DateTime
+  status          String        @default("SCHEDULED")
+  notes           String?
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  attendance      Attendance[]
+  schedule        ClassSchedule @relation(fields: [classScheduleId], references: [id])
+
+  @@index([classScheduleId])
+  @@index([date])
+}
+
+model Attendance {
+  id        String           @id @default(uuid())
+  studentId String
+  sessionId String
+  status    AttendanceStatus
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  session   ClassSession     @relation(fields: [sessionId], references: [id])
+  student   Student          @relation(fields: [studentId], references: [id])
+
+  @@unique([studentId, sessionId])
+  @@index([studentId])
+  @@index([sessionId])
+}
+
+model Student {
+  id                  String          @id @default(uuid())
+  name                String
+  email               String?
+  monthlyRate         Int             @default(150)
+  customRate          Boolean         @default(false)
+  status              String          @default("registered")
+  payerId             String?
+  lastPaymentDate     DateTime?
+  nextPaymentDue      DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  batchId             String?
+  collegeGradYear     Int?
+  collegeGraduated    Boolean         @default(false)
+  dateOfBirth         DateTime?
+  educationLevel      EducationLevel?
+  gradeLevel          GradeLevel?
+  highSchoolGradYear  Int?
+  highSchoolGraduated Boolean         @default(false)
+  phone               String?
+  postGradCompleted   Boolean         @default(false)
+  postGradYear        Int?
+  schoolName          String?
+  siblingGroupId      String?
+  attendance          Attendance[]
+  batch               Batch?          @relation(fields: [batchId], references: [id])
+  payer               Payer?          @relation(fields: [payerId], references: [id])
+  siblingGroup        Sibling?        @relation(fields: [siblingGroupId], references: [id])
+
+  @@index([status])
+  @@index([siblingGroupId])
+  @@index([batchId])
+  @@index([name])
+  @@index([email])
+  @@index([updatedAt])
+  @@index([createdAt, status])
+}
+
+model Payer {
+  id               String         @id @default(uuid())
+  name             String
+  email            String         @unique
+  phone            String
+  stripeCustomerId String         @unique
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  relationship     String?
+  students         Student[]
+  subscriptions    Subscription[]
+}
+
+model Sibling {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  students  Student[]
+
+  @@index([updatedAt])
+}
+
+model Batch {
+  id             String          @id @default(uuid())
+  name           String          @unique
+  startDate      DateTime?
+  endDate        DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  classSchedules ClassSchedule[]
+  students       Student[]
+
+  @@index([startDate])
+  @@index([endDate])
+  @@index([createdAt])
+}
+
+model Subscription {
+  id                   String             @id @default(uuid())
+  stripeSubscriptionId String             @unique
+  payerId              String
+  status               SubscriptionStatus @default(ACTIVE)
+  lastPaymentDate      DateTime?
+  nextPaymentDate      DateTime?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  paymentRetryCount    Int                @default(0)
+  lastPaymentError     String?
+  gracePeriodEndsAt    DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  payer                Payer              @relation(fields: [payerId], references: [id])
+
+  @@index([status])
+  @@index([payerId])
+  @@index([stripeSubscriptionId])
+}
+
 enum EducationLevel {
   HIGH_SCHOOL
   COLLEGE
   POST_GRAD
 }
 
-// Grade level enum
 enum GradeLevel {
   FRESHMAN
   SOPHOMORE
@@ -23,79 +191,11 @@ enum GradeLevel {
   SENIOR
 }
 
-model Student {
-  id                String          @id @default(uuid())
-  // Personal Info
-  name              String
-  email             String?
-  phone             String?
-  dateOfBirth       DateTime?
-  
-  // Education Info
-  educationLevel    EducationLevel?
-  gradeLevel        GradeLevel?
-  schoolName        String?         // Name of school/university/college
-  
-  // Graduation Status
-  highSchoolGraduated    Boolean   @default(false)
-  highSchoolGradYear     Int?
-  collegeGraduated       Boolean   @default(false)
-  collegeGradYear        Int?
-  postGradCompleted      Boolean   @default(false)
-  postGradYear           Int?
-  
-  // Existing Fields
-  batchId           String?     
-  monthlyRate       Int         @default(150)
-  customRate        Boolean     @default(false)
-  status            String      @default("registered") // registered, enrolled, on_leave, withdrawn
-  payerId           String?     // Optional link to current payer
-  siblingGroupId    String?     // For sibling grouping
-  lastPaymentDate   DateTime?   // Track last successful payment
-  nextPaymentDue    DateTime?   // Track next payment due
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-
-  // Relations
-  payer             Payer?      @relation(fields: [payerId], references: [id])
-  siblingGroup      Sibling?    @relation(fields: [siblingGroupId], references: [id])
-  batch             Batch?      @relation(fields: [batchId], references: [id])
-
-  @@index([status])
-}
-
-model Payer {
-  id                String    @id @default(uuid())
-  name              String
-  email             String    @unique
-  phone             String
-  stripeCustomerId  String    @unique
-  relationship      String?   // Nullable relationship field
-  isActive          Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  students          Student[]
-  subscriptions     Subscription[]
-}
-
-model Sibling {
-  id                String    @id @default(uuid())
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  students          Student[]
-}
-
-model Batch {
-  id                String    @id @default(uuid())
-  name              String    @unique // e.g. "Quran Level 1 - Sunday 10AM"
-  startDate         DateTime?
-  endDate           DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  students          Student[]
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
 }
 
 enum SubscriptionStatus {
@@ -103,35 +203,6 @@ enum SubscriptionStatus {
   PAST_DUE
   CANCELED
   INACTIVE
-  INCOMPLETE      // Add back for backward compatibility
-  TRIALING       // Add back for future use
-}
-
-model Subscription {
-  id                  String             @id @default(uuid())
-  stripeSubscriptionId String            @unique
-  payerId             String            
-  status              SubscriptionStatus @default(ACTIVE)
-  
-  // Payment tracking
-  lastPaymentDate     DateTime?
-  nextPaymentDate     DateTime?
-  currentPeriodStart  DateTime?
-  currentPeriodEnd    DateTime?
-  
-  // Error handling
-  paymentRetryCount   Int               @default(0)
-  lastPaymentError    String?
-  gracePeriodEndsAt   DateTime?
-
-  // Audit
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-
-  // Relations
-  payer               Payer             @relation(fields: [payerId], references: [id])
-  
-  @@index([status])
-  @@index([payerId])
-  @@index([stripeSubscriptionId])
+  INCOMPLETE
+  TRIALING
 }

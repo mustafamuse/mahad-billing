@@ -23,6 +23,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { BackupButton } from '@/app/components/backup-button'
+import { RestoreButton } from '@/app/components/restore-button'
 import { ThemeToggle } from '@/components/theme-toggle'
 import {
   AlertDialog,
@@ -936,6 +938,13 @@ export function BatchesTable() {
       {/* Contacts Export Section */}
       <div className="rounded-lg border bg-card p-3 sm:p-4 lg:p-6">
         <BatchContactsExport students={students} batches={batches} />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <BackupButton />
+          <RestoreButton />
+        </div>
       </div>
     </div>
   )
