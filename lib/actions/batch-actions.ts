@@ -105,6 +105,27 @@ export async function assignStudentsToBatch(
   }
 }
 
+export async function transferStudentsToBatch(
+  destinationBatchId: string,
+  studentIds: string[]
+) {
+  try {
+    const updates = await prisma.$transaction(
+      studentIds.map((studentId) =>
+        prisma.student.update({
+          where: { id: studentId },
+          data: { batchId: destinationBatchId },
+        })
+      )
+    )
+
+    return { success: true, count: updates.length }
+  } catch (error) {
+    console.error('Failed to transfer students:', error)
+    throw new Error('Failed to transfer students')
+  }
+}
+
 export async function exportIncompleteStudents() {
   try {
     const students = await prisma.student.findMany({
