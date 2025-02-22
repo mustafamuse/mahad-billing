@@ -13,11 +13,37 @@ import {
 } from '@tanstack/react-table'
 import { format } from 'date-fns'
 import { saveAs } from 'file-saver'
-import { Users, GraduationCap, Users2, BarChart3, Download } from 'lucide-react'
+import {
+  Users,
+  GraduationCap,
+  Users2,
+  BarChart3,
+  Download,
+  Settings2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { ThemeToggle } from '@/components/theme-toggle'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -36,6 +62,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { exportIncompleteStudents } from '@/lib/actions/batch-actions'
 import type { BatchStudentData } from '@/lib/actions/get-batch-data'
 import { getStudentCompleteness } from '@/lib/utils/student-validation'
@@ -56,7 +88,56 @@ interface FilterPreset {
   }
 }
 
-// First, let's create a function to generate all filters including batch-specific ones
+const columnPresets = {
+  'Basic View': {
+    name: true,
+    status: true,
+    batch: true,
+    completeness: true,
+    email: false,
+    phone: false,
+    siblingGroup: false,
+  },
+  'Contact Details': {
+    name: true,
+    email: true,
+    phone: true,
+    batch: true,
+    status: false,
+    siblingGroup: false,
+    completeness: false,
+  },
+  'Batch Management': {
+    name: true,
+    batch: true,
+    status: true,
+    siblingGroup: true,
+    completeness: true,
+    email: false,
+    phone: false,
+  },
+  'Incomplete Records': {
+    name: true,
+    completeness: true,
+    status: true,
+    batch: true,
+    email: true,
+    phone: true,
+    siblingGroup: false,
+  },
+} as const
+
+const presetDescriptions = {
+  'Basic View':
+    'Shows essential student information - name, status, batch, and completion status. Ideal for quick overview.',
+  'Contact Details':
+    'Displays all contact information - name, email, phone, and batch. Perfect for communication tasks.',
+  'Batch Management':
+    'Shows batch-related info with sibling groups. Useful for managing batch assignments and transfers.',
+  'Incomplete Records':
+    'Focuses on student records that need attention - shows all contact info and completion status.',
+} as const
+
 function getFilters(batches: Array<{ id: string; name: string }>) {
   const staticFilters: FilterPreset[] = [
     {
@@ -152,6 +233,7 @@ export function BatchesTable() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const allFilters = useMemo(() => getFilters(batches), [batches])
 
@@ -353,6 +435,161 @@ export function BatchesTable() {
     [students]
   )
 
+  // Move the function inside the component to access 'table'
+  function applyColumnPreset(presetName: keyof typeof columnPresets) {
+    try {
+      const preset = columnPresets[presetName]
+
+      // Validate preset structure
+      if (!preset || typeof preset !== 'object') {
+        throw new Error('Invalid preset configuration')
+      }
+
+      // Check if all columns exist before applying
+      const currentColumns = new Set(table.getAllColumns().map((col) => col.id))
+      const invalidColumns = Object.keys(preset).filter(
+        (col) => !currentColumns.has(col)
+      )
+
+      if (invalidColumns.length > 0) {
+        throw new Error(
+          `Invalid columns in preset: ${invalidColumns.join(', ')}`
+        )
+      }
+
+      // Apply the preset
+      table.setColumnVisibility(preset)
+
+      // Save to localStorage
+      localStorage.setItem('tableColumnPreset', presetName)
+      localStorage.setItem('tableColumnVisibility', JSON.stringify(preset))
+
+      // Show success message
+      toast.success(`Applied "${presetName}" view`)
+    } catch (error) {
+      console.error('Failed to apply column preset:', error)
+
+      // Show error message
+      toast.error(
+        error instanceof Error
+          ? `Failed to apply preset: ${error.message}`
+          : 'Failed to apply column preset'
+      )
+
+      // Try to restore previous state
+      const savedVisibility = localStorage.getItem('tableColumnVisibility')
+      if (savedVisibility) {
+        try {
+          const previousState = JSON.parse(savedVisibility)
+          table.setColumnVisibility(previousState)
+        } catch {
+          // If restore fails, reset to default
+          table.resetColumnVisibility()
+        }
+      }
+    }
+  }
+
+  // Update the reset function
+  function handleReset() {
+    try {
+      table.resetColumnVisibility()
+      localStorage.removeItem('tableColumnPreset')
+      localStorage.removeItem('tableColumnVisibility')
+      toast.success('Reset column visibility to default')
+      setShowResetConfirm(false)
+    } catch (error) {
+      console.error('Failed to reset columns:', error)
+      toast.error('Failed to reset column visibility')
+    }
+  }
+
+  // Update the column toggle dropdown
+  const columnToggle = (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="ml-auto">
+            <Settings2 className="mr-2 h-4 w-4" />
+            Columns
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[200px]">
+          <DropdownMenuLabel>Column Presets</DropdownMenuLabel>
+          <TooltipProvider>
+            {Object.keys(columnPresets).map((presetName) => (
+              <Tooltip key={presetName}>
+                <TooltipTrigger asChild>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      applyColumnPreset(
+                        presetName as keyof typeof columnPresets
+                      )
+                    }
+                  >
+                    {presetName}
+                  </DropdownMenuItem>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="max-w-[250px]">
+                  <p>
+                    {
+                      presetDescriptions[
+                        presetName as keyof typeof presetDescriptions
+                      ]
+                    }
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </TooltipProvider>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setShowResetConfirm(true)}
+            className="text-muted-foreground"
+          >
+            Reset to Default
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+          {table
+            .getAllColumns()
+            .filter(
+              (column) =>
+                typeof column.accessorFn !== 'undefined' && column.getCanHide()
+            )
+            .map((column) => (
+              <DropdownMenuCheckboxItem
+                key={column.id}
+                className="capitalize"
+                checked={column.getIsVisible()}
+                onCheckedChange={(value) => column.toggleVisibility(!!value)}
+              >
+                {column.id.replace(/([A-Z])/g, ' $1').trim()}
+              </DropdownMenuCheckboxItem>
+            ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Column Layout</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset all column visibility settings to their default
+              state. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReset}>
+              Reset Columns
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+
   if (isLoading) {
     return (
       <div className="flex h-48 items-center justify-center">
@@ -528,6 +765,7 @@ export function BatchesTable() {
                   Clear Filters
                 </Button>
               )}
+              {columnToggle}
               <Select
                 value=""
                 onValueChange={(value) => {
