@@ -26,6 +26,24 @@ import {
 } from '@/lib/schemas/enrollment'
 import { type Relationship } from '@/lib/types'
 
+// Utility function to format phone numbers
+function formatPhoneNumber(value: string): string {
+  // Remove all non-digit characters
+  const digits = value.replace(/\D/g, '')
+
+  // Format based on the number of digits
+  if (digits.length <= 3) {
+    return digits
+  } else if (digits.length <= 6) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  } else if (digits.length <= 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`
+  }
+
+  // If more than 10 digits, truncate to 10
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`
+}
+
 export function PayorDetailsStep() {
   const {
     state: { selectedStudents, isTermsModalOpen, payorDetails, isProcessing },
@@ -131,12 +149,15 @@ export function PayorDetailsStep() {
         const [firstName, ...lastNameParts] = nameParts
         const lastName = lastNameParts.join(' ')
 
+        // Format the phone number before setting it
+        const formattedPhone = formatPhoneNumber(student.phone)
+
         const fieldsToSet = {
           relationship: 'self' as const,
           firstName,
           lastName,
           email: student.email,
-          phone: student.phone,
+          phone: formattedPhone,
         }
 
         console.log('Setting form values:', {

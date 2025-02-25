@@ -14,6 +14,24 @@ import {
 import { EnrollmentFormValues } from '@/lib/schemas/enrollment'
 import { cn } from '@/lib/utils'
 
+// Utility function to format phone numbers
+function formatPhoneNumber(value: string): string {
+  // Remove all non-digit characters
+  const digits = value.replace(/\D/g, '')
+
+  // Format based on the number of digits
+  if (digits.length <= 3) {
+    return digits
+  } else if (digits.length <= 6) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  } else if (digits.length <= 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`
+  }
+
+  // If more than 10 digits, truncate to 10
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`
+}
+
 interface RelationshipSelectProps {
   value: string | undefined
   onChange: (value: string) => void
@@ -78,6 +96,7 @@ export function PayorDetailsFields({
   const {
     register,
     formState: { errors },
+    setValue,
   } = form
 
   return (
@@ -151,21 +170,14 @@ export function PayorDetailsFields({
           type="tel"
           placeholder="XXX-XXX-XXXX"
           value={form.watch('phone') || ''}
-          {...register('phone', {
-            onChange: (e) => {
-              // Format the phone number as user types
-              const value = e.target.value.replace(/\D/g, '') // Remove non-digits
-              if (value.length <= 10) {
-                const formatted = value.replace(
-                  /(\d{3})(\d{3})(\d{4})/,
-                  '$1-$2-$3'
-                )
-                e.target.value = formatted
-              }
-            },
-          })}
+          {...register('phone')}
+          onChange={(e) => {
+            const formatted = formatPhoneNumber(e.target.value)
+            setValue('phone', formatted, { shouldValidate: true })
+          }}
           className={cn(errors?.phone && 'border-destructive')}
           aria-invalid={errors?.phone ? 'true' : 'false'}
+          aria-describedby={errors?.phone ? 'phone-error' : undefined}
         />
         {errors?.phone && (
           <p id="phone-error" className="text-sm text-destructive">

@@ -26,25 +26,12 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Update matcher to include all routes except api, static files, etc.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  // Only apply middleware to specific protected routes
+  // This ensures webhook and other API routes are completely excluded
+  matcher: [
+    '/batches/:path*',
+    '/admin-access/:path*',
+    '/dashboard/:path*',
+    '/admin/dashboard/:path*',
+  ],
 }
-
-// import { NextResponse } from 'next/server'
-// import type { NextRequest } from 'next/server'
-
-// export function middleware(request: NextRequest) {
-//   const path = request.nextUrl.pathname
-
-//   // Allow only autopay page
-//   if (path === '/autopay') {
-//     return NextResponse.next()
-//   }
-
-//   // Redirect all other routes to autopay
-//   return NextResponse.redirect(new URL('/autopay', request.url))
-// }
-
-// export const config = {
-//   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-// }
