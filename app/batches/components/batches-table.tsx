@@ -72,6 +72,7 @@ import {
 } from '@/components/ui/tooltip'
 import { exportIncompleteStudents } from '@/lib/actions/batch-actions'
 import type { BatchStudentData } from '@/lib/actions/get-batch-data'
+import { exportToExcel } from '@/lib/utils/export-to-excel'
 import { getStudentCompleteness } from '@/lib/utils/student-validation'
 
 import { BatchContactsExport } from './batch-contacts-export'
@@ -388,6 +389,25 @@ export function BatchesTable() {
       console.error('Export failed:', error)
       toast.error('Failed to export incomplete students')
     }
+  }
+
+  const handleExportToExcel = () => {
+    const visibleColumns = table
+      .getAllColumns()
+      .filter((col) => col.getIsVisible())
+      .map((col) => col.id)
+
+    const filename = `students-${
+      batchFilter === 'all'
+        ? 'all'
+        : (batches.find((b) => b.id === batchFilter)?.name ?? 'all')
+    }-${new Date().toISOString().split('T')[0]}`
+
+    exportToExcel(filteredData, visibleColumns, filename)
+
+    toast.success('Export complete', {
+      description: `Exported ${filteredData.length} students to ${filename}.xlsx`,
+    })
   }
 
   const table = useReactTable<BatchStudentData>({
@@ -768,6 +788,15 @@ export function BatchesTable() {
                 </Button>
               )}
               {columnToggle}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportToExcel}
+                disabled={filteredData.length === 0}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Export to Excel
+              </Button>
               <Select
                 value=""
                 onValueChange={(value) => {
