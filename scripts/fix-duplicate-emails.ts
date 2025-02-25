@@ -67,7 +67,8 @@ async function fixDuplicateEmails() {
     console.log(`Keeping record: ${keepRecord.id} (${keepRecord.name})`)
 
     // Update the duplicate records with modified emails
-    for (const [index, record] of duplicateRecords.entries()) {
+    for (let index = 0; index < duplicateRecords.length; index++) {
+      const record = duplicateRecords[index]
       const newEmail = `${record.email!.split('@')[0]}.duplicate${index + 1}@${record.email!.split('@')[1]}`
 
       console.log(`Updating record: ${record.id} (${record.name})`)

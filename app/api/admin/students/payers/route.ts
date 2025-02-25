@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+import { Prisma } from '@prisma/client'
+
 import { prisma } from '@/lib/db'
 
 export async function GET(request: Request) {
@@ -35,7 +37,10 @@ export async function GET(request: Request) {
           },
         },
       },
-      orderBy: [{ payerId: 'asc' }, { name: 'asc' }],
+      orderBy: [
+        { payerId: Prisma.SortOrder.asc },
+        { name: Prisma.SortOrder.asc },
+      ],
     }
 
     // Apply filters

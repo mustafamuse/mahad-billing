@@ -206,7 +206,6 @@ export function StudentForm({
                         {duplicateStudents.map((s) => (
                           <li key={s.id}>
                             {s.name} {s.email ? `(${s.email})` : ''}
-                            {s.batch ? ` - Batch: ${s.batch.name}` : ''}
                           </li>
                         ))}
                       </ul>

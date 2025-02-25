@@ -1,5 +1,3 @@
-'use client'
-
 import { NextResponse } from 'next/server'
 
 import { prisma } from '@/lib/db'
@@ -235,3 +233,5 @@ async function handleEmailDuplicates(email: string, shouldFix: boolean) {
     ],
   })
 }
+
+export const dynamic = 'force-dynamic'

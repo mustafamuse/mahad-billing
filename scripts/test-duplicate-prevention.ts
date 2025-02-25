@@ -51,9 +51,7 @@ async function main() {
   if (existingPayers.length > 0) {
     console.log(`Found ${existingPayers.length} existing payers:`)
     existingPayers.forEach((payer) => {
-      console.log(
-        `- ID: ${payer.id}, Name: ${payer.firstName} ${payer.lastName}`
-      )
+      console.log(`- ID: ${payer.id}, Name: ${payer.name}`)
       console.log(`  Stripe Customer ID: ${payer.stripeCustomerId}`)
       console.log(`  Students: ${payer.students.length}`)
       console.log(`  Subscriptions: ${payer.subscriptions.length}`)

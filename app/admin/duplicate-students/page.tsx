@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 
 import { useSearchParams } from 'next/navigation'
 
@@ -88,7 +88,8 @@ interface DuplicateResponse {
   }
 }
 
-export default function DuplicateStudentsPage() {
+// Create a wrapper component that uses useSearchParams
+function DuplicateStudentsContent() {
   const _searchParams = useSearchParams()
   const [data, setData] = useState<DuplicateResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -934,5 +935,16 @@ export default function DuplicateStudentsPage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+// Main page component with Suspense boundary
+export default function DuplicateStudentsPage() {
+  return (
+    <Suspense
+      fallback={<div className="container mx-auto py-6">Loading...</div>}
+    >
+      <DuplicateStudentsContent />
+    </Suspense>
   )
 }
