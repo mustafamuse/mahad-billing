@@ -253,6 +253,16 @@ export function PayorDetailsStep() {
       console.log('Submit handler:', {
         rawValues: values,
         termsAccepted: values.termsAccepted,
+        firstName: {
+          value: values.firstName,
+          length: values.firstName ? values.firstName.length : 0,
+          isEmpty: !values.firstName || values.firstName.trim() === '',
+        },
+        lastName: {
+          value: values.lastName,
+          length: values.lastName ? values.lastName.length : 0,
+          isEmpty: !values.lastName || values.lastName.trim() === '',
+        },
         formState: {
           isValid: form.formState.isValid,
           errors: form.formState.errors,

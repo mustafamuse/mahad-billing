@@ -14,6 +14,7 @@ import {
 import { validateStudentForEnrollment } from '@/lib/queries/subscriptions'
 import { prepareSetupSchema } from '@/lib/schemas/enrollment'
 import { stripeServerClient } from '@/lib/stripe'
+import { BASE_RATE } from '@/lib/types'
 
 // const ACTIVE_SUBSCRIPTION_STATUSES = [
 //   SubscriptionStatus.ACTIVE,
@@ -131,21 +132,26 @@ export async function POST(req: Request) {
         )
       }
 
-      // 4. Get students with family info for metadata
-      const students = await tx.student.findMany({
-        where: { id: { in: data.studentIds } },
-        include: { siblingGroup: true },
-      })
+      // Get validated students with their calculated rates
+      const validatedStudents = validationResults
+        .filter((result) => result.status === 'fulfilled')
+        .map((result) => (result as PromiseFulfilledResult<any>).value)
 
-      // Calculate total monthly rate
-      const totalMonthlyRate = students.reduce(
-        (sum, student) => sum + student.monthlyRate,
+      // Calculate total monthly rate using validated rates
+      const totalMonthlyRate = validatedStudents.reduce(
+        (sum, { student }) => sum + student.monthlyRate,
+        0
+      )
+
+      // Calculate total discount applied
+      const totalDiscountApplied = validatedStudents.reduce(
+        (sum, { student }) => sum + student.discountApplied,
         0
       )
 
       // Group students by family
-      const siblingGroups = students.reduce(
-        (acc, student) => {
+      const siblingGroups = validatedStudents.reduce(
+        (acc, { student }) => {
           if (student.siblingGroup) {
             if (!acc[student.siblingGroup.id]) {
               acc[student.siblingGroup.id] = []
@@ -154,7 +160,7 @@ export async function POST(req: Request) {
           }
           return acc
         },
-        {} as Record<string, typeof students>
+        {} as Record<string, any[]>
       )
 
       // First check if a Stripe customer already exists with this email
@@ -207,6 +213,8 @@ export async function POST(req: Request) {
                     enrollmentPending: 'true',
                     totalStudents: data.studentIds.length.toString(),
                     totalMonthlyRate: totalMonthlyRate.toString(),
+                    totalDiscountApplied: totalDiscountApplied.toString(),
+                    hasFamilyDiscount: (totalDiscountApplied > 0).toString(),
                     lastAttemptedAt: new Date().toISOString(),
                   },
                 }
@@ -270,6 +278,8 @@ export async function POST(req: Request) {
                   enrollmentPending: 'true',
                   totalStudents: data.studentIds.length.toString(),
                   totalMonthlyRate: totalMonthlyRate.toString(),
+                  totalDiscountApplied: totalDiscountApplied.toString(),
+                  hasFamilyDiscount: (totalDiscountApplied > 0).toString(),
                   lastAttemptedAt: new Date().toISOString(),
                   previouslyOrphaned: 'true',
                 },
@@ -288,6 +298,8 @@ export async function POST(req: Request) {
                 enrollmentPending: 'true',
                 totalStudents: data.studentIds.length.toString(),
                 totalMonthlyRate: totalMonthlyRate.toString(),
+                totalDiscountApplied: totalDiscountApplied.toString(),
+                hasFamilyDiscount: (totalDiscountApplied > 0).toString(),
                 createdAt: new Date().toISOString(),
                 source: 'autopay_enrollment',
               },
@@ -312,15 +324,22 @@ export async function POST(req: Request) {
           payerDetails: JSON.stringify(data.payerDetails),
           studentIds: JSON.stringify(data.studentIds),
           studentDetails: JSON.stringify(
-            students.map((s) => ({
-              id: s.id,
-              name: s.name,
-              rate: s.monthlyRate,
-              familyId: s.siblingGroup?.id,
+            validatedStudents.map(({ student }) => ({
+              id: student.id,
+              name: student.name,
+              rate: student.monthlyRate,
+              originalRate: student.customRate
+                ? student.monthlyRate
+                : BASE_RATE,
+              discountApplied: student.discountApplied,
+              familyId: student.familyId,
+              customRateApplied: student.hasCustomRate,
             }))
           ),
           totalStudents: data.studentIds.length.toString(),
           totalMonthlyRate: totalMonthlyRate.toString(),
+          totalDiscountApplied: totalDiscountApplied.toString(),
+          hasFamilyDiscount: (totalDiscountApplied > 0).toString(),
           siblingGroupCount: Object.keys(siblingGroups).length.toString(),
           createdAt: new Date().toISOString(),
           environment: process.env.NODE_ENV,
@@ -343,6 +362,7 @@ export async function POST(req: Request) {
         status: setupIntent.status,
         paymentMethodTypes: setupIntent.payment_method_types,
         totalMonthlyRate,
+        totalDiscountApplied,
         siblingGroupCount: Object.keys(siblingGroups).length,
       }
     })

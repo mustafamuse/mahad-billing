@@ -82,6 +82,15 @@ export function StripePaymentForm({
     setProgress(30)
 
     try {
+      // Detailed logging for debugging
+      console.log('StripePaymentForm - setupBankAccount - payorDetails:', {
+        name: payorDetails.name,
+        nameLength: payorDetails.name ? payorDetails.name.length : 0,
+        nameEmpty: !payorDetails.name || payorDetails.name.trim() === '',
+        email: payorDetails.email,
+        phone: payorDetails.phone,
+      })
+
       const { setupIntent, error } = await stripe.collectBankAccountForSetup({
         clientSecret,
         params: {
