@@ -2,6 +2,7 @@ import { SubscriptionStatus } from '@prisma/client'
 
 import { PAYMENT_RULES, getGracePeriodEnd } from '@/lib/config/payment-rules'
 import { prisma } from '@/lib/db'
+import { BASE_RATE } from '@/lib/types'
 import { StudentStatus } from '@/lib/types/student'
 
 // Constants for grace period settings
@@ -204,6 +205,18 @@ export async function validateStudentForEnrollment(studentId: string) {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
     include: {
+      siblingGroup: {
+        include: {
+          students: {
+            select: {
+              id: true,
+              name: true,
+              monthlyRate: true,
+              customRate: true,
+            },
+          },
+        },
+      },
       payer: {
         include: {
           subscriptions: {
@@ -237,5 +250,30 @@ export async function validateStudentForEnrollment(studentId: string) {
     throw new Error('Student already has an active subscription')
   }
 
-  return { student }
+  // Calculate discount based on siblings
+  const siblingCount = student.siblingGroup?.students.length ?? 0
+  let discount = 0
+
+  if (!student.customRate && siblingCount > 1) {
+    // Tiered discount calculation:
+    // 2 siblings → $10 off each ($140 per student)
+    // 3 siblings → $15 off each ($135 per student)
+    // 4 siblings → $20 off each ($130 per student)
+    discount = (siblingCount - 1) * 5 + 5
+  }
+
+  // Use custom rate if set, otherwise apply BASE_RATE with discount
+  const calculatedRate = student.customRate
+    ? student.monthlyRate
+    : BASE_RATE - discount
+
+  return {
+    student: {
+      ...student,
+      monthlyRate: calculatedRate,
+      hasCustomRate: student.customRate,
+      discountApplied: discount,
+      familyId: student.siblingGroupId,
+    },
+  }
 }

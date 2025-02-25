@@ -118,6 +118,21 @@ export function EnrollmentProvider({
     },
 
     updatePayorDetails: (details: PayorDetails) => {
+      console.log('EnrollmentContext - updatePayorDetails:', {
+        firstName: {
+          value: details.firstName,
+          length: details.firstName ? details.firstName.length : 0,
+          isEmpty: !details.firstName || details.firstName === '',
+        },
+        lastName: {
+          value: details.lastName,
+          length: details.lastName ? details.lastName.length : 0,
+          isEmpty: !details.lastName || details.lastName === '',
+        },
+        email: details.email,
+        phone: details.phone,
+        relationship: details.relationship,
+      })
       setState((prev) => ({ ...prev, payorDetails: details }))
     },
 

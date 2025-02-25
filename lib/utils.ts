@@ -10,13 +10,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function getFamilyDiscount(totalFamilyMembers: number): number {
-  if (totalFamilyMembers >= 4) return 30
-  if (totalFamilyMembers === 3) return 20
-  if (totalFamilyMembers === 2) return 10
-  return 0
-}
-
 export function calculateTotal(students: StudentDTO[]): number {
   return students.reduce((total, student) => total + student.monthlyRate, 0)
 }

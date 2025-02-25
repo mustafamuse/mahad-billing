@@ -193,9 +193,14 @@ export async function POST(req: Request) {
           ),
           enrollmentDate: new Date().toISOString(),
           totalStudents: validatedStudents.length.toString(),
-          hasFamilyDiscount: validatedStudents.some((s) => s.familyId)
+          hasFamilyDiscount: validatedStudents.some(
+            (s) => s.discountApplied > 0
+          )
             ? 'true'
             : 'false',
+          totalDiscountApplied: validatedStudents
+            .reduce((sum, s) => sum + (s.discountApplied || 0), 0)
+            .toString(),
           setupIntentId: setupIntentId, // Add this for tracking
           environment: process.env.NODE_ENV,
           version: '2.0.0',
@@ -216,8 +221,8 @@ export async function POST(req: Request) {
           name: s.name,
           rate: s.monthlyRate,
           isCustomRate: s.hasCustomRate,
-          discountApplied: s.discountApplied,
-          familyId: s.familyId,
+          discountApplied: s.discountApplied || 0,
+          familyId: s.familyId || '',
         })),
       }
     })
