@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { SubscriptionStatus } from '@prisma/client'
+import type { Stripe } from 'stripe'
 import { z } from 'zod'
 
 import { prisma } from '@/lib/db'
@@ -18,6 +19,13 @@ import { stripeServerClient } from '@/lib/stripe'
 //   SubscriptionStatus.ACTIVE,
 //   SubscriptionStatus.PAST_DUE,
 // ]
+
+// Helper function to check if object is a full Stripe Customer (not deleted)
+function isFullCustomer(
+  obj: Stripe.Customer | Stripe.DeletedCustomer
+): obj is Stripe.Customer {
+  return !('deleted' in obj && obj.deleted)
+}
 
 export async function POST(req: Request) {
   try {
@@ -149,19 +157,151 @@ export async function POST(req: Request) {
         {} as Record<string, typeof students>
       )
 
-      // Create or update Stripe customer
-      const customer = await stripeServerClient.customers.create({
-        name: `${data.payerDetails.firstName} ${data.payerDetails.lastName}`,
-        email: data.payerDetails.email,
-        phone: data.payerDetails.phone,
-        metadata: {
-          relationship: data.payerDetails.relationship,
-          enrollmentPending: 'true',
-          totalStudents: data.studentIds.length.toString(),
-          totalMonthlyRate: totalMonthlyRate.toString(),
-          createdAt: new Date().toISOString(),
-        },
-      })
+      // First check if a Stripe customer already exists with this email
+      let customer
+      try {
+        console.log(
+          '🔍 Checking for existing Stripe customer with email:',
+          data.payerDetails.email
+        )
+
+        // Check if there's an existing payer in our database with this email
+        const existingPayer = await tx.payer.findFirst({
+          where: { email: data.payerDetails.email },
+          select: { id: true, email: true, stripeCustomerId: true },
+        })
+
+        if (existingPayer?.stripeCustomerId) {
+          console.log('📋 Found existing payer in database:', {
+            id: existingPayer.id,
+            email: existingPayer.email,
+            stripeCustomerId: existingPayer.stripeCustomerId,
+          })
+
+          // Verify the customer still exists in Stripe
+          try {
+            customer = await stripeServerClient.customers.retrieve(
+              existingPayer.stripeCustomerId
+            )
+
+            // Check if customer is deleted using our helper function
+            if (!isFullCustomer(customer)) {
+              console.log('Stripe customer exists but is deleted')
+              customer = null // Will create new customer below
+            } else {
+              console.log('✅ Verified existing Stripe customer:', {
+                id: customer.id,
+                email: customer.email,
+                name: customer.name,
+              })
+
+              // Update customer details
+              customer = await stripeServerClient.customers.update(
+                customer.id,
+                {
+                  name: `${data.payerDetails.firstName} ${data.payerDetails.lastName}`,
+                  phone: data.payerDetails.phone,
+                  metadata: {
+                    ...customer.metadata,
+                    relationship: data.payerDetails.relationship,
+                    enrollmentPending: 'true',
+                    totalStudents: data.studentIds.length.toString(),
+                    totalMonthlyRate: totalMonthlyRate.toString(),
+                    lastAttemptedAt: new Date().toISOString(),
+                  },
+                }
+              )
+              console.log('🔄 Updated existing Stripe customer')
+            }
+          } catch (stripeError) {
+            console.error(
+              '❌ Error retrieving Stripe customer, will create new one:',
+              stripeError
+            )
+            customer = null // Force creation of new customer
+          }
+        }
+
+        // If no customer found in our database, check Stripe directly
+        if (!customer) {
+          const existingCustomers = await stripeServerClient.customers.list({
+            email: data.payerDetails.email,
+            limit: 1,
+          })
+
+          if (existingCustomers.data.length > 0) {
+            const stripeCustomer = existingCustomers.data[0]
+            console.log('🔍 Found existing Stripe customer via API:', {
+              id: stripeCustomer.id,
+              email: stripeCustomer.email,
+              created: new Date(stripeCustomer.created * 1000).toISOString(),
+            })
+
+            // Check if this customer has any subscriptions
+            const subscriptions = await stripeServerClient.subscriptions.list({
+              customer: stripeCustomer.id,
+              limit: 1,
+            })
+
+            if (subscriptions.data.length > 0) {
+              console.log(
+                '⚠️ Found existing subscriptions for this customer:',
+                {
+                  subscriptionId: subscriptions.data[0].id,
+                  status: subscriptions.data[0].status,
+                }
+              )
+
+              // Log this for further investigation
+              console.log(
+                '🚨 Customer has existing subscriptions but no payer record in database'
+              )
+            }
+
+            // Update customer details
+            customer = await stripeServerClient.customers.update(
+              stripeCustomer.id,
+              {
+                name: `${data.payerDetails.firstName} ${data.payerDetails.lastName}`,
+                phone: data.payerDetails.phone,
+                metadata: {
+                  ...stripeCustomer.metadata,
+                  relationship: data.payerDetails.relationship,
+                  enrollmentPending: 'true',
+                  totalStudents: data.studentIds.length.toString(),
+                  totalMonthlyRate: totalMonthlyRate.toString(),
+                  lastAttemptedAt: new Date().toISOString(),
+                  previouslyOrphaned: 'true',
+                },
+              }
+            )
+            console.log('🔄 Updated existing Stripe customer from API search')
+          } else {
+            // Create new customer if none exists
+            console.log('🆕 No existing customer found, creating new one')
+            customer = await stripeServerClient.customers.create({
+              name: `${data.payerDetails.firstName} ${data.payerDetails.lastName}`,
+              email: data.payerDetails.email,
+              phone: data.payerDetails.phone,
+              metadata: {
+                relationship: data.payerDetails.relationship,
+                enrollmentPending: 'true',
+                totalStudents: data.studentIds.length.toString(),
+                totalMonthlyRate: totalMonthlyRate.toString(),
+                createdAt: new Date().toISOString(),
+                source: 'autopay_enrollment',
+              },
+            })
+            console.log('✅ Created new Stripe customer:', {
+              id: customer.id,
+              email: customer.email,
+            })
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error in customer lookup/creation:', error)
+        throw error
+      }
 
       // Create SetupIntent
       const setupIntent = await stripeServerClient.setupIntents.create({

@@ -679,22 +679,321 @@ export async function getStripeSubscriptionDetails(subscriptionId: string) {
 export async function handleSetupIntentSucceeded(
   event: Stripe.Event
 ): Promise<boolean> {
-  console.log('Setup intent succeeded:', event.id)
-  return true
+  const setupIntent = event.data.object as Stripe.SetupIntent
+  console.log('Setup intent succeeded:', {
+    id: setupIntent.id,
+    customerId: setupIntent.customer,
+    paymentMethodId: setupIntent.payment_method,
+    timestamp: new Date().toISOString(),
+  })
+
+  try {
+    // If this is a bank account setup for autopay, mark it in the customer metadata
+    if (setupIntent.metadata?.payerDetails) {
+      const customerId =
+        typeof setupIntent.customer === 'string'
+          ? setupIntent.customer
+          : setupIntent.customer?.id
+
+      if (customerId) {
+        // Log the setup intent success
+        logEvent('Setup Intent Succeeded', event.id, {
+          eventId: event.id,
+          type: event.type,
+          status: 'success',
+          customerId,
+          metadata: {
+            setupIntentId: setupIntent.id,
+            paymentMethodId:
+              typeof setupIntent.payment_method === 'string'
+                ? setupIntent.payment_method
+                : setupIntent.payment_method?.id || null,
+            paymentMethodType:
+              setupIntent.payment_method_types?.[0] || 'unknown',
+            isForAutopay: 'true',
+          },
+          timestamp: Date.now(),
+        })
+
+        // Update customer metadata
+        await stripeServerClient.customers.update(customerId, {
+          metadata: {
+            bankAccountVerified: 'true',
+            bankAccountVerifiedAt: new Date().toISOString(),
+            setupIntentId: setupIntent.id,
+            paymentMethodId:
+              typeof setupIntent.payment_method === 'string'
+                ? setupIntent.payment_method
+                : setupIntent.payment_method?.id || null,
+            enrollmentStatus: 'bank_verified',
+          },
+        })
+
+        console.log(
+          '✅ Updated customer with bank account verification:',
+          customerId
+        )
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleSetupIntentSucceeded:', error)
+    handleError('Setup Intent Succeeded', event.id, error)
+    return false
+  }
 }
 
 export async function handleCustomerCreated(
   event: Stripe.Event
 ): Promise<boolean> {
-  console.log('Customer created:', event.id)
-  return true
+  const customer = event.data.object as Stripe.Customer
+
+  console.log('Customer created:', {
+    id: customer.id,
+    email: customer.email,
+    name: customer.name,
+    metadata: customer.metadata,
+    timestamp: new Date().toISOString(),
+  })
+
+  try {
+    // Check if this customer already exists in our database
+    const existingPayer = await prisma.payer.findFirst({
+      where: {
+        OR: [
+          { email: customer.email ?? undefined },
+          { stripeCustomerId: customer.id },
+        ],
+      },
+      include: {
+        students: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        subscriptions: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    })
+
+    if (existingPayer) {
+      console.log('⚠️ Customer already exists in database:', {
+        payerId: existingPayer.id,
+        email: existingPayer.email,
+        stripeCustomerId: existingPayer.stripeCustomerId,
+        studentCount: existingPayer.students.length,
+        subscriptionCount: existingPayer.subscriptions.length,
+      })
+
+      // If the stripeCustomerId doesn't match, this might be a duplicate
+      if (existingPayer.stripeCustomerId !== customer.id) {
+        console.log('🚨 Potential duplicate customer detected!', {
+          existingStripeId: existingPayer.stripeCustomerId,
+          newStripeId: customer.id,
+          email: customer.email,
+        })
+
+        // Log this event for later cleanup
+        logEvent('Duplicate Customer Detected', event.id, {
+          eventId: event.id,
+          type: event.type,
+          status: 'warning',
+          customerId: customer.id,
+          metadata: {
+            existingPayerId: existingPayer.id,
+            existingStripeId: existingPayer.stripeCustomerId,
+            newStripeId: customer.id,
+            email: customer.email,
+          },
+          timestamp: Date.now(),
+        })
+
+        // Update the customer metadata to indicate it's a potential duplicate
+        await stripeServerClient.customers.update(customer.id, {
+          metadata: {
+            ...customer.metadata,
+            potentialDuplicate: 'true',
+            duplicateDetectedAt: new Date().toISOString(),
+            existingStripeId: existingPayer.stripeCustomerId,
+          },
+        })
+      }
+    } else {
+      // Check if there are other customers with the same email in Stripe
+      if (customer.email) {
+        const stripeCustomers = await stripeServerClient.customers.list({
+          email: customer.email,
+          limit: 5,
+        })
+
+        if (stripeCustomers.data.length > 1) {
+          const otherCustomers = stripeCustomers.data.filter(
+            (c) => c.id !== customer.id
+          )
+          if (otherCustomers.length > 0) {
+            console.log('⚠️ Multiple Stripe customers with same email:', {
+              email: customer.email,
+              count: stripeCustomers.data.length,
+              currentId: customer.id,
+              otherIds: otherCustomers.map((c) => c.id),
+            })
+
+            // Log this event for later cleanup
+            logEvent('Multiple Stripe Customers', event.id, {
+              eventId: event.id,
+              type: event.type,
+              status: 'warning',
+              customerId: customer.id,
+              metadata: {
+                email: customer.email,
+                count: stripeCustomers.data.length,
+                currentId: customer.id,
+                otherIds: otherCustomers.map((c) => c.id).join(','),
+              },
+              timestamp: Date.now(),
+            })
+          }
+        }
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleCustomerCreated:', error)
+    handleError('Customer Created', event.id, error)
+    return false
+  }
 }
 
 export async function handleCustomerUpdated(
   event: Stripe.Event
 ): Promise<boolean> {
-  console.log('Customer updated:', event.id)
-  return true
+  const customer = event.data.object as Stripe.Customer
+  const previousAttributes =
+    (event.data.previous_attributes as Partial<Stripe.Customer>) || {}
+
+  console.log('Customer updated:', {
+    id: customer.id,
+    email: customer.email,
+    name: customer.name,
+    metadata: customer.metadata,
+    previousAttributes: Object.keys(previousAttributes),
+    timestamp: new Date().toISOString(),
+  })
+
+  try {
+    // Check if this customer exists in our database
+    const existingPayer = await prisma.payer.findFirst({
+      where: { stripeCustomerId: customer.id },
+      include: {
+        students: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    })
+
+    if (existingPayer) {
+      // Check if email has changed and needs to be updated
+      if (customer.email && existingPayer.email !== customer.email) {
+        console.log('📧 Customer email changed, updating in database:', {
+          oldEmail: existingPayer.email,
+          newEmail: customer.email,
+        })
+
+        await prisma.payer.update({
+          where: { id: existingPayer.id },
+          data: {
+            email: customer.email,
+            name: customer.name || existingPayer.name,
+            updatedAt: new Date(),
+          },
+        })
+
+        // Log email change event
+        logEvent('Customer Email Changed', event.id, {
+          eventId: event.id,
+          type: event.type,
+          status: 'info',
+          customerId: customer.id,
+          metadata: {
+            oldEmail: existingPayer.email,
+            newEmail: customer.email,
+            payerId: existingPayer.id,
+          },
+          timestamp: Date.now(),
+        })
+      }
+
+      // Check if metadata has been updated to indicate this is a duplicate
+      if (
+        customer.metadata?.potentialDuplicate === 'true' &&
+        customer.metadata?.duplicateDetectedAt
+      ) {
+        console.log(
+          '🚨 This customer has been marked as a potential duplicate:',
+          {
+            stripeCustomerId: customer.id,
+            email: customer.email,
+            duplicateDetectedAt: customer.metadata.duplicateDetectedAt,
+            existingStripeId: customer.metadata.existingStripeId,
+          }
+        )
+      }
+    } else {
+      console.log('⚠️ Customer updated but not found in database:', {
+        stripeCustomerId: customer.id,
+        email: customer.email,
+      })
+
+      // Check if a payer with this email exists but with a different stripeCustomerId
+      if (customer.email) {
+        const payerWithSameEmail = await prisma.payer.findFirst({
+          where: { email: customer.email },
+        })
+
+        if (payerWithSameEmail) {
+          console.log(
+            '🔍 Found payer with same email but different Stripe ID:',
+            {
+              payerId: payerWithSameEmail.id,
+              email: payerWithSameEmail.email,
+              stripeCustomerId: payerWithSameEmail.stripeCustomerId,
+            }
+          )
+
+          // Log this for investigation
+          logEvent('Customer ID Mismatch', event.id, {
+            eventId: event.id,
+            type: event.type,
+            status: 'warning',
+            customerId: customer.id,
+            metadata: {
+              payerId: payerWithSameEmail.id,
+              payerEmail: payerWithSameEmail.email,
+              payerStripeId: payerWithSameEmail.stripeCustomerId,
+              updatedStripeId: customer.id,
+            },
+            timestamp: Date.now(),
+          })
+        }
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleCustomerUpdated:', error)
+    handleError('Customer Updated', event.id, error)
+    return false
+  }
 }
 
 export async function handlePaymentIntentSucceeded(

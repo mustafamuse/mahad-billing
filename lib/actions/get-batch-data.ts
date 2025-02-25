@@ -33,7 +33,15 @@ export interface BatchStudentData {
 }
 
 export async function getBatchData(): Promise<BatchStudentData[]> {
+  const startTime = performance.now()
+  let queryTime: number
+  let transformTime: number
+
   try {
+    console.log('🔍 Starting optimized student fetch...')
+
+    // Measure database query time
+    const queryStartTime = performance.now()
     const students = await prisma.student.findMany({
       select: {
         id: true,
@@ -69,8 +77,11 @@ export async function getBatchData(): Promise<BatchStudentData[]> {
         },
       },
     })
+    queryTime = performance.now() - queryStartTime
 
-    return students.map((student) => ({
+    // Transform and filter siblings in memory
+    const transformStartTime = performance.now()
+    const transformedStudents = students.map((student) => ({
       ...student,
       dateOfBirth: student.dateOfBirth?.toISOString() ?? null,
       createdAt: student.createdAt.toISOString(),
@@ -82,9 +93,69 @@ export async function getBatchData(): Promise<BatchStudentData[]> {
             endDate: student.batch.endDate?.toISOString() ?? null,
           }
         : null,
+      siblingGroup: student.siblingGroup
+        ? {
+            id: student.siblingGroup.id,
+            students: student.siblingGroup.students.filter(
+              (s) => s.id !== student.id
+            ),
+          }
+        : null,
     }))
+    transformTime = performance.now() - transformStartTime
+
+    // Log query stats with corrected sibling counting
+    const siblingStats = transformedStudents.reduce(
+      (acc, student) => {
+        if (student.siblingGroup?.students.length) {
+          acc.withSiblings++
+          acc.totalSiblingConnections += student.siblingGroup.students.length
+        }
+        return acc
+      },
+      { withSiblings: 0, totalSiblingConnections: 0 }
+    )
+
+    console.log('📊 Query Stats:', {
+      queryTimeMs: queryTime.toFixed(2),
+      totalStudents: students.length,
+      studentsWithSiblings: siblingStats.withSiblings,
+      avgSiblingsPerStudent: siblingStats.withSiblings
+        ? (
+            siblingStats.totalSiblingConnections / siblingStats.withSiblings
+          ).toFixed(2)
+        : '0.00',
+    })
+
+    // Log final performance metrics
+    const totalTime = performance.now() - startTime
+    console.log('✅ Performance Metrics:', {
+      totalTimeMs: totalTime.toFixed(2),
+      queryTimeMs: queryTime.toFixed(2),
+      transformTimeMs: transformTime.toFixed(2),
+      queryPercent: ((queryTime / totalTime) * 100).toFixed(1) + '%',
+      transformPercent: ((transformTime / totalTime) * 100).toFixed(1) + '%',
+    })
+
+    // Verify sibling data integrity with more detail
+    const sampleStudent = transformedStudents.find(
+      (s) => s.siblingGroup?.students.length
+    )
+    if (sampleStudent) {
+      console.log('🔍 Sample Sibling Data:', {
+        studentName: sampleStudent.name,
+        siblingGroupId: sampleStudent.siblingGroup?.id,
+        siblingCount: sampleStudent.siblingGroup?.students.length,
+        siblings: sampleStudent.siblingGroup?.students.map((s) => s.name),
+      })
+    }
+
+    return transformedStudents
   } catch (error) {
-    console.error('Failed to fetch students:', error)
+    console.error('❌ Error fetching students:', {
+      error,
+      timeElapsed: `${(performance.now() - startTime).toFixed(2)}ms`,
+    })
     throw new Error('Failed to fetch students')
   }
 }

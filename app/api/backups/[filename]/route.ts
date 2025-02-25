@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+import fs from 'fs'
+import path from 'path'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { filename: string } }
+) {
+  try {
+    const backupDir = path.join(process.cwd(), 'backups')
+    const filePath = path.join(backupDir, params.filename)
+
+    // Security check - ensure file is in backups directory
+    if (!filePath.startsWith(backupDir)) {
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 400 })
+    }
+
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 })
+    }
+
+    // Read file
+    const fileContent = fs.readFileSync(filePath, 'utf-8')
+
+    // Check if this is a download request
+    const isDownload = request.nextUrl.searchParams.get('download') === 'true'
+
+    return new NextResponse(fileContent, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Disposition': isDownload
+          ? `attachment; filename="${params.filename}"`
+          : `inline; filename="${params.filename}"`,
+      },
+    })
+  } catch (error) {
+    console.error('Error serving backup file:', error)
+    return NextResponse.json({ error: 'Failed to serve file' }, { status: 500 })
+  }
+}
