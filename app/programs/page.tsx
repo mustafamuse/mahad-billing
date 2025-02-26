@@ -484,7 +484,7 @@ export default function ProgramsPage() {
             {/* CTA */}
             <section className="mt-12 text-center">
               <Button size="lg" className="gap-2" asChild>
-                <Link href="/autopay">
+                <Link href="https://buy.stripe.com/fZeg0O7va1gt4da3cc">
                   Begin Your Journey
                   <ArrowRight className="h-4 w-4" />
                 </Link>

@@ -44,7 +44,9 @@ export default function HomePage() {
             </Link>
           </nav>
           <Button asChild variant="secondary">
-            <Link href="/autopay">Get Started →</Link>
+            <Link href="https://buy.stripe.com/fZeg0O7va1gt4da3cc">
+              Pay Tuition →
+            </Link>
           </Button>
         </div>
       </header>
@@ -111,7 +113,7 @@ export default function HomePage() {
                   className="gap-2 bg-primary/90 hover:bg-primary"
                   asChild
                 >
-                  <Link href="/autopay">
+                  <Link href="https://buy.stripe.com/fZeg0O7va1gt4da3cc">
                     Begin Your Journey
                     <ArrowRight className="h-4 w-4" />
                   </Link>

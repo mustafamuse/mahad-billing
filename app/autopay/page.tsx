@@ -1,15 +1,7 @@
-'use client'
-
-import { EnrollmentForm } from './(enrollment)/enrollment-form'
+import { redirect } from 'next/navigation'
 
 export default function AutopayPage() {
-  return (
-    <div className="container relative px-4 py-8">
-      <div className="mx-auto max-w-4xl">
-        <EnrollmentForm />
-      </div>
-    </div>
-  )
+  redirect('https://buy.stripe.com/fZeg0O7va1gt4da3cc')
 }
 
 export const dynamic = 'force-dynamic'
