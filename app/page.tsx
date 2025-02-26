@@ -37,6 +37,12 @@ export default function HomePage() {
               Pricing
             </Link>
             <Link
+              href="/payment-link"
+              className="text-sm font-medium hover:text-primary"
+            >
+              Make a Payment
+            </Link>
+            <Link
               href="#contact"
               className="text-sm font-medium hover:text-primary"
             >
@@ -116,8 +122,11 @@ export default function HomePage() {
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
-                <Button variant="outline" size="lg">
+                <Button variant="outline" size="lg" asChild>
                   <Link href="/programs">Explore Programs</Link>
+                </Button>
+                <Button variant="secondary" size="lg" asChild>
+                  <Link href="/payment-link">Make a Payment</Link>
                 </Button>
               </div>
             </div>
