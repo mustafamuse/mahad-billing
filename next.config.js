@@ -10,11 +10,11 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "img-src 'self' blob: data:",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' 'wasm-unsafe-eval' https://js.stripe.com",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' 'wasm-unsafe-eval' https://js.stripe.com https://va.vercel-scripts.com",
               "style-src 'self' 'unsafe-inline'",
               process.env.NODE_ENV === 'development'
-                ? "connect-src 'self' ws: wss: blob: data: https://api.stripe.com"
-                : "connect-src 'self' blob: data: https://api.stripe.com",
+                ? "connect-src 'self' ws: wss: blob: data: https://api.stripe.com https://va.vercel-scripts.com"
+                : "connect-src 'self' blob: data: https://api.stripe.com https://va.vercel-scripts.com",
               "worker-src 'self' blob:",
               "child-src 'self' blob:",
               "frame-src 'self' blob: https://js.stripe.com https://hooks.stripe.com",

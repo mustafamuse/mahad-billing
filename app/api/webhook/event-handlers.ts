@@ -999,60 +999,433 @@ export async function handleCustomerUpdated(
 export async function handlePaymentIntentSucceeded(
   event: Stripe.Event
 ): Promise<boolean> {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
   console.log('Payment intent succeeded:', event.id)
+
+  // Check if this is an ACH payment
+  if (paymentIntent.payment_method_types.includes('us_bank_account')) {
+    console.log('✅ ACH payment succeeded:', {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      customerId: paymentIntent.customer,
+      status: paymentIntent.status,
+    })
+
+    // Import and use the ACH-specific handler from our sync service
+    const { handleACHPaymentIntent } = await import(
+      '@/lib/services/stripe-sync'
+    )
+    await handleACHPaymentIntent(event)
+  }
+
   return true
 }
 
 export async function handlePaymentIntentProcessing(
   event: Stripe.Event
 ): Promise<boolean> {
+  const paymentIntent = event.data.object as Stripe.PaymentIntent
   console.log('Payment intent processing:', event.id)
+
+  // Check if this is an ACH payment
+  if (paymentIntent.payment_method_types.includes('us_bank_account')) {
+    console.log('⏳ ACH payment processing:', {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      customerId: paymentIntent.customer,
+      status: paymentIntent.status,
+    })
+
+    // Import and use the ACH-specific handler from our sync service
+    const { handleACHPaymentIntent } = await import(
+      '@/lib/services/stripe-sync'
+    )
+    await handleACHPaymentIntent(event)
+  }
+
   return true
 }
 
 export async function handleChargeSucceeded(
   event: Stripe.Event
 ): Promise<boolean> {
-  console.log('Charge succeeded:', event.id)
-  return true
+  const charge = event.data.object as Stripe.Charge
+
+  console.log('Charge succeeded:', {
+    id: charge.id,
+    amount: charge.amount / 100,
+    currency: charge.currency,
+    customerId: charge.customer,
+    paymentIntentId: charge.payment_intent,
+    metadata: charge.metadata,
+  })
+
+  try {
+    // If this charge is related to a subscription, we can log additional details
+    if (charge.invoice) {
+      const invoice = await stripeServerClient.invoices.retrieve(
+        charge.invoice as string
+      )
+
+      console.log('Charge related to invoice:', {
+        invoiceId: invoice.id,
+        subscriptionId: invoice.subscription,
+        billingReason: invoice.billing_reason,
+        total: invoice.total / 100,
+      })
+    }
+
+    // Log the successful charge event
+    logEvent('Charge Succeeded', event.id, {
+      eventId: event.id,
+      type: event.type,
+      status: 'success',
+      customerId:
+        typeof charge.customer === 'string'
+          ? charge.customer
+          : charge.customer?.id,
+      metadata: {
+        chargeId: charge.id,
+        amount: charge.amount / 100,
+        currency: charge.currency.toUpperCase(),
+        paymentMethod: charge.payment_method_details?.type || 'unknown',
+        invoiceId: charge.invoice as string,
+      },
+      timestamp: Date.now(),
+    })
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleChargeSucceeded:', error)
+    handleError('Charge Succeeded', event.id, error)
+    return false
+  }
 }
 
 export async function handleChargeFailed(
   event: Stripe.Event
 ): Promise<boolean> {
-  console.log('Charge failed:', event.id)
-  return true
+  const charge = event.data.object as Stripe.Charge
+
+  console.log('Charge failed:', {
+    id: charge.id,
+    amount: charge.amount / 100,
+    currency: charge.currency,
+    customerId: charge.customer,
+    paymentIntentId: charge.payment_intent,
+    failureCode: charge.failure_code,
+    failureMessage: charge.failure_message,
+    metadata: charge.metadata,
+  })
+
+  try {
+    // Log the failed charge event
+    logEvent('Charge Failed', event.id, {
+      eventId: event.id,
+      type: event.type,
+      status: 'error',
+      customerId:
+        typeof charge.customer === 'string'
+          ? charge.customer
+          : charge.customer?.id,
+      metadata: {
+        chargeId: charge.id,
+        amount: charge.amount / 100,
+        currency: charge.currency.toUpperCase(),
+        failureCode: charge.failure_code || 'unknown',
+        failureMessage: charge.failure_message || 'No failure message provided',
+        paymentMethod: charge.payment_method_details?.type || 'unknown',
+        invoiceId: charge.invoice as string,
+      },
+      timestamp: Date.now(),
+    })
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleChargeFailed:', error)
+    handleError('Charge Failed', event.id, error)
+    return false
+  }
 }
 
 export async function handleChargePending(
   event: Stripe.Event
 ): Promise<boolean> {
-  console.log('Charge pending:', event.id)
-  return true
+  const charge = event.data.object as Stripe.Charge
+
+  console.log('Charge pending:', {
+    id: charge.id,
+    amount: charge.amount / 100,
+    currency: charge.currency,
+    customerId: charge.customer,
+    paymentIntentId: charge.payment_intent,
+    metadata: charge.metadata,
+  })
+
+  try {
+    // Log the pending charge event
+    logEvent('Charge Pending', event.id, {
+      eventId: event.id,
+      type: event.type,
+      status: 'pending',
+      customerId:
+        typeof charge.customer === 'string'
+          ? charge.customer
+          : charge.customer?.id,
+      metadata: {
+        chargeId: charge.id,
+        amount: charge.amount / 100,
+        currency: charge.currency.toUpperCase(),
+        paymentMethod: charge.payment_method_details?.type || 'unknown',
+        invoiceId: charge.invoice as string,
+      },
+      timestamp: Date.now(),
+    })
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleChargePending:', error)
+    handleError('Charge Pending', event.id, error)
+    return false
+  }
 }
 
 export async function handleInvoiceCreated(
   event: Stripe.Event
 ): Promise<boolean> {
-  console.log('Invoice created:', event.id)
-  return true
+  const invoice = event.data.object as Stripe.Invoice
+
+  console.log('Invoice created:', {
+    id: invoice.id,
+    customerId: invoice.customer,
+    subscriptionId: invoice.subscription,
+    total: invoice.total / 100,
+    currency: invoice.currency,
+    status: invoice.status,
+    metadata: invoice.metadata,
+  })
+
+  try {
+    // Log the invoice created event
+    logEvent('Invoice Created', event.id, {
+      eventId: event.id,
+      type: event.type,
+      status: 'info',
+      customerId:
+        typeof invoice.customer === 'string'
+          ? invoice.customer
+          : invoice.customer?.id,
+      metadata: {
+        invoiceId: invoice.id,
+        subscriptionId: invoice.subscription as string,
+        total: invoice.total / 100,
+        currency: invoice.currency.toUpperCase(),
+        status: invoice.status,
+        dueDate: invoice.due_date
+          ? new Date(invoice.due_date * 1000).toISOString()
+          : undefined,
+      },
+      timestamp: Date.now(),
+    })
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleInvoiceCreated:', error)
+    handleError('Invoice Created', event.id, error)
+    return false
+  }
 }
 
 export async function handleInvoiceFinalized(
   event: Stripe.Event
 ): Promise<boolean> {
-  console.log('Invoice finalized:', event.id)
-  return true
+  const invoice = event.data.object as Stripe.Invoice
+
+  console.log('Invoice finalized:', {
+    id: invoice.id,
+    customerId: invoice.customer,
+    subscriptionId: invoice.subscription,
+    total: invoice.total / 100,
+    currency: invoice.currency,
+    status: invoice.status,
+    metadata: invoice.metadata,
+  })
+
+  try {
+    // Log the invoice finalized event
+    logEvent('Invoice Finalized', event.id, {
+      eventId: event.id,
+      type: event.type,
+      status: 'info',
+      customerId:
+        typeof invoice.customer === 'string'
+          ? invoice.customer
+          : invoice.customer?.id,
+      metadata: {
+        invoiceId: invoice.id,
+        subscriptionId: invoice.subscription as string,
+        total: invoice.total / 100,
+        currency: invoice.currency.toUpperCase(),
+        status: invoice.status,
+        dueDate: invoice.due_date
+          ? new Date(invoice.due_date * 1000).toISOString()
+          : undefined,
+        hostedInvoiceUrl: invoice.hosted_invoice_url,
+      },
+      timestamp: Date.now(),
+    })
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleInvoiceFinalized:', error)
+    handleError('Invoice Finalized', event.id, error)
+    return false
+  }
 }
 
 export async function handleInvoicePaid(event: Stripe.Event): Promise<boolean> {
-  console.log('Invoice paid:', event.id)
-  return true
+  const invoice = event.data.object as Stripe.Invoice
+
+  console.log('Invoice paid:', {
+    id: invoice.id,
+    customerId: invoice.customer,
+    subscriptionId: invoice.subscription,
+    total: invoice.total / 100,
+    currency: invoice.currency,
+    status: invoice.status,
+    metadata: invoice.metadata,
+  })
+
+  try {
+    // If this is a subscription invoice, we may want to update our database
+    if (invoice.subscription) {
+      const customerId =
+        typeof invoice.customer === 'string'
+          ? invoice.customer
+          : invoice.customer?.id
+
+      if (customerId) {
+        // Find the payer in our database
+        const payer = await prisma.payer.findUnique({
+          where: { stripeCustomerId: customerId },
+          include: {
+            students: true,
+            subscriptions: {
+              where: { stripeSubscriptionId: invoice.subscription as string },
+            },
+          },
+        })
+
+        if (payer) {
+          console.log('Found payer for paid invoice:', {
+            payerId: payer.id,
+            studentCount: payer.students.length,
+            subscriptionCount: payer.subscriptions.length,
+          })
+
+          // Update subscription payment dates if found
+          if (payer.subscriptions.length > 0) {
+            const subscription = payer.subscriptions[0]
+            await prisma.subscription.update({
+              where: { id: subscription.id },
+              data: {
+                lastPaymentDate: new Date(),
+                status: SubscriptionStatus.ACTIVE,
+              },
+            })
+
+            console.log('Updated subscription payment date:', {
+              subscriptionId: subscription.id,
+              lastPaymentDate: new Date().toISOString(),
+            })
+          }
+
+          // Update student payment dates
+          if (payer.students.length > 0) {
+            await prisma.student.updateMany({
+              where: { payerId: payer.id },
+              data: {
+                lastPaymentDate: new Date(),
+                status: StudentStatus.ENROLLED,
+              },
+            })
+
+            console.log('Updated student payment dates:', {
+              studentCount: payer.students.length,
+              lastPaymentDate: new Date().toISOString(),
+            })
+          }
+        }
+      }
+    }
+
+    // Log the invoice paid event
+    logEvent('Invoice Paid', event.id, {
+      eventId: event.id,
+      type: event.type,
+      status: 'success',
+      customerId:
+        typeof invoice.customer === 'string'
+          ? invoice.customer
+          : invoice.customer?.id,
+      metadata: {
+        invoiceId: invoice.id,
+        subscriptionId: invoice.subscription as string,
+        total: invoice.total / 100,
+        currency: invoice.currency.toUpperCase(),
+        status: invoice.status,
+        paymentIntent: invoice.payment_intent as string,
+      },
+      timestamp: Date.now(),
+    })
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleInvoicePaid:', error)
+    handleError('Invoice Paid', event.id, error)
+    return false
+  }
 }
 
 export async function handleInvoiceUpdated(
   event: Stripe.Event
 ): Promise<boolean> {
-  console.log('Invoice updated:', event.id)
-  return true
+  const invoice = event.data.object as Stripe.Invoice
+
+  console.log('Invoice updated:', {
+    id: invoice.id,
+    customerId: invoice.customer,
+    subscriptionId: invoice.subscription,
+    total: invoice.total / 100,
+    currency: invoice.currency,
+    status: invoice.status,
+    metadata: invoice.metadata,
+  })
+
+  try {
+    // Log the invoice updated event
+    logEvent('Invoice Updated', event.id, {
+      eventId: event.id,
+      type: event.type,
+      status: 'info',
+      customerId:
+        typeof invoice.customer === 'string'
+          ? invoice.customer
+          : invoice.customer?.id,
+      metadata: {
+        invoiceId: invoice.id,
+        subscriptionId: invoice.subscription as string,
+        total: invoice.total / 100,
+        currency: invoice.currency.toUpperCase(),
+        status: invoice.status,
+      },
+      timestamp: Date.now(),
+    })
+
+    return true
+  } catch (error) {
+    console.error('❌ Error in handleInvoiceUpdated:', error)
+    handleError('Invoice Updated', event.id, error)
+    return false
+  }
 }
