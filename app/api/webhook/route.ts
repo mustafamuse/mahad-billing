@@ -1,27 +1,20 @@
 import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-import Stripe from 'stripe'
+import { stripeServerClient } from '@/lib/stripe'
 
 import { eventHandlers } from './event-handlers'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
 
 export async function POST(req: Request) {
   const body = await req.text()
   const signature = headers().get('stripe-signature')
 
-  // Early return if no signature
   if (!signature || !process.env.STRIPE_WEBHOOK_SECRET) {
-    console.error('❌ Missing webhook signature or secret')
-    return NextResponse.json(
-      { message: 'Missing signature or webhook secret' },
-      { status: 400 }
-    )
+    return new NextResponse('Webhook Error: Missing signature', { status: 400 })
   }
 
   try {
-    const event = stripe.webhooks.constructEvent(
+    const event = stripeServerClient.webhooks.constructEvent(
       body,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET

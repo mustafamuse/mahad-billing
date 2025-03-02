@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server'
 
-import Stripe from 'stripe'
+import type Stripe from 'stripe'
 import { z } from 'zod'
 
 import { prisma } from '@/lib/db'
+import { stripeLiveClient } from '@/lib/stripe'
 
 const reconcileSchema = z.object({
   studentId: z.string(),
   subscriptionId: z.string(),
-})
-
-const stripeLiveClient = new Stripe(process.env.STRIPE_LIVE_SECRET_KEY || '', {
-  apiVersion: '2024-11-20.acacia',
 })
 
 export async function POST(req: Request) {
