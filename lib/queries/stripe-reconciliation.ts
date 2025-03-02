@@ -3,10 +3,16 @@ import Stripe from 'stripe'
 
 import { prisma } from '@/lib/db'
 
-// Create a separate Stripe client for live mode operations
-const stripeLiveClient = new Stripe(process.env.STRIPE_LIVE_SECRET_KEY || '', {
-  apiVersion: '2024-11-20.acacia',
-})
+// Create a lazy Stripe client that only initializes when needed
+const getStripeClient = () => {
+  const apiKey = process.env.STRIPE_LIVE_SECRET_KEY
+  if (!apiKey) {
+    throw new Error('STRIPE_LIVE_SECRET_KEY is not configured')
+  }
+  return new Stripe(apiKey, {
+    apiVersion: '2024-11-20.acacia',
+  })
+}
 
 interface StripeSubscriptionInfo {
   customerId: string
@@ -168,7 +174,7 @@ export async function findUnlinkedSubscriptions() {
     const processedStripeIds = new Set<string>()
 
     // 3. Fetch all active subscriptions from Stripe in one call
-    const allStripeSubscriptions = await stripeLiveClient.subscriptions.list({
+    const allStripeSubscriptions = await getStripeClient().subscriptions.list({
       status: 'active',
       expand: [
         'data.customer',
@@ -211,7 +217,7 @@ export async function findUnlinkedSubscriptions() {
         }
 
         // Get payment information
-        const invoices = await stripeLiveClient.invoices.list({
+        const invoices = await getStripeClient().invoices.list({
           subscription: subscription.id,
           status: 'paid',
           limit: 1,
@@ -271,7 +277,7 @@ export async function findUnlinkedSubscriptions() {
       if (!customer?.email) continue
 
       // Get payment information
-      const invoices = await stripeLiveClient.invoices.list({
+      const invoices = await getStripeClient().invoices.list({
         subscription: subscription.id,
         status: 'paid',
         limit: 1,
@@ -296,7 +302,7 @@ export async function findUnlinkedSubscriptions() {
       ) {
         try {
           const checkoutSession =
-            await stripeLiveClient.checkout.sessions.retrieve(
+            await getStripeClient().checkout.sessions.retrieve(
               subscription.latest_invoice.payment_intent.metadata
                 .checkout_session,
               {
@@ -430,7 +436,7 @@ export async function reconcileSubscription(
   }
 
   // 1. Find or create payer
-  const customer = (await stripeLiveClient.customers.retrieve(
+  const customer = (await getStripeClient().customers.retrieve(
     stripeSubscription.customerId
   )) as Stripe.Customer
 
