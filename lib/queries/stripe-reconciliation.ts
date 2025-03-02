@@ -14,6 +14,8 @@ interface StripeSubscriptionInfo {
   status: string
   currentPeriodEnd: number
   currentPeriodStart: number
+  lastPaymentDate: Date | null
+  nextPaymentDate: Date | null
   metadata: {
     studentId?: string
     studentName?: string
@@ -47,6 +49,8 @@ interface UnmatchedSubscription {
   status: string
   currentPeriodEnd: number
   currentPeriodStart: number
+  lastPaymentDate: Date | null
+  nextPaymentDate: Date | null
   metadata: Record<string, any>
 }
 
@@ -168,6 +172,7 @@ export async function findUnlinkedSubscriptions() {
       status: 'active',
       expand: [
         'data.customer',
+        'data.latest_invoice',
         'data.latest_invoice.payment_intent',
         'data.default_payment_method',
       ],
@@ -205,6 +210,21 @@ export async function findUnlinkedSubscriptions() {
           whatsappNumber: subscription.metadata.whatsappNumber,
         }
 
+        // Get payment information
+        const invoices = await stripeLiveClient.invoices.list({
+          subscription: subscription.id,
+          status: 'paid',
+          limit: 1,
+        })
+
+        const latestPaidInvoice = invoices.data[0]
+        const lastPaymentDate = latestPaidInvoice?.status_transitions?.paid_at
+          ? new Date(latestPaidInvoice.status_transitions.paid_at * 1000)
+          : null
+        const nextPaymentDate = subscription.current_period_end
+          ? new Date(subscription.current_period_end * 1000)
+          : null
+
         // Check if this subscription needs reconciliation
         const needsReconciliation =
           !databaseSubscription ||
@@ -226,6 +246,8 @@ export async function findUnlinkedSubscriptions() {
               currentPeriodEnd: subscription.current_period_end,
               currentPeriodStart: subscription.current_period_start,
               metadata,
+              lastPaymentDate,
+              nextPaymentDate,
             },
             needsReconciliation,
             isUnmatched: false,
@@ -234,7 +256,7 @@ export async function findUnlinkedSubscriptions() {
       }
     }
 
-    // 6. Process remaining subscriptions, but first check if they're already linked
+    // 6. Process remaining subscriptions
     for (const subscription of allStripeSubscriptions.data) {
       if (processedStripeIds.has(subscription.id)) continue
 
@@ -247,6 +269,21 @@ export async function findUnlinkedSubscriptions() {
 
       const customer = subscription.customer as Stripe.Customer
       if (!customer?.email) continue
+
+      // Get payment information
+      const invoices = await stripeLiveClient.invoices.list({
+        subscription: subscription.id,
+        status: 'paid',
+        limit: 1,
+      })
+
+      const latestPaidInvoice = invoices.data[0]
+      const lastPaymentDate = latestPaidInvoice?.status_transitions?.paid_at
+        ? new Date(latestPaidInvoice.status_transitions.paid_at * 1000)
+        : null
+      const nextPaymentDate = subscription.current_period_end
+        ? new Date(subscription.current_period_end * 1000)
+        : null
 
       // Try to get metadata from the payment intent if available
       let checkoutSessionMetadata: CheckoutMetadata = {}
@@ -343,6 +380,8 @@ export async function findUnlinkedSubscriptions() {
               ...subscription.metadata,
               ...metadata,
             },
+            lastPaymentDate,
+            nextPaymentDate,
           },
           needsReconciliation: true,
           isUnmatched: false,
@@ -365,6 +404,8 @@ export async function findUnlinkedSubscriptions() {
               ...customer.metadata,
               ...metadata,
             },
+            lastPaymentDate,
+            nextPaymentDate,
           },
           needsReconciliation: true,
           isUnmatched: true,

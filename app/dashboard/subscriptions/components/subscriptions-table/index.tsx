@@ -1,5 +1,8 @@
+'use client'
+
 import Link from 'next/link'
 
+import { useQuery } from '@tanstack/react-query'
 import { ExternalLink } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -12,12 +15,63 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getStudentSubscriptions } from '@/lib/queries/subscriptions'
+import { StudentSubscription } from '@/lib/types/subscriptions'
 
+interface SubscriptionsTableProps {
+  batchId: string | null
+}
 
+export function SubscriptionsTable({ batchId }: SubscriptionsTableProps) {
+  const { data, isLoading, error } = useQuery<StudentSubscription[]>({
+    queryKey: ['subscriptions', batchId],
+    queryFn: async () => {
+      const response = await fetch(
+        batchId
+          ? `/api/admin/subscriptions?batchId=${batchId}`
+          : '/api/admin/subscriptions'
+      )
+      if (!response.ok) {
+        throw new Error('Failed to fetch subscriptions')
+      }
+      return response.json()
+    },
+    // Cache the data for 5 minutes (300000 milliseconds)
+    staleTime: 300000,
+    // Keep the cached data for 10 minutes even if unused
+    gcTime: 600000,
+    // Refetch in the background if data is older than 5 minutes
+    refetchOnMount: true,
+    refetchOnWindowFocus: 'always',
+    // Add a retry mechanism for failed requests
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  })
 
-export async function SubscriptionsTable() {
-  const subscriptions = await getStudentSubscriptions()
+  if (error) {
+    return (
+      <div className="rounded-md border p-4">
+        <div className="text-red-500">Error loading subscriptions</div>
+      </div>
+    )
+  }
+
+  if (isLoading || !data) {
+    return (
+      <div className="rounded-md border p-4">
+        <div>Loading...</div>
+      </div>
+    )
+  }
+
+  if (data.length === 0) {
+    return (
+      <div className="rounded-md border p-4">
+        <div className="text-center text-muted-foreground">
+          No subscriptions found
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-md border">
@@ -25,24 +79,26 @@ export async function SubscriptionsTable() {
         <TableHeader>
           <TableRow>
             <TableHead>Student Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Monthly Rate</TableHead>
-            <TableHead>Subscription Status</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Last Payment</TableHead>
             <TableHead>Next Payment</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {subscriptions.map((sub) => (
+          {data.map((sub) => (
             <TableRow key={sub.student.id}>
               <TableCell className="font-medium">{sub.student.name}</TableCell>
-              <TableCell>{sub.student.email || 'N/A'}</TableCell>
-              <TableCell>${sub.student.monthlyRate}</TableCell>
               <TableCell>
-                <SubscriptionStatusBadge
-                  status={sub.subscription?.status || 'NO_SUBSCRIPTION'}
-                />
+                <Badge
+                  variant={
+                    sub.subscription?.status === 'ACTIVE'
+                      ? 'default'
+                      : 'secondary'
+                  }
+                >
+                  {sub.subscription?.status || 'NO SUBSCRIPTION'}
+                </Badge>
               </TableCell>
               <TableCell>
                 {sub.subscription?.lastPaymentDate
@@ -59,7 +115,7 @@ export async function SubscriptionsTable() {
                   : 'N/A'}
               </TableCell>
               <TableCell>
-                {sub.subscription?.stripeSubscriptionId ? (
+                {sub.subscription && (
                   <Button variant="outline" size="sm" asChild>
                     <Link
                       href={`https://dashboard.stripe.com/subscriptions/${sub.subscription.stripeSubscriptionId}`}
@@ -70,10 +126,6 @@ export async function SubscriptionsTable() {
                       View in Stripe
                     </Link>
                   </Button>
-                ) : (
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/autopay">Set up AutoPay</Link>
-                  </Button>
                 )}
               </TableCell>
             </TableRow>
@@ -81,28 +133,5 @@ export async function SubscriptionsTable() {
         </TableBody>
       </Table>
     </div>
-  )
-}
-
-function SubscriptionStatusBadge({ status }: { status: string }) {
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'ACTIVE':
-        return 'bg-green-500'
-      case 'PAST_DUE':
-        return 'bg-yellow-500'
-      case 'CANCELED':
-        return 'bg-red-500'
-      case 'INACTIVE':
-        return 'bg-gray-500'
-      case 'NO_SUBSCRIPTION':
-        return 'bg-gray-500'
-      default:
-        return 'bg-blue-500'
-    }
-  }
-
-  return (
-    <Badge className={getStatusColor(status)}>{status.replace('_', ' ')}</Badge>
   )
 }

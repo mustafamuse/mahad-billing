@@ -43,3 +43,10 @@ export async function testStripeClientInitialization(): Promise<void> {
     console.error('Stripe client initialization failed:', error)
   }
 }
+
+export const stripeLiveClient = new Stripe(
+  process.env.STRIPE_LIVE_SECRET_KEY || '',
+  {
+    apiVersion: '2024-11-20.acacia',
+  }
+)

@@ -1,35 +1,20 @@
 import { NextResponse } from 'next/server'
 
-import { prisma } from '@/lib/db'
+import { getStudentSubscriptions } from '@/lib/queries/subscriptions'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Get all subscriptions with their associated students and payers
-    const subscriptions = await prisma.subscription.findMany({
-      include: {
-        payer: {
-          include: {
-            students: true,
-          },
-        },
-      },
-    })
+    const { searchParams } = new URL(request.url)
+    const batchId = searchParams.get('batchId')
 
-    // Transform the data to return only what we need
-    const students = subscriptions.flatMap((subscription) =>
-      subscription.payer.students.map((student) => ({
-        id: student.id,
-        name: student.name,
-        payerName: subscription.payer.name,
-        payerEmail: subscription.payer.email,
-        payerPhone: subscription.payer.phone,
-        monthlyAmount: student.monthlyRate,
-        nextPaymentDate: subscription.currentPeriodEnd,
-        status: subscription.status,
-      }))
-    )
+    const subscriptions = await getStudentSubscriptions()
 
-    return NextResponse.json({ students })
+    // Filter by batch if batchId is provided
+    const filteredSubscriptions = batchId
+      ? subscriptions.filter((sub) => sub.student.batchId === batchId)
+      : subscriptions
+
+    return NextResponse.json(filteredSubscriptions)
   } catch (error) {
     console.error('Error fetching subscriptions:', error)
     return NextResponse.json(

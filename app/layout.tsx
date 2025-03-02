@@ -1,3 +1,5 @@
+import { Inter } from 'next/font/google'
+
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
 
@@ -6,6 +8,8 @@ import { ThemeProvider } from '@/providers/theme-provider'
 
 import { Providers } from './providers'
 import './globals.css'
+
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
   title: 'Roots of Knowledge - Islamic Education',
@@ -26,7 +30,7 @@ export default function RootLayout({
           content="width=device-width, initial-scale=1, minimum-scale=1"
         />
       </head>
-      <body suppressHydrationWarning>
+      <body suppressHydrationWarning className={inter.className}>
         <Providers>
           <ThemeProvider
             attribute="class"

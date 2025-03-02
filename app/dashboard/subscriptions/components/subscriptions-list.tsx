@@ -27,6 +27,8 @@ interface SubscriptionsListProps {
       status: string
       customerEmail: string
       customerName: string
+      lastPaymentDate: Date | null
+      nextPaymentDate: Date | null
     }
     isUnmatched: boolean
   }>
@@ -49,6 +51,8 @@ export function SubscriptionsList({ subscriptions }: SubscriptionsListProps) {
             <TableHead>Customer Email</TableHead>
             <TableHead>Customer Name</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Last Payment</TableHead>
+            <TableHead>Next Payment</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -68,6 +72,20 @@ export function SubscriptionsList({ subscriptions }: SubscriptionsListProps) {
                 >
                   {sub.stripeSubscription.status}
                 </Badge>
+              </TableCell>
+              <TableCell>
+                {sub.stripeSubscription.lastPaymentDate
+                  ? new Date(
+                      sub.stripeSubscription.lastPaymentDate
+                    ).toLocaleDateString()
+                  : 'Never'}
+              </TableCell>
+              <TableCell>
+                {sub.stripeSubscription.nextPaymentDate
+                  ? new Date(
+                      sub.stripeSubscription.nextPaymentDate
+                    ).toLocaleDateString()
+                  : 'N/A'}
               </TableCell>
               <TableCell>
                 <Button variant="outline" size="sm" asChild>

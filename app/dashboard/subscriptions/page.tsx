@@ -4,6 +4,7 @@ import { AlertTriangle } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { prisma } from '@/lib/db'
 import { findUnlinkedSubscriptions } from '@/lib/queries/stripe-reconciliation'
 
@@ -21,13 +22,27 @@ export const revalidate = 0
 
 export default async function SubscriptionsPage() {
   try {
-    const [unlinkedSubscriptions, students] = await Promise.all([
+    const [unlinkedSubscriptions, students, batches] = await Promise.all([
       findUnlinkedSubscriptions(),
       prisma.student.findMany({
         select: {
           id: true,
           name: true,
           email: true,
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      }),
+      prisma.batch.findMany({
+        where: {
+          students: {
+            some: {
+              payer: {
+                isNot: null,
+              },
+            },
+          },
         },
         orderBy: {
           name: 'asc',
@@ -50,12 +65,31 @@ export default async function SubscriptionsPage() {
 
         {/* Show all student subscriptions from the database */}
         <div>
-          <h2 className="mb-4 text-xl font-semibold">
-            All Student Subscriptions
-          </h2>
-          <Suspense fallback={<SubscriptionsTableSkeleton />}>
-            <SubscriptionsTable />
-          </Suspense>
+          <h2 className="mb-4 text-xl font-semibold">Student Subscriptions</h2>
+          <Tabs defaultValue="all" className="w-full">
+            <TabsList className="w-full justify-start">
+              <TabsTrigger value="all">All Students</TabsTrigger>
+              {batches.map((batch) => (
+                <TabsTrigger key={batch.id} value={batch.id}>
+                  {batch.name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            <TabsContent value="all">
+              <Suspense fallback={<SubscriptionsTableSkeleton />}>
+                <SubscriptionsTable batchId={null} />
+              </Suspense>
+            </TabsContent>
+
+            {batches.map((batch) => (
+              <TabsContent key={batch.id} value={batch.id}>
+                <Suspense fallback={<SubscriptionsTableSkeleton />}>
+                  <SubscriptionsTable batchId={batch.id} />
+                </Suspense>
+              </TabsContent>
+            ))}
+          </Tabs>
         </div>
       </div>
     )

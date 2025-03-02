@@ -2,6 +2,7 @@ import { SubscriptionStatus } from '@prisma/client'
 
 import { PAYMENT_RULES, getGracePeriodEnd } from '@/lib/config/payment-rules'
 import { prisma } from '@/lib/db'
+import { stripeServerClient } from '@/lib/stripe'
 import { BASE_RATE } from '@/lib/types'
 import { StudentStatus } from '@/lib/types/student'
 
@@ -279,6 +280,7 @@ export async function validateStudentForEnrollment(studentId: string) {
 }
 
 export async function getStudentSubscriptions() {
+  // 1. First get all students with their subscription info
   const students = await prisma.student.findMany({
     select: {
       id: true,
@@ -287,6 +289,13 @@ export async function getStudentSubscriptions() {
       monthlyRate: true,
       customRate: true,
       status: true,
+      batchId: true,
+      batch: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       payer: {
         select: {
           id: true,
@@ -321,24 +330,142 @@ export async function getStudentSubscriptions() {
     ],
   })
 
-  // Transform the data to include the most recent subscription
-  return students.map((student) => ({
-    student: {
-      id: student.id,
-      name: student.name,
-      email: student.email,
-      monthlyRate: student.monthlyRate,
-      customRate: student.customRate,
-      status: student.status,
-    },
-    payer: student.payer
-      ? {
-          id: student.payer.id,
-          name: student.payer.name,
-          email: student.payer.email,
-          stripeCustomerId: student.payer.stripeCustomerId,
+  // 2. For each student with a subscription, fetch latest Stripe data
+  const updatedStudents = await Promise.all(
+    students.map(async (student) => {
+      const subscription = student.payer?.subscriptions[0]
+      if (!subscription?.stripeSubscriptionId) {
+        return {
+          student: {
+            id: student.id,
+            name: student.name,
+            email: student.email,
+            monthlyRate: student.monthlyRate,
+            customRate: student.customRate,
+            status: student.status,
+            batchId: student.batchId,
+            batch: student.batch,
+          },
+          payer: student.payer
+            ? {
+                id: student.payer.id,
+                name: student.payer.name,
+                email: student.payer.email,
+                stripeCustomerId: student.payer.stripeCustomerId,
+              }
+            : null,
+          subscription: null,
         }
-      : null,
-    subscription: student.payer?.subscriptions[0] || null,
-  }))
+      }
+
+      try {
+        // Fetch latest subscription data from Stripe
+        const stripeSubscription =
+          await stripeServerClient.subscriptions.retrieve(
+            subscription.stripeSubscriptionId,
+            {
+              expand: ['latest_invoice', 'latest_invoice.payment_intent'],
+            }
+          )
+
+        // Get the latest paid invoice for this subscription
+        const invoices = await stripeServerClient.invoices.list({
+          subscription: subscription.stripeSubscriptionId,
+          status: 'paid',
+          limit: 1,
+        })
+
+        const latestPaidInvoice = invoices.data[0]
+        const lastPaymentDate = latestPaidInvoice?.status_transitions?.paid_at
+          ? new Date(latestPaidInvoice.status_transitions.paid_at * 1000)
+          : null
+        const nextPaymentDate = stripeSubscription.current_period_end
+          ? new Date(stripeSubscription.current_period_end * 1000)
+          : null
+
+        // Update our database with the latest payment information
+        const updatedSubscription = await prisma.subscription.update({
+          where: { stripeSubscriptionId: subscription.stripeSubscriptionId },
+          data: {
+            status: mapStripeStatus(stripeSubscription.status),
+            lastPaymentDate,
+            nextPaymentDate,
+            currentPeriodStart: new Date(
+              stripeSubscription.current_period_start * 1000
+            ),
+            currentPeriodEnd: new Date(
+              stripeSubscription.current_period_end * 1000
+            ),
+          },
+        })
+
+        return {
+          student: {
+            id: student.id,
+            name: student.name,
+            email: student.email,
+            monthlyRate: student.monthlyRate,
+            customRate: student.customRate,
+            status: student.status,
+            batchId: student.batchId,
+            batch: student.batch,
+          },
+          payer: student.payer
+            ? {
+                id: student.payer.id,
+                name: student.payer.name,
+                email: student.payer.email,
+                stripeCustomerId: student.payer.stripeCustomerId,
+              }
+            : null,
+          subscription: updatedSubscription,
+        }
+      } catch (error) {
+        console.error(
+          `Error fetching Stripe data for subscription ${subscription.stripeSubscriptionId}:`,
+          error
+        )
+        // Return existing data if Stripe fetch fails
+        return {
+          student: {
+            id: student.id,
+            name: student.name,
+            email: student.email,
+            monthlyRate: student.monthlyRate,
+            customRate: student.customRate,
+            status: student.status,
+            batchId: student.batchId,
+            batch: student.batch,
+          },
+          payer: student.payer
+            ? {
+                id: student.payer.id,
+                name: student.payer.name,
+                email: student.payer.email,
+                stripeCustomerId: student.payer.stripeCustomerId,
+              }
+            : null,
+          subscription,
+        }
+      }
+    })
+  )
+
+  return updatedStudents
+}
+
+// Helper function to map Stripe status to our enum
+function mapStripeStatus(stripeStatus: string): SubscriptionStatus {
+  switch (stripeStatus) {
+    case 'active':
+      return SubscriptionStatus.ACTIVE
+    case 'past_due':
+      return SubscriptionStatus.PAST_DUE
+    case 'canceled':
+      return SubscriptionStatus.CANCELED
+    case 'incomplete':
+      return SubscriptionStatus.INCOMPLETE
+    default:
+      return SubscriptionStatus.INACTIVE
+  }
 }

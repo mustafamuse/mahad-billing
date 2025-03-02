@@ -112,6 +112,22 @@ export function UnmatchedSubscriptions({
                       WhatsApp: {subscription.metadata.whatsappNumber}
                     </p>
                   )}
+                  {subscription.lastPaymentDate && (
+                    <p className="text-sm text-muted-foreground">
+                      Last Payment:{' '}
+                      {new Date(
+                        subscription.lastPaymentDate
+                      ).toLocaleDateString()}
+                    </p>
+                  )}
+                  {subscription.nextPaymentDate && (
+                    <p className="text-sm text-muted-foreground">
+                      Next Payment:{' '}
+                      {new Date(
+                        subscription.nextPaymentDate
+                      ).toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-4">
                   <Select
