@@ -277,3 +277,68 @@ export async function validateStudentForEnrollment(studentId: string) {
     },
   }
 }
+
+export async function getStudentSubscriptions() {
+  const students = await prisma.student.findMany({
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      monthlyRate: true,
+      customRate: true,
+      status: true,
+      payer: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          stripeCustomerId: true,
+          subscriptions: {
+            select: {
+              id: true,
+              stripeSubscriptionId: true,
+              status: true,
+              lastPaymentDate: true,
+              nextPaymentDate: true,
+              currentPeriodStart: true,
+              currentPeriodEnd: true,
+              paymentRetryCount: true,
+              lastPaymentError: true,
+              gracePeriodEndsAt: true,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: 1,
+          },
+        },
+      },
+    },
+    orderBy: [
+      {
+        name: 'asc',
+      },
+    ],
+  })
+
+  // Transform the data to include the most recent subscription
+  return students.map((student) => ({
+    student: {
+      id: student.id,
+      name: student.name,
+      email: student.email,
+      monthlyRate: student.monthlyRate,
+      customRate: student.customRate,
+      status: student.status,
+    },
+    payer: student.payer
+      ? {
+          id: student.payer.id,
+          name: student.payer.name,
+          email: student.payer.email,
+          stripeCustomerId: student.payer.stripeCustomerId,
+        }
+      : null,
+    subscription: student.payer?.subscriptions[0] || null,
+  }))
+}
