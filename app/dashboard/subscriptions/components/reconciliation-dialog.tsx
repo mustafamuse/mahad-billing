@@ -68,7 +68,7 @@ export function ReconciliationDialog() {
   const handleReconcile = async (studentId: string) => {
     setReconciling((prev) => [...prev, studentId])
     try {
-      const result = results.find((r) => r.student.id === studentId)
+      const result = results.find((r) => r.student?.id === studentId)
       if (result) {
         const response = await fetch('/api/subscriptions/reconcile', {
           method: 'POST',
@@ -84,9 +84,9 @@ export function ReconciliationDialog() {
         }
 
         // Remove reconciled item from results
-        setResults((prev) => prev.filter((r) => r.student.id !== studentId))
+        setResults((prev) => prev.filter((r) => r.student?.id !== studentId))
         toast.success('Subscription reconciled', {
-          description: `Successfully linked subscription for ${result.student.name}`,
+          description: `Successfully linked subscription for ${result.student?.name}`,
         })
       }
     } catch (err) {
@@ -144,33 +144,43 @@ export function ReconciliationDialog() {
 
           {results.length > 0 && (
             <ScrollArea className="h-[300px] rounded-md border p-4">
-              {results.map((result) => (
-                <div
-                  key={result.student.id}
-                  className="flex items-center justify-between border-b py-2 last:border-0"
-                >
-                  <div>
-                    <p className="font-medium">{result.student.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {result.student.email}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Stripe Status: {result.stripeSubscription?.status}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => handleReconcile(result.student.id)}
-                    disabled={reconciling.includes(result.student.id)}
+              {results
+                .filter(
+                  (
+                    result
+                  ): result is ReconciliationResult & {
+                    student: NonNullable<typeof result.student>
+                  } =>
+                    result.student !== null &&
+                    typeof result.student.id === 'string'
+                )
+                .map((result) => (
+                  <div
+                    key={result.student.id}
+                    className="flex items-center justify-between border-b py-2 last:border-0"
                   >
-                    {reconciling.includes(result.student.id) ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      'Reconcile'
-                    )}
-                  </Button>
-                </div>
-              ))}
+                    <div>
+                      <p className="font-medium">{result.student.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {result.student.email}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Stripe Status: {result.stripeSubscription?.status}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => handleReconcile(result.student.id)}
+                      disabled={reconciling.includes(result.student.id)}
+                    >
+                      {reconciling.includes(result.student.id) ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        'Reconcile'
+                      )}
+                    </Button>
+                  </div>
+                ))}
             </ScrollArea>
           )}
 
