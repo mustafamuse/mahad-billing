@@ -313,9 +313,7 @@ export function StatusMessages({ status, bankDetails }: StatusMessagesProps) {
               <span className="font-medium">1.</span> Verify bank details are
               correct
               <br />
-              <span className="font-medium">
-                2.
-              </span> Confirm below to proceed
+              <span className="font-medium">2.</span> Confirm below to proceed
             </p>
           </motion.div>
         </motion.div>

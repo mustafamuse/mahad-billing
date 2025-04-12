@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarDate } from '@internationalized/date'
 import { EducationLevel, GradeLevel } from '@prisma/client'
 import { AlertTriangle, UserPlus, X, Check, Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { Toaster, toast } from 'sonner'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -94,6 +94,8 @@ export default function WireframePage() {
   const [selectedStudent, setSelectedStudent] = useState<SearchResult | null>(
     null
   )
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Debounced search function
   const debouncedSearch = debounce(async (query: string) => {
@@ -107,7 +109,10 @@ export default function WireframePage() {
   // Search function using actual API
   const searchSiblings = async (query: string) => {
     if (!formData?.lastName) {
-      toast.error('Please complete personal details first')
+      toast.error('Complete your details first', {
+        description:
+          'Please fill in your personal information before searching for siblings',
+      })
       return
     }
 
@@ -115,10 +120,6 @@ export default function WireframePage() {
       setSearchResults([])
       return
     }
-
-    const loadingToast = toast.loading('Searching for siblings...', {
-      description: `Looking for siblings with last name "${formData.lastName}"`,
-    })
 
     try {
       const students = await getRegistrationStudents()
@@ -146,23 +147,13 @@ export default function WireframePage() {
         }))
 
       setSearchResults(results)
-      toast.dismiss(loadingToast)
 
-      if (results.length === 0 && query.length >= 2) {
-        toast.info('No siblings found', {
-          description:
-            'Make sure your sibling is registered with the same last name.',
-        })
-      } else if (results.length > 0) {
-        toast.success(
-          `Found ${results.length} potential ${results.length === 1 ? 'match' : 'matches'}`
-        )
-      }
+      // Only show "no results" message in the UI, not as a toast
     } catch (error) {
       console.error('Error searching siblings:', error)
-      toast.dismiss(loadingToast)
-      toast.error('Search failed', {
-        description: 'Failed to search for siblings. Please try again.',
+      toast.error('Unable to search for siblings', {
+        description:
+          'Please try again or contact support if the issue persists',
       })
       setSearchResults([])
     }
@@ -171,23 +162,11 @@ export default function WireframePage() {
   // Add sibling handler with improved toast feedback
   const handleAddSelectedSibling = () => {
     if (selectedStudent) {
-      const loadingToast = toast.loading('Adding sibling...', {
-        description: `Adding ${selectedStudent.name} to your registration`,
-      })
-
-      // Simulate a small delay for better UX
-      setTimeout(() => {
-        setSiblings((prev) => [...prev, selectedStudent])
-        setSelectedStudent(null)
-        setSearchResults([])
-        setSearchTerm('')
-        setShowSiblingSearch(false)
-
-        toast.dismiss(loadingToast)
-        toast.success('Sibling added', {
-          description: `${selectedStudent.name} has been added as your sibling.`,
-        })
-      }, 500)
+      setSiblings((prev) => [...prev, selectedStudent])
+      setSelectedStudent(null)
+      setSearchResults([])
+      setSearchTerm('')
+      setShowSiblingSearch(false)
     }
   }
 
@@ -206,89 +185,138 @@ export default function WireframePage() {
     },
   })
 
+  // Add email validation on blur
+  const validateEmail = async (email: string) => {
+    if (!email) return true
+
+    setIsCheckingEmail(true)
+    try {
+      const students = await getRegistrationStudents()
+      const exists = students.some((student) => student.email === email)
+
+      if (exists) {
+        form.setError('email', {
+          type: 'manual',
+          message: 'This email is already registered',
+        })
+        return false
+      }
+
+      form.clearErrors('email')
+      return true
+    } catch (error) {
+      console.error('Error checking email:', error)
+      return true // Allow submission on error, we'll catch it server-side
+    } finally {
+      setIsCheckingEmail(false)
+    }
+  }
+
   const handleSubmit = async (data: StudentFormValues) => {
-    // Only store form data and show sibling prompt
+    // Validate email before proceeding
+    const isEmailValid = await validateEmail(data.email)
+    if (!isEmailValid) {
+      toast.error('This email is already registered', {
+        description: 'Please use a different email address',
+      })
+      return
+    }
+
     setFormData(data)
     setShowSiblingPrompt(true)
   }
 
   // Handle registration for students with no siblings
-  const handleNoSiblingsRegistration = async () => {
-    if (!formData) return
+  const handleNoSiblingsRegistration = useCallback(async () => {
+    if (!formData || isSubmitting) return
+    setIsSubmitting(true)
 
-    const loadingToast = toast.loading('Submitting registration...', {
-      description: 'Processing your registration',
+    const registrationPromise = registerWithSiblings({
+      studentData: formData,
+      siblingIds: null,
     })
 
     try {
-      const result = await registerWithSiblings({
-        studentData: formData,
-        siblingIds: null, // No siblings
+      await toast.promise(registrationPromise, {
+        loading: 'Processing your registration...',
+        success: 'Registration complete! Redirecting to payment...',
+        error: 'Registration failed. Please try again.',
       })
 
-      toast.dismiss(loadingToast)
+      const result = await registrationPromise
 
-      if (result.success) {
-        toast.success('Registration completed!', {
-          description: 'Your registration has been successfully submitted.',
-        })
-        // Reset form and state after successful registration
+      if (result) {
         form.reset()
         setFormData(null)
         setShowSiblingPrompt(false)
-        // Here you would redirect to payment or next step
+        // Short delay to allow the success toast to be seen
+        setTimeout(() => {
+          window.location.href = 'https://buy.stripe.com/fZeg0O7va1gt4da3cc'
+        }, 1500)
       }
     } catch (error) {
-      console.error('Registration failed:', error)
-      toast.dismiss(loadingToast)
-      toast.error('Registration failed', {
-        description:
-          error instanceof Error ? error.message : 'Please try again later.',
-      })
+      console.error('Registration error:', error)
+    } finally {
+      setIsSubmitting(false)
     }
-  }
+  }, [formData, isSubmitting, form])
 
   // Handle registration for students with siblings
-  const handleSiblingRegistration = async () => {
-    if (!formData) return
+  const handleSiblingRegistration = useCallback(async () => {
+    if (!formData || isSubmitting) return
+    setIsSubmitting(true)
 
-    const loadingToast = toast.loading('Submitting registration...', {
-      description: `Registering with ${siblings.length} sibling${siblings.length > 1 ? 's' : ''}`,
+    const loadingMessage =
+      siblings.length > 0
+        ? `Registering you with ${siblings.length} sibling${siblings.length > 1 ? 's' : ''}...`
+        : 'Processing your registration...'
+
+    const successMessage =
+      siblings.length > 0
+        ? `Registration complete! Redirecting to payment for ${siblings.length + 1} students...`
+        : 'Registration complete! Redirecting to payment...'
+
+    const registrationPromise = registerWithSiblings({
+      studentData: formData,
+      siblingIds: siblings.map((s) => s.id),
     })
 
     try {
-      const result = await registerWithSiblings({
-        studentData: formData,
-        siblingIds: siblings.map((s) => s.id),
+      await toast.promise(registrationPromise, {
+        loading: loadingMessage,
+        success: successMessage,
+        error: 'Registration failed. Please try again.',
       })
 
-      toast.dismiss(loadingToast)
+      const result = await registrationPromise
 
-      if (result.success) {
-        toast.success('Registration completed!', {
-          description: `Successfully registered with ${siblings.length} sibling${siblings.length > 1 ? 's' : ''}`,
-        })
-        // Reset form and state after successful registration
+      if (result) {
         form.reset()
         setFormData(null)
         setSiblings([])
         setShowSiblingSection(false)
-        // Here you would redirect to payment or next step
+        // Short delay to allow the success toast to be seen
+        setTimeout(() => {
+          window.location.href = 'https://buy.stripe.com/fZeg0O7va1gt4da3cc'
+        }, 1500)
       }
     } catch (error) {
-      console.error('Registration failed:', error)
-      toast.dismiss(loadingToast)
-      toast.error('Registration failed', {
-        description:
-          error instanceof Error ? error.message : 'Please try again later.',
-      })
+      console.error('Registration error:', error)
+    } finally {
+      setIsSubmitting(false)
     }
-  }
+  }, [formData, isSubmitting, siblings, form])
+
+  // Effect to handle state updates after registration
+  useEffect(() => {
+    return () => {
+      // Cleanup any pending state updates
+      setIsSubmitting(false)
+    }
+  }, [])
 
   return (
     <div className="container max-w-3xl space-y-8 py-8">
-      <Toaster richColors position="top-center" />
-
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">Student Registration</h1>
         <p className="text-muted-foreground">
@@ -367,17 +395,29 @@ export default function WireframePage() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="Enter your email"
-                          {...field}
-                          value={field.value || ''}
-                          aria-invalid={!!fieldState.error}
-                          className={cn(
-                            fieldState.error &&
-                              'border-destructive focus-visible:ring-destructive'
+                        <div className="relative">
+                          <Input
+                            type="email"
+                            placeholder="Enter your email"
+                            {...field}
+                            value={field.value || ''}
+                            onBlur={async (e) => {
+                              field.onBlur()
+                              await validateEmail(e.target.value)
+                            }}
+                            aria-invalid={!!fieldState.error}
+                            className={cn(
+                              fieldState.error &&
+                                'border-destructive focus-visible:ring-destructive',
+                              isCheckingEmail && 'pr-10'
+                            )}
+                          />
+                          {isCheckingEmail && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </div>
                           )}
-                        />
+                        </div>
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
                         Enter your email address
@@ -668,8 +708,16 @@ export default function WireframePage() {
                 className="w-full"
                 size="lg"
                 variant="default"
+                disabled={isSubmitting}
               >
-                Continue
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  'Continue'
+                )}
               </Button>
             </div>
           </CardContent>
@@ -694,8 +742,16 @@ export default function WireframePage() {
             <Button
               className="w-full sm:w-auto"
               onClick={handleNoSiblingsRegistration}
+              disabled={isSubmitting}
             >
-              No, Continue to Payment
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'No, Continue to Payment'
+              )}
             </Button>
             <Button
               variant="outline"
@@ -704,6 +760,7 @@ export default function WireframePage() {
                 setShowSiblingPrompt(false)
                 setShowSiblingSection(true)
               }}
+              disabled={isSubmitting}
             >
               Yes, Add a Sibling
             </Button>

@@ -1,24 +1,12 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { headers } from 'next/headers'
-
-import { Prisma } from '@prisma/client'
-import { Ratelimit } from '@upstash/ratelimit'
 
 import {
   studentFormSchema,
   type StudentFormValues,
 } from '@/app/register/schema'
 import { prisma } from '@/lib/db'
-
-import { redis } from '../utils/redis'
-
-// Create rate limiter
-const ratelimit = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(10, '10 s'), // 10 requests per 10 seconds
-})
 
 // Helper function for consistent capitalization
 function capitalizeNames(firstName: string, lastName: string) {
@@ -30,8 +18,6 @@ function capitalizeNames(firstName: string, lastName: string) {
 
 // Get students for registration
 export async function getRegistrationStudents() {
-  const CUTOFF_DATE = new Date('2024-02-13')
-
   try {
     const students = await prisma.student.findMany({
       select: {
@@ -57,120 +43,54 @@ export async function getRegistrationStudents() {
       },
     })
 
-    // Filter out students who completed registration after cutoff
     return students
-      .filter((student) => {
-        const hasCompletedRegistration =
-          student.email &&
-          student.phone &&
-          student.dateOfBirth &&
-          student.educationLevel &&
-          student.gradeLevel &&
-          student.schoolName
-
-        const wasUpdatedAfterCutoff = student.updatedAt > CUTOFF_DATE
-
-        // If student completed registration after cutoff, exclude them
-        if (hasCompletedRegistration && wasUpdatedAfterCutoff) {
-          console.log('Student excluded from list:', {
-            id: student.id,
-            name: student.name,
-            updatedAt: student.updatedAt,
-            reason: 'Completed registration after cutoff date',
-          })
-          return false
-        }
-
-        return true
-      })
-
-      .map(({ updatedAt: _, ...student }) => student) // Remove updatedAt from returned data
   } catch (error) {
     console.error('Failed to fetch students:', error)
     throw new Error('Failed to fetch students')
   }
 }
 
-// Update student registration info
-export async function updateRegistrationStudent(
-  id: string,
-  data: Prisma.StudentUpdateInput
-) {
-  try {
-    const ip = headers().get('x-forwarded-for') ?? '127.0.0.1'
-    const { success, reset } = await ratelimit.limit(ip)
-
-    if (!success) {
-      throw new Error(
-        `Too many updates. Please wait ${Math.ceil(
-          (reset - Date.now()) / 1000
-        )} seconds.`
-      )
-    }
-
-    // If name is being updated, capitalize it
-    if (typeof data.name === 'string') {
-      const [firstName, ...lastNames] = data.name.split(' ')
-      const { firstName: capFirst, lastName: capLast } = capitalizeNames(
-        firstName,
-        lastNames.join(' ')
-      )
-      data.name = `${capFirst} ${capLast}`.trim()
-    }
-
-    const updatedStudent = await prisma.student.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        dateOfBirth: true,
-        educationLevel: true,
-        gradeLevel: true,
-        schoolName: true,
-        siblingGroup: {
-          select: {
-            students: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
-    })
-
-    // Revalidate the entire registration route
-    revalidatePath('/register', 'layout')
-
-    return {
-      student: updatedStudent,
-      success: true,
-      message: 'Student information updated successfully',
-    }
-  } catch (error) {
-    console.error('Failed to update student:', error)
-    throw new Error('Failed to update student information')
-  }
-}
-
-export type RegisterStudent = Awaited<
+export type RegisteredStudents = Awaited<
   ReturnType<typeof getRegistrationStudents>
 >[0]
 
 export async function addSibling(studentId: string, siblingId: string) {
-  try {
+  if (studentId === siblingId) {
+    throw new Error('Cannot add student as their own sibling')
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    // Get both students with their current sibling groups
     const [student, sibling] = await Promise.all([
-      prisma.student.findUnique({
+      tx.student.findUnique({
         where: { id: studentId },
-        select: { id: true, siblingGroupId: true },
+        select: {
+          id: true,
+          name: true,
+          siblingGroupId: true,
+          siblingGroup: {
+            select: {
+              students: {
+                select: { id: true },
+              },
+            },
+          },
+        },
       }),
-      prisma.student.findUnique({
+      tx.student.findUnique({
         where: { id: siblingId },
-        select: { id: true, siblingGroupId: true },
+        select: {
+          id: true,
+          name: true,
+          siblingGroupId: true,
+          siblingGroup: {
+            select: {
+              students: {
+                select: { id: true },
+              },
+            },
+          },
+        },
       }),
     ])
 
@@ -178,37 +98,85 @@ export async function addSibling(studentId: string, siblingId: string) {
       throw new Error('One or both students not found')
     }
 
-    // Create sibling group only when neither student has one
+    // Case 1: Neither student has a group
     if (!student.siblingGroupId && !sibling.siblingGroupId) {
-      await prisma.sibling.create({
+      // Create new group with both students
+      const newGroup = await tx.sibling.create({
         data: {
           students: {
             connect: [{ id: studentId }, { id: siblingId }],
           },
         },
+        include: {
+          students: {
+            select: { id: true, name: true },
+          },
+        },
       })
-    } else if (student.siblingGroupId && !sibling.siblingGroupId) {
-      await prisma.student.update({
+
+      if (newGroup.students.length !== 2) {
+        throw new Error('Failed to create sibling group with both students')
+      }
+
+      return newGroup
+    }
+
+    // Case 2: Student has group, sibling doesn't
+    if (student.siblingGroupId && !sibling.siblingGroupId) {
+      // Verify current group size
+      const currentGroupSize = student.siblingGroup?.students.length ?? 0
+      if (currentGroupSize < 1) {
+        throw new Error('Invalid existing sibling group state')
+      }
+
+      // Add sibling to existing group
+      await tx.student.update({
         where: { id: siblingId },
         data: { siblingGroupId: student.siblingGroupId },
       })
-    } else if (!student.siblingGroupId && sibling.siblingGroupId) {
-      await prisma.student.update({
+    }
+
+    // Case 3: Sibling has group, student doesn't
+    else if (!student.siblingGroupId && sibling.siblingGroupId) {
+      // Verify current group size
+      const currentGroupSize = sibling.siblingGroup?.students.length ?? 0
+      if (currentGroupSize < 1) {
+        throw new Error('Invalid existing sibling group state')
+      }
+
+      // Add student to existing group
+      await tx.student.update({
         where: { id: studentId },
         data: { siblingGroupId: sibling.siblingGroupId },
       })
-    } else if (student.siblingGroupId !== sibling.siblingGroupId) {
-      await prisma.$transaction([
-        prisma.student.updateMany({
+    }
+
+    // Case 4: Both have different groups
+    else if (student.siblingGroupId !== sibling.siblingGroupId) {
+      // Verify both group sizes
+      const [studentGroupSize, siblingGroupSize] = [
+        student.siblingGroup?.students.length ?? 0,
+        sibling.siblingGroup?.students.length ?? 0,
+      ]
+
+      if (studentGroupSize < 1 || siblingGroupSize < 1) {
+        throw new Error('Invalid sibling group state')
+      }
+
+      // Merge groups by moving all siblings to student's group
+      await Promise.all([
+        tx.student.updateMany({
           where: { siblingGroupId: sibling.siblingGroupId },
           data: { siblingGroupId: student.siblingGroupId },
         }),
-        prisma.sibling.delete({ where: { id: sibling.siblingGroupId! } }),
+        tx.sibling.delete({
+          where: { id: sibling.siblingGroupId! },
+        }),
       ])
     }
 
-    // Get full student data
-    const updatedStudent = await prisma.student.findUnique({
+    // Get updated student data
+    const updatedStudent = await tx.student.findUnique({
       where: { id: studentId },
       select: {
         id: true,
@@ -229,49 +197,91 @@ export async function addSibling(studentId: string, siblingId: string) {
       },
     })
 
+    if (!updatedStudent?.siblingGroup) {
+      throw new Error('Failed to update sibling relationship')
+    }
+
+    // Verify final group state
+    if (updatedStudent.siblingGroup.students.length < 2) {
+      throw new Error('Invalid final sibling group state')
+    }
+
     // Revalidate the entire registration route
     revalidatePath('/register', 'layout')
 
     return { success: true, student: updatedStudent }
-  } catch (error) {
-    console.error('Failed to add sibling:', error)
-    throw new Error('Failed to add sibling')
-  }
+  })
 }
 
 export async function removeSibling(studentId: string, siblingId: string) {
-  try {
-    const student = await prisma.student.findUnique({
+  if (studentId === siblingId) {
+    throw new Error('Cannot remove student from their own sibling group')
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    // Get student with their current sibling group
+    const student = await tx.student.findUnique({
       where: { id: studentId },
-      select: { id: true, siblingGroupId: true },
+      select: {
+        id: true,
+        siblingGroupId: true,
+        siblingGroup: {
+          select: {
+            students: {
+              select: { id: true },
+            },
+          },
+        },
+      },
     })
 
-    if (!student || !student.siblingGroupId) {
+    if (!student?.siblingGroupId) {
       throw new Error('Student or sibling group not found')
     }
 
-    // Remove sibling from the group
-    await prisma.student.update({
-      where: { id: siblingId },
-      data: { siblingGroupId: null },
-    })
+    // Get current group size
+    const currentGroupSize = student.siblingGroup?.students.length ?? 0
 
-    // Count remaining members in the group
-    const remainingMembers = await prisma.student.count({
-      where: { siblingGroupId: student.siblingGroupId },
-    })
-
-    if (remainingMembers <= 1) {
-      await prisma.$transaction([
-        prisma.student.updateMany({
+    if (currentGroupSize <= 2) {
+      // If we're about to remove from a group of 2 or fewer,
+      // delete the whole group and clear all references
+      await Promise.all([
+        tx.student.updateMany({
           where: { siblingGroupId: student.siblingGroupId },
           data: { siblingGroupId: null },
         }),
-        prisma.sibling.delete({ where: { id: student.siblingGroupId } }),
+        tx.sibling.delete({
+          where: { id: student.siblingGroupId },
+        }),
       ])
+    } else {
+      // Safe to remove just the one student
+      await tx.student.update({
+        where: { id: siblingId },
+        data: { siblingGroupId: null },
+      })
+
+      // Verify the group still has at least 2 members
+      const remainingMembers = await tx.student.count({
+        where: { siblingGroupId: student.siblingGroupId },
+      })
+
+      if (remainingMembers < 2) {
+        // Something went wrong, clean up the group
+        await Promise.all([
+          tx.student.updateMany({
+            where: { siblingGroupId: student.siblingGroupId },
+            data: { siblingGroupId: null },
+          }),
+          tx.sibling.delete({
+            where: { id: student.siblingGroupId },
+          }),
+        ])
+      }
     }
 
-    const updatedStudent = await prisma.student.findUnique({
+    // Get updated student data
+    const updatedStudent = await tx.student.findUnique({
       where: { id: studentId },
       select: {
         id: true,
@@ -296,15 +306,10 @@ export async function removeSibling(studentId: string, siblingId: string) {
     revalidatePath('/register', 'layout')
 
     return { success: true, student: updatedStudent }
-  } catch (error) {
-    console.error('Failed to remove sibling:', error)
-    throw new Error('Failed to remove sibling')
-  }
+  })
 }
 
 export async function getRegistrationStudent(id: string) {
-  const CUTOFF_DATE = new Date('2024-02-13')
-
   try {
     const student = await prisma.student.findUnique({
       where: { id },
@@ -330,183 +335,106 @@ export async function getRegistrationStudent(id: string) {
 
     if (!student) return null
 
-    // Check if student has completed registration after cutoff date
-    const hasCompletedRegistration =
-      student.email &&
-      student.phone &&
-      student.dateOfBirth &&
-      student.educationLevel &&
-      student.gradeLevel &&
-      student.schoolName
-
-    const wasUpdatedAfterCutoff = student.updatedAt > CUTOFF_DATE
-
-    // If student completed registration after cutoff, don't return them
-    if (hasCompletedRegistration && wasUpdatedAfterCutoff) {
-      console.log('Student excluded:', {
-        id: student.id,
-        name: student.name,
-        updatedAt: student.updatedAt,
-        reason: 'Completed registration after cutoff date',
-      })
-      return null
-    }
-
-    // Return student without the updatedAt field
-    const { updatedAt: _, ...studentData } = student
-    return studentData
+    return student
   } catch (error) {
     console.error('Failed to fetch student:', error)
     throw new Error('Failed to fetch student')
   }
 }
 
-// Function to calculate Levenshtein distance between two strings
-function levenshteinDistance(a: string, b: string): number {
-  const matrix: number[][] = []
-
-  // Initialize matrix
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i]
-  }
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j
-  }
-
-  // Fill in the rest of the matrix
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1]
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1, // substitution
-          matrix[i][j - 1] + 1, // insertion
-          matrix[i - 1][j] + 1 // deletion
-        )
-      }
-    }
-  }
-
-  return matrix[b.length][a.length]
+interface RegisterWithSiblingsInput {
+  studentData: StudentFormValues
+  siblingIds: string[] | null
 }
 
-// Function to calculate similarity percentage
-function calculateSimilarity(a: string, b: string): number {
-  const distance = levenshteinDistance(a.toLowerCase(), b.toLowerCase())
-  const maxLength = Math.max(a.length, b.length)
-  return Math.round(((maxLength - distance) / maxLength) * 100)
-}
+export async function registerWithSiblings(input: RegisterWithSiblingsInput) {
+  return await prisma.$transaction(async (tx) => {
+    try {
+      // 1. Validate and capitalize names
+      const validated = studentFormSchema.parse(input.studentData)
+      const { firstName, lastName } = capitalizeNames(
+        validated.firstName,
+        validated.lastName
+      )
+      const fullName = `${firstName} ${lastName}`.trim()
 
-export async function createRegistrationStudent(data: StudentFormValues) {
-  try {
-    // Validate using schema
-    const validated = studentFormSchema.parse(data)
-
-    // Capitalize names
-    const { firstName, lastName } = capitalizeNames(
-      validated.firstName,
-      validated.lastName
-    )
-
-    const fullName = `${firstName} ${lastName}`.trim()
-
-    // Check if student with this email already exists
-    if (validated.email) {
-      const existingStudent = await prisma.student.findFirst({
-        where: { email: validated.email },
+      // Log the data we're about to submit
+      console.log('Registering student with data:', {
+        studentData: {
+          ...validated,
+          firstName,
+          lastName,
+          fullName,
+        },
+        siblingIds: input.siblingIds,
       })
 
-      if (existingStudent) {
-        throw new Error('A student with this email already exists')
-      }
-    }
-
-    // Check for exact name match
-    const exactNameMatch = await prisma.student.findFirst({
-      where: {
-        name: {
-          equals: fullName,
-          mode: 'insensitive',
+      // 2. Create the student
+      const newStudent = await tx.student.create({
+        data: {
+          name: fullName,
+          email: validated.email,
+          phone: validated.phone,
+          dateOfBirth: validated.dateOfBirth,
+          educationLevel: validated.educationLevel,
+          gradeLevel: validated.gradeLevel,
+          schoolName: validated.schoolName,
         },
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
-    })
+      })
 
-    if (exactNameMatch) {
-      throw new Error(
-        `A student with the exact name "${fullName}" already exists (ID: ${exactNameMatch.id}, Email: ${exactNameMatch.email || 'None'})`
-      )
-    }
-
-    // Check for similar names
-    const similarityThreshold = 90 // Higher threshold for server-side validation
-    const allStudents = await prisma.student.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-      },
-    })
-
-    const similarNames = allStudents.filter((s) => {
-      const similarity = calculateSimilarity(s.name, fullName)
-      return similarity >= similarityThreshold && similarity < 100 // Less than 100 to exclude exact matches
-    })
-
-    if (similarNames.length > 0) {
-      const similarNamesInfo = similarNames
-        .map((s) => `"${s.name}" (ID: ${s.id}, Email: ${s.email || 'None'})`)
-        .join(', ')
-
-      console.warn(
-        `Creating student with name "${fullName}" that is similar to existing students: ${similarNamesInfo}`
-      )
-      // We're just logging a warning here, not throwing an error
-      // This allows the registration to proceed but keeps a record of potential duplicates
-    }
-
-    const student = await prisma.student.create({
-      data: {
-        name: fullName,
-        email: validated.email,
-        phone: validated.phone,
-        dateOfBirth: validated.dateOfBirth,
-        educationLevel: validated.educationLevel,
-        gradeLevel: validated.gradeLevel,
-        schoolName: validated.schoolName,
-      },
-      include: {
-        siblingGroup: {
-          include: {
+      // 3. If there are siblings, create/update sibling group
+      if (input.siblingIds?.length) {
+        // Create sibling group and connect students
+        await tx.sibling.create({
+          data: {
             students: {
-              select: {
-                id: true,
-                name: true,
+              connect: [
+                { id: newStudent.id },
+                ...input.siblingIds.map((id) => ({ id })),
+              ],
+            },
+          },
+        })
+
+        // Get the final state with all details
+        const finalStudent = await tx.student.findUnique({
+          where: { id: newStudent.id },
+          include: {
+            siblingGroup: {
+              include: {
+                students: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
               },
             },
           },
-        },
-      },
-    })
+        })
 
-    return {
-      success: true,
-      student,
-    }
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        throw new Error('A student with this email already exists')
+        if (!finalStudent) {
+          throw new Error('Failed to create student record')
+        }
+
+        return {
+          success: true,
+          student: finalStudent,
+          siblingGroup: finalStudent.siblingGroup,
+        }
       }
+
+      // If no siblings, return just the student
+      return {
+        success: true,
+        student: newStudent,
+      }
+    } catch (error) {
+      console.error('Registration failed:', error)
+      throw error instanceof Error
+        ? error
+        : new Error('Failed to complete registration')
     }
-    console.error('Failed to create student:', error)
-    throw error instanceof Error
-      ? error
-      : new Error('Failed to create student registration')
-  }
+  })
 }

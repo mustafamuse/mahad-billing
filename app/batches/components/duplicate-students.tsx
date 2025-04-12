@@ -221,9 +221,7 @@ export function DuplicateStudents() {
                     ) : (
                       <>
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Delete {
-                          group.duplicateRecords.length
-                        } Duplicate
+                        Delete {group.duplicateRecords.length} Duplicate
                         {group.duplicateRecords.length > 1 ? 's' : ''}
                       </>
                     )}

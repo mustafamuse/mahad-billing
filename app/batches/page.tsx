@@ -1,7 +1,5 @@
 import { Suspense } from 'react'
 
-import dynamic from 'next/dynamic'
-
 import { Metadata } from 'next'
 
 import { Separator } from '@/components/ui/separator'
@@ -9,16 +7,8 @@ import { Separator } from '@/components/ui/separator'
 import { Providers } from '../providers'
 import { BatchManagement } from './components/batch-management'
 import { BatchesTable } from './components/batches-table'
+import { DuplicateStudentsClient } from './components/duplicate-students-client'
 import { BatchErrorBoundary } from './components/error-boundary'
-
-// Import DuplicateStudentsSection with ssr disabled to prevent hydration errors
-const DuplicateStudentsSection = dynamic(
-  () =>
-    import('./components/duplicate-students-section').then(
-      (mod) => mod.DuplicateStudentsSection
-    ),
-  { ssr: false }
-)
 
 function Loading() {
   return <div className="p-4 text-muted-foreground">Loading...</div>
@@ -35,7 +25,7 @@ export default function BatchesPage() {
       <main className="container mx-auto space-y-8 p-8">
         <BatchErrorBoundary>
           <Suspense fallback={<Loading />}>
-            <DuplicateStudentsSection />
+            <DuplicateStudentsClient />
           </Suspense>
         </BatchErrorBoundary>
 

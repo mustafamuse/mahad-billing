@@ -5,12 +5,13 @@ import { prisma } from '@/lib/db'
 // Get a single student by ID
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const student = await prisma.student.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         batch: true,
@@ -35,15 +36,16 @@ export async function GET(
 // Update a student
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
 
     // Validate the student exists
     const existingStudent = await prisma.student.findUnique({
       where: {
-        id: params.id,
+        id,
       },
     })
 
@@ -54,7 +56,7 @@ export async function PATCH(
     // Update the student
     const updatedStudent = await prisma.student.update({
       where: {
-        id: params.id,
+        id,
       },
       data: body,
       include: {
@@ -76,13 +78,14 @@ export async function PATCH(
 // Delete a student
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     // Validate the student exists
     const existingStudent = await prisma.student.findUnique({
       where: {
-        id: params.id,
+        id,
       },
     })
 
@@ -93,7 +96,7 @@ export async function DELETE(
     // Delete the student
     await prisma.student.delete({
       where: {
-        id: params.id,
+        id,
       },
     })
 

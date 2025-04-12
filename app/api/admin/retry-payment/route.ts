@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       })
 
       // Update invoice with payment method
-      await stripeServerClient.invoices.pay(invoice.id, {
+      await stripeServerClient.invoices.pay(invoice.id as string, {
         payment_method: subscription.default_payment_method as string,
       })
 

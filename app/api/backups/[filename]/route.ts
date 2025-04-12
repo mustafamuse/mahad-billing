@@ -5,11 +5,12 @@ import path from 'path'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
+    const { filename } = await params
     const backupDir = path.join(process.cwd(), 'backups')
-    const filePath = path.join(backupDir, params.filename)
+    const filePath = path.join(backupDir, filename)
 
     // Security check - ensure file is in backups directory
     if (!filePath.startsWith(backupDir)) {
@@ -31,8 +32,8 @@ export async function GET(
       headers: {
         'Content-Type': 'application/json',
         'Content-Disposition': isDownload
-          ? `attachment; filename="${params.filename}"`
-          : `inline; filename="${params.filename}"`,
+          ? `attachment; filename="${filename}"`
+          : `inline; filename="${filename}"`,
       },
     })
   } catch (error) {
@@ -40,3 +41,5 @@ export async function GET(
     return NextResponse.json({ error: 'Failed to serve file' }, { status: 500 })
   }
 }
+
+export const dynamic = 'force-dynamic'

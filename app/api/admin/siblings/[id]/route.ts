@@ -5,12 +5,13 @@ import { prisma } from '@/lib/db'
 // Get a single sibling group by ID
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const siblingGroup = await prisma.sibling.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         students: {
@@ -54,16 +55,17 @@ export async function GET(
 // Update a sibling group (add or remove students)
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
     const { addStudentIds, removeStudentIds } = body
 
     // Validate the sibling group exists
     const existingSiblingGroup = await prisma.sibling.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         students: {
@@ -110,7 +112,7 @@ export async function PATCH(
     // Update the sibling group
     const updatedSiblingGroup = await prisma.sibling.update({
       where: {
-        id: params.id,
+        id,
       },
       data: updateData,
       include: {
@@ -152,7 +154,7 @@ export async function PATCH(
       // Delete the empty sibling group
       await prisma.sibling.delete({
         where: {
-          id: params.id,
+          id,
         },
       })
 
@@ -179,13 +181,14 @@ export async function PATCH(
 // Delete a sibling group
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     // Validate the sibling group exists
     const existingSiblingGroup = await prisma.sibling.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         students: {
@@ -206,7 +209,7 @@ export async function DELETE(
     // Update all students to remove the sibling group ID
     await prisma.student.updateMany({
       where: {
-        siblingGroupId: params.id,
+        siblingGroupId: id,
       },
       data: {
         siblingGroupId: null,
@@ -216,7 +219,7 @@ export async function DELETE(
     // Delete the sibling group
     await prisma.sibling.delete({
       where: {
-        id: params.id,
+        id,
       },
     })
 
