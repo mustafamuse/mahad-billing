@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
+import Link from 'next/link'
+
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarDate } from '@internationalized/date'
 import { EducationLevel, GradeLevel } from '@prisma/client'
-import { AlertTriangle, UserPlus, X, Check, Loader2 } from 'lucide-react'
+import { AlertTriangle, UserPlus, X, Check, Loader2, Home } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 
@@ -318,6 +320,23 @@ export function RegisterForm() {
   return (
     <div className="min-h-screen bg-background px-4 pb-20 pt-4 md:px-6 md:py-8">
       <div className="mx-auto max-w-3xl space-y-4 md:space-y-8">
+        {/* Navigation Context */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1 hover:text-primary"
+            >
+              <Home className="h-4 w-4" />
+              <span>Home</span>
+            </Link>
+            <span>/</span>
+            <span className="font-medium text-foreground">
+              Student Registration
+            </span>
+          </div>
+        </div>
+
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleSubmit)}
@@ -626,7 +645,7 @@ export function RegisterForm() {
                       Submitting...
                     </>
                   ) : (
-                    'Next: Sibling Info'
+                    'Continue to Next Step'
                   )}
                 </Button>
               </CardContent>

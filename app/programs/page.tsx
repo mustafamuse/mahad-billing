@@ -7,9 +7,16 @@ import {
   ArrowLeft,
   ArrowRight,
   Book,
+  BookOpenCheck,
+  BookText,
   CheckCircle,
   Clock,
+  Compass,
   GraduationCap,
+  Heart,
+  History,
+  Lightbulb,
+  Scroll,
   Users,
 } from 'lucide-react'
 
@@ -37,49 +44,133 @@ const semesters = [
 ]
 
 const firstYearCourses = [
-  { code: 'ISE100', title: 'Islamic Creed 1', credits: 3 },
-  { code: 'ISE110', title: 'The History of Islamic Jurisprudence', credits: 3 },
-  { code: 'ISE120', title: 'Rules of Quranic Recitation', credits: 3 },
-  { code: 'ISE130', title: 'Introduction to Hadeeth Sciences', credits: 3 },
-  { code: 'ISE140', title: 'Stories of the Prophets', credits: 3 },
-  { code: 'ISE101', title: 'Islamic Creed 2', credits: 3 },
-  { code: 'ISE111', title: 'Fiqh of Worship 1', credits: 3 },
-  { code: 'ISE121', title: "Introduction to the Qur'anic Studies", credits: 3 },
-  { code: 'ISE131', title: 'Purification of the Soul 1', credits: 3 },
-  { code: 'ISE141', title: 'Prophetic Biography Makka Period', credits: 3 },
+  {
+    id: 1,
+    name: 'Quranic Studies',
+    description:
+      'Learn proper recitation, memorization techniques, and basic Quranic interpretation.',
+    icon: BookOpenCheck,
+    detailedCourses: [
+      { code: 'ISE120', title: 'Rules of Quranic Recitation', credits: 3 },
+      {
+        code: 'ISE121',
+        title: "Introduction to the Qur'anic Studies",
+        credits: 3,
+      },
+    ],
+  },
+  {
+    id: 2,
+    name: 'Islamic Creed & Jurisprudence',
+    description:
+      'Study fundamental Islamic beliefs and practical religious rulings.',
+    icon: BookText,
+    detailedCourses: [
+      { code: 'ISE100', title: 'Islamic Creed 1', credits: 3 },
+      { code: 'ISE101', title: 'Islamic Creed 2', credits: 3 },
+      {
+        code: 'ISE110',
+        title: 'The History of Islamic Jurisprudence',
+        credits: 3,
+      },
+      { code: 'ISE111', title: 'Fiqh of Worship 1', credits: 3 },
+    ],
+  },
+  {
+    id: 3,
+    name: 'Prophetic Studies',
+    description:
+      'Learn about the life of Prophet Muhammad ﷺ and authentic hadith.',
+    icon: History,
+    detailedCourses: [
+      { code: 'ISE130', title: 'Introduction to Hadeeth Sciences', credits: 3 },
+      { code: 'ISE140', title: 'Stories of the Prophets', credits: 3 },
+      { code: 'ISE141', title: 'Prophetic Biography Makka Period', credits: 3 },
+    ],
+  },
+  {
+    id: 4,
+    name: 'Spiritual Development',
+    description: 'Focus on character development and spiritual purification.',
+    icon: Heart,
+    detailedCourses: [
+      { code: 'ISE131', title: 'Purification of the Soul 1', credits: 3 },
+    ],
+  },
 ]
 
 const secondYearCourses = [
-  { code: 'ISE200', title: 'Prophetic Biography Madina Period', credits: 3 },
-  { code: 'ISE210', title: 'Fiqh of Worship 2', credits: 3 },
   {
-    code: 'ISE220',
-    title: 'Usul At Tafseer - Analytical Quranic 1',
-    credits: 3,
-  },
-  { code: 'ISE230', title: 'Islamic Manners', credits: 3 },
-  {
-    code: 'ISE240',
-    title: 'Usul At Tafseer - Analytical Quranic 2',
-    credits: 3,
-  },
-  {
-    code: 'ISE201',
-    title: 'The History of the Rightly Guided Caliphs',
-    credits: 3,
-  },
-  {
-    code: 'ISE211',
-    title: 'Introduction to the Principles of Jurisprudence',
-    credits: 3,
+    id: 1,
+    name: 'Advanced Quranic Studies',
+    description:
+      'Deep dive into Quranic exegesis and advanced interpretation methods.',
+    icon: Scroll,
+    detailedCourses: [
+      {
+        code: 'ISE220',
+        title: 'Usul At Tafseer - Analytical Quranic 1',
+        credits: 3,
+      },
+      {
+        code: 'ISE240',
+        title: 'Usul At Tafseer - Analytical Quranic 2',
+        credits: 3,
+      },
+    ],
   },
   {
-    code: 'ISE221',
-    title: 'An Understanding of Heretical Innovation',
-    credits: 3,
+    id: 2,
+    name: 'Advanced Islamic Studies',
+    description: 'Study advanced topics in Islamic law and jurisprudence.',
+    icon: BookText,
+    detailedCourses: [
+      { code: 'ISE210', title: 'Fiqh of Worship 2', credits: 3 },
+      {
+        code: 'ISE211',
+        title: 'Introduction to the Principles of Jurisprudence',
+        credits: 3,
+      },
+      {
+        code: 'ISE221',
+        title: 'An Understanding of Heretical Innovation',
+        credits: 3,
+      },
+    ],
   },
-  { code: 'ISE231', title: 'Purification of the Soul 2', credits: 3 },
-  { code: 'ISE241', title: 'Introduction to Islamic Education', credits: 3 },
+  {
+    id: 3,
+    name: 'Islamic History',
+    description: 'Study the history of early Islam and its development.',
+    icon: Compass,
+    detailedCourses: [
+      {
+        code: 'ISE200',
+        title: 'Prophetic Biography Madina Period',
+        credits: 3,
+      },
+      {
+        code: 'ISE201',
+        title: 'The History of the Rightly Guided Caliphs',
+        credits: 3,
+      },
+    ],
+  },
+  {
+    id: 4,
+    name: 'Character & Education',
+    description: 'Focus on Islamic manners and educational principles.',
+    icon: Lightbulb,
+    detailedCourses: [
+      { code: 'ISE230', title: 'Islamic Manners', credits: 3 },
+      { code: 'ISE231', title: 'Purification of the Soul 2', credits: 3 },
+      {
+        code: 'ISE241',
+        title: 'Introduction to Islamic Education',
+        credits: 3,
+      },
+    ],
+  },
 ]
 
 const gradeScale = [
@@ -128,25 +219,26 @@ export default function ProgramsPage() {
         </div>
       </div>
 
-      <div className="container relative px-4 py-16">
+      <div className="container relative px-4 py-8 md:py-16">
         <div className="mx-auto max-w-5xl">
-          {/* Back Button */}
-          <div className="mb-12 flex items-center justify-between">
+          {/* Back Button and Logo */}
+          <div className="mb-8 flex items-center justify-between md:mb-12">
             <Button
               asChild
               variant="ghost"
-              className="flex items-center gap-2 hover:bg-transparent hover:text-primary"
+              className="h-12 gap-2 rounded-xl text-base hover:bg-transparent hover:text-primary md:h-10"
             >
               <Link href="/">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Home
+                <ArrowLeft className="h-5 w-5 md:h-4 md:w-4" />
+                <span className="hidden md:inline">Back to Home</span>
+                <span className="md:hidden">Back</span>
               </Link>
             </Button>
             <Logo size="sm" />
           </div>
 
           {/* Header */}
-          <div className="relative mb-16 text-center">
+          <div className="relative mb-12 text-center md:mb-16">
             <GeometricPattern className="absolute left-0 top-0 -z-10 h-64 w-64 rotate-90 opacity-10" />
             <motion.div
               initial={{ opacity: 0, y: 50, scale: 0.9 }}
@@ -155,7 +247,7 @@ export default function ProgramsPage() {
                 duration: 1,
                 ease: [0.21, 1.11, 0.81, 0.99],
               }}
-              className="mb-6 text-5xl font-bold text-primary md:text-6xl lg:text-7xl"
+              className="mb-4 text-4xl font-bold text-primary md:mb-6 md:text-5xl lg:text-7xl"
             >
               Roots of Knowledge
             </motion.div>
@@ -166,7 +258,7 @@ export default function ProgramsPage() {
                 duration: 0.8,
                 delay: 0.3,
               }}
-              className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl"
+              className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-6xl"
             >
               Ma'had Program
             </motion.div>
@@ -177,7 +269,7 @@ export default function ProgramsPage() {
                 duration: 0.8,
                 delay: 0.6,
               }}
-              className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground"
+              className="mx-auto mt-4 max-w-2xl px-4 text-base leading-relaxed text-muted-foreground md:mt-6 md:text-lg"
             >
               Discover a comprehensive Islamic education program that combines
               traditional knowledge with modern learning approaches.
@@ -185,20 +277,20 @@ export default function ProgramsPage() {
           </div>
 
           {/* Content */}
-          <div className="space-y-12">
+          <div className="space-y-8 md:space-y-12">
             {/* Overview Section */}
             <section>
-              <Card className="overflow-hidden p-6 md:p-8">
-                <div className="grid gap-8 md:grid-cols-3">
+              <Card className="overflow-hidden p-4 md:p-6 lg:p-8">
+                <div className="grid gap-6 md:grid-cols-3 md:gap-8">
                   <div className="md:col-span-2">
-                    <div className="mb-6 flex items-center gap-3">
+                    <div className="mb-4 flex items-center gap-3 md:mb-6">
                       <GraduationCap className="h-6 w-6 text-primary" />
-                      <h2 className="text-2xl font-semibold">
+                      <h2 className="text-xl font-semibold md:text-2xl">
                         Program Overview
                       </h2>
                     </div>
                     <div className="prose prose-gray dark:prose-invert max-w-none">
-                      <p>
+                      <p className="text-sm leading-relaxed md:text-base">
                         Our flagship program offers a structured curriculum in
                         Islamic Studies, Arabic language, and Quranic Sciences.
                         Learn more about our accrediting institution at{' '}
@@ -211,51 +303,63 @@ export default function ProgramsPage() {
                           site.ium.edu.so
                         </Link>
                       </p>
-                      <div className="mt-8 grid grid-cols-2 gap-6">
+                      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:mt-6">
                         <div>
-                          <h3 className="mb-4 text-lg font-medium">
+                          <h3 className="mb-3 text-base font-medium md:text-lg">
                             What's included
                           </h3>
                           <ul className="space-y-3">
-                            <li className="flex items-center gap-2">
-                              <CheckCircle className="h-5 w-5 text-primary" />
-                              <span>Comprehensive Islamic Studies</span>
+                            <li className="flex items-start gap-2">
+                              <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
+                              <span className="text-sm md:text-base">
+                                Comprehensive Islamic Studies
+                              </span>
                             </li>
-                            <li className="flex items-center gap-2">
-                              <CheckCircle className="h-5 w-5 text-primary" />
-                              <span>Arabic Language</span>
+                            <li className="flex items-start gap-2">
+                              <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
+                              <span className="text-sm md:text-base">
+                                Arabic Language
+                              </span>
                             </li>
-                            <li className="flex items-center gap-2">
-                              <CheckCircle className="h-5 w-5 text-primary" />
-                              <span>Quranic Sciences</span>
+                            <li className="flex items-start gap-2">
+                              <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
+                              <span className="text-sm md:text-base">
+                                Quranic Sciences
+                              </span>
                             </li>
                           </ul>
                         </div>
                         <div>
                           <ul className="space-y-3">
-                            <li className="flex items-center gap-2">
-                              <CheckCircle className="h-5 w-5 text-primary" />
-                              <span>Islamic History</span>
+                            <li className="flex items-start gap-2">
+                              <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
+                              <span className="text-sm md:text-base">
+                                Islamic History
+                              </span>
                             </li>
-                            <li className="flex items-center gap-2">
-                              <CheckCircle className="h-5 w-5 text-primary" />
-                              <span>Islamic Jurisprudence</span>
+                            <li className="flex items-start gap-2">
+                              <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
+                              <span className="text-sm md:text-base">
+                                Islamic Jurisprudence
+                              </span>
                             </li>
-                            <li className="flex items-center gap-2">
-                              <CheckCircle className="h-5 w-5 text-primary" />
-                              <span>Character Development</span>
+                            <li className="flex items-start gap-2">
+                              <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-primary" />
+                              <span className="text-sm md:text-base">
+                                Character Development
+                              </span>
                             </li>
                           </ul>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg bg-slate-900 p-6 text-white dark:bg-slate-800">
-                    <h3 className="mb-6 text-lg font-medium text-slate-200">
+                  <div className="rounded-lg bg-slate-900 p-4 text-white dark:bg-slate-800 md:p-6">
+                    <h3 className="mb-4 text-base font-medium text-slate-200 md:mb-6 md:text-lg">
                       Full Program Details
                     </h3>
-                    <div className="mb-6 text-center">
-                      <div className="text-6xl font-bold">60</div>
+                    <div className="mb-4 text-center md:mb-6">
+                      <div className="text-4xl font-bold md:text-6xl">60</div>
                       <div className="text-sm text-slate-300">credit hours</div>
                     </div>
                     <Button
@@ -269,7 +373,7 @@ export default function ProgramsPage() {
                         <ArrowRight className="h-4 w-4" />
                       </Link>
                     </Button>
-                    <p className="mt-4 text-center text-sm text-slate-400">
+                    <p className="mt-3 text-center text-xs text-slate-400 md:text-sm">
                       Classes held at our Eden Prairie location
                     </p>
                   </div>
@@ -278,34 +382,46 @@ export default function ProgramsPage() {
             </section>
 
             {/* Instructors & Materials */}
-            <section className="grid gap-6 md:grid-cols-2">
-              <Card className="p-6">
-                <div className="mb-4 flex items-center gap-3">
+            <section className="grid gap-4 md:grid-cols-2 md:gap-6">
+              <Card className="p-4 md:p-6">
+                <div className="mb-3 flex items-center gap-2 md:mb-4 md:gap-3">
                   <Users className="h-5 w-5 text-primary" />
-                  <h3 className="text-lg font-semibold">Instructors</h3>
+                  <h3 className="text-base font-semibold md:text-lg">
+                    Instructors
+                  </h3>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <div className="font-medium">Sheikh Nuur Hassan</div>
+                    <div className="text-sm font-medium md:text-base">
+                      Sheikh Nuur Hassan
+                    </div>
                   </div>
                   <div>
-                    <div className="font-medium">Sheikh Abdiaziz Omar</div>
+                    <div className="text-sm font-medium md:text-base">
+                      Sheikh Abdiaziz Omar
+                    </div>
                   </div>
                   <div>
-                    <div className="font-medium">Sheikh Ibrahim Ali</div>
+                    <div className="text-sm font-medium md:text-base">
+                      Sheikh Ibrahim Ali
+                    </div>
                   </div>
                   <div>
-                    <div className="font-medium">Sheikh Mustafa Muse</div>
+                    <div className="text-sm font-medium md:text-base">
+                      Sheikh Mustafa Muse
+                    </div>
                   </div>
                 </div>
               </Card>
 
-              <Card className="p-6">
-                <div className="mb-4 flex items-center gap-3">
+              <Card className="p-4 md:p-6">
+                <div className="mb-3 flex items-center gap-2 md:mb-4 md:gap-3">
                   <Book className="h-5 w-5 text-primary" />
-                  <h3 className="text-lg font-semibold">Required Materials</h3>
+                  <h3 className="text-base font-semibold md:text-lg">
+                    Required Materials
+                  </h3>
                 </div>
-                <ul className="space-y-3 text-sm text-muted-foreground">
+                <ul className="space-y-2 text-xs text-muted-foreground md:text-sm">
                   <li>
                     Islamic Studies: Islamic University Minnesota curriculum
                   </li>
@@ -342,30 +458,63 @@ export default function ProgramsPage() {
             </section>
 
             {/* Curriculum */}
-            <section>
-              <Card className="p-6 md:p-8">
+            <section id="curriculum">
+              <Card className="p-4 md:p-6 lg:p-8">
                 <div className="mb-6 flex items-center gap-3">
                   <Book className="h-6 w-6 text-primary" />
-                  <h2 className="text-2xl font-semibold">Curriculum</h2>
+                  <h2 className="text-xl font-semibold md:text-2xl">
+                    Curriculum
+                  </h2>
                 </div>
-                <div className="grid gap-8 md:grid-cols-2">
-                  {/* First Year */}
+
+                {/* First Year */}
+                <div className="space-y-6 md:space-y-8">
                   <div>
-                    <h3 className="mb-4 text-lg font-medium">
-                      First Year (30 credits)
-                    </h3>
-                    <div className="space-y-3">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-lg font-medium md:text-xl">
+                        First Year
+                      </h3>
+                      <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                        30 credits
+                      </span>
+                    </div>
+                    <div className="space-y-4">
                       {firstYearCourses.map((course, i) => (
-                        <div key={i} className="rounded-lg border p-3">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{course.code}</span>
-                            <span className="text-sm text-muted-foreground">
-                              {course.credits} credits
-                            </span>
+                        <div
+                          key={i}
+                          className="overflow-hidden rounded-xl border bg-card/50"
+                        >
+                          <div className="border-b p-4">
+                            <div className="mb-2 flex items-center gap-2">
+                              <course.icon className="h-5 w-5 text-primary" />
+                              <h4 className="font-medium">{course.name}</h4>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {course.description}
+                            </p>
                           </div>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {course.title}
-                          </p>
+                          <div className="divide-y">
+                            {course.detailedCourses.map((detailed, j) => (
+                              <div
+                                key={j}
+                                className="flex items-center justify-between p-3 hover:bg-muted/50"
+                              >
+                                <div className="flex-1 space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <code className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-xs text-primary">
+                                      {detailed.code}
+                                    </code>
+                                    <span className="text-xs font-medium md:text-sm">
+                                      {detailed.credits} cr
+                                    </span>
+                                  </div>
+                                  <div className="text-sm md:text-base">
+                                    {detailed.title}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -373,21 +522,51 @@ export default function ProgramsPage() {
 
                   {/* Second Year */}
                   <div>
-                    <h3 className="mb-4 text-lg font-medium">
-                      Second Year (30 credits)
-                    </h3>
-                    <div className="space-y-3">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 className="text-lg font-medium md:text-xl">
+                        Second Year
+                      </h3>
+                      <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                        30 credits
+                      </span>
+                    </div>
+                    <div className="space-y-4">
                       {secondYearCourses.map((course, i) => (
-                        <div key={i} className="rounded-lg border p-3">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{course.code}</span>
-                            <span className="text-sm text-muted-foreground">
-                              {course.credits} credits
-                            </span>
+                        <div
+                          key={i}
+                          className="overflow-hidden rounded-xl border bg-card/50"
+                        >
+                          <div className="border-b p-4">
+                            <div className="mb-2 flex items-center gap-2">
+                              <course.icon className="h-5 w-5 text-primary" />
+                              <h4 className="font-medium">{course.name}</h4>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {course.description}
+                            </p>
                           </div>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {course.title}
-                          </p>
+                          <div className="divide-y">
+                            {course.detailedCourses.map((detailed, j) => (
+                              <div
+                                key={j}
+                                className="flex items-center justify-between p-3 hover:bg-muted/50"
+                              >
+                                <div className="flex-1 space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <code className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-xs text-primary">
+                                      {detailed.code}
+                                    </code>
+                                    <span className="text-xs font-medium md:text-sm">
+                                      {detailed.credits} cr
+                                    </span>
+                                  </div>
+                                  <div className="text-sm md:text-base">
+                                    {detailed.title}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
