@@ -113,7 +113,7 @@ export default function HomePage() {
                   className="gap-2 bg-primary/90 hover:bg-primary"
                   asChild
                 >
-                  <Link href="https://buy.stripe.com/fZeg0O7va1gt4da3cc">
+                  <Link href="/register">
                     Begin Your Journey
                     <ArrowRight className="h-4 w-4" />
                   </Link>
