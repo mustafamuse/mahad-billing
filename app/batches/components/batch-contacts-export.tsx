@@ -22,8 +22,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import type { BatchStudentData } from '@/lib/actions/get-batch-data'
 import { getBatchStyle } from '@/lib/config/batch-styles'
+import { StudentStatus } from '@/lib/types/student'
 import {
   generateBatchVCards,
   getContactPreview,
@@ -31,14 +39,14 @@ import {
 
 interface BatchContactsExportProps {
   students: BatchStudentData[]
-  batches: Array<{ id: string; name: string; studentCount: number }>
+  batches: Array<{ id: string; name: string }>
 }
 
 interface ConfirmDialogProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: () => void
-  batchName: string
+  selectedBatch: string
   totalContacts: number
   missingDataCount: number
   previewContact?: ReturnType<typeof getContactPreview>
@@ -48,7 +56,7 @@ function ConfirmDialog({
   isOpen,
   onClose,
   onConfirm,
-  batchName,
+  selectedBatch,
   totalContacts,
   missingDataCount,
   previewContact,
@@ -57,10 +65,10 @@ function ConfirmDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Download {batchName} Contacts</DialogTitle>
+          <DialogTitle>Download {selectedBatch} Contacts</DialogTitle>
           <DialogDescription>
             This will generate a VCard file with all student contacts from{' '}
-            {batchName}.
+            {selectedBatch}.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -103,113 +111,94 @@ export function BatchContactsExport({
   students,
   batches,
 }: BatchContactsExportProps) {
-  const [isLoading, setIsLoading] = useState<string | null>(null)
-  const [selectedBatch, setSelectedBatch] = useState<{
-    name: string
-    contacts: number
-    missing: number
-    preview?: ReturnType<typeof getContactPreview>
-  } | null>(null)
+  const [isOpen, setIsOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [selectedBatch, setSelectedBatch] = useState(batches[0]?.name ?? '')
 
-  const handleDownload = async (batchId: string, batchName: string) => {
+  const activeStudents = students.filter(
+    (student) =>
+      student.status !== StudentStatus.WITHDRAWN &&
+      student.batch?.name === selectedBatch
+  )
+
+  const handleDownload = async () => {
     try {
-      setIsLoading(batchId)
-      const batchStudents = students.filter((s) => s.batch?.id === batchId)
-      const result = generateBatchVCards(batchStudents, batchName)
-
-      const blob = new Blob([result.vcf], { type: 'text/vcard' })
-      saveAs(blob, `${batchName.replace(/\s+/g, '-')}-student-contacts.vcf`)
-
-      toast.success(
-        `Downloaded ${result.totalContacts} contacts from ${batchName}`
-      )
+      setIsLoading(true)
+      const result = generateBatchVCards(activeStudents, selectedBatch)
+      const blob = new Blob([result.vcf], { type: 'text/vcard;charset=utf-8' })
+      saveAs(blob, `${selectedBatch}-contacts.vcf`)
+      toast.success('Contacts downloaded successfully')
     } catch (error) {
-      console.error('Failed to generate contacts:', error)
-      toast.error('Failed to generate contacts')
+      console.error('Error downloading contacts:', error)
+      toast.error('Failed to download contacts')
     } finally {
-      setIsLoading(null)
-      setSelectedBatch(null)
+      setIsLoading(false)
+      setIsOpen(false)
     }
   }
+
+  const preview =
+    activeStudents.length > 0
+      ? getContactPreview(activeStudents[0], selectedBatch)
+      : undefined
 
   return (
     <Accordion type="single" collapsible className="w-full">
       <AccordionItem value="contacts">
-        <AccordionTrigger className="text-lg font-medium">
-          Download Student Contacts
-        </AccordionTrigger>
+        <AccordionTrigger>Export Contacts</AccordionTrigger>
         <AccordionContent>
           <div className="space-y-4">
-            {batches.map((batch) => {
-              const style = getBatchStyle(batch.name)
-              const batchStudents = students.filter(
-                (s) => s.batch?.id === batch.id
-              )
-              const preview =
-                batchStudents[0] &&
-                getContactPreview(batchStudents[0], batch.name)
-              const result = generateBatchVCards(batchStudents, batch.name)
-
-              return (
-                <div
-                  key={batch.id}
-                  className="flex items-center justify-between rounded-lg border p-4"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant={style.variant}
-                        className={style.className}
-                      >
-                        {batch.name}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        ({result.totalContacts} contacts)
-                      </span>
-                    </div>
-                    {result.contactsWithMissingData > 0 && (
-                      <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                        {result.contactsWithMissingData} contacts missing data
-                      </p>
-                    )}
-                  </div>
-                  <Button
+            <Select value={selectedBatch} onValueChange={setSelectedBatch}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select batch" />
+              </SelectTrigger>
+              <SelectContent>
+                {batches.map((batch) => (
+                  <SelectItem key={batch.id} value={batch.name}>
+                    {batch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center gap-4">
+                <div className="space-y-1">
+                  <Badge
                     variant="outline"
-                    size="sm"
-                    disabled={isLoading === batch.id}
-                    onClick={() =>
-                      setSelectedBatch({
-                        name: batch.name,
-                        contacts: result.totalContacts,
-                        missing: result.contactsWithMissingData,
-                        preview,
-                      })
-                    }
+                    className={getBatchStyle(selectedBatch).className}
                   >
-                    <Download className="mr-2 h-4 w-4" />
-                    Download
-                  </Button>
+                    {selectedBatch}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {activeStudents.length} contacts available
+                  </span>
                 </div>
-              )
-            })}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isLoading}
+                onClick={() => setIsOpen(true)}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+            </div>
           </div>
         </AccordionContent>
       </AccordionItem>
 
-      {selectedBatch && (
+      {isOpen && (
         <ConfirmDialog
-          isOpen={true}
-          onClose={() => setSelectedBatch(null)}
-          onConfirm={() => {
-            const batch = batches.find((b) => b.name === selectedBatch.name)
-            if (batch) {
-              handleDownload(batch.id, batch.name)
-            }
-          }}
-          batchName={selectedBatch.name}
-          totalContacts={selectedBatch.contacts}
-          missingDataCount={selectedBatch.missing}
-          previewContact={selectedBatch.preview}
+          isOpen={isOpen}
+          onClose={() => setIsOpen(false)}
+          onConfirm={handleDownload}
+          selectedBatch={selectedBatch}
+          totalContacts={activeStudents.length}
+          missingDataCount={
+            activeStudents.filter((s) => !s.email || !s.phone).length
+          }
+          previewContact={preview}
         />
       )}
     </Accordion>
