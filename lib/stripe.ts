@@ -1,7 +1,5 @@
 import Stripe from 'stripe'
-
 let stripeClient: Stripe | null = null
-
 // Get configured server-side Stripe client
 export function getStripeClient(): Stripe {
   if (!process.env.STRIPE_SECRET_KEY) {
@@ -13,11 +11,10 @@ export function getStripeClient(): Stripe {
   if (!stripeClient) {
     console.log('Initializing Stripe client...')
     stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2024-11-20.acacia',
+      apiVersion: '2025-03-31.basil',
       typescript: true,
     })
   }
-
   return stripeClient
 }
 

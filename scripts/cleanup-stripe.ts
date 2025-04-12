@@ -151,7 +151,7 @@ async function cleanupStripe() {
         'processing',
       ]
       if (cancelableStatuses.includes(intent.status)) {
-        if (intent.invoice) {
+        if ('invoice' in intent && intent.invoice != null) {
           console.log(`Skipping invoice-related payment intent ${intent.id}`)
           continue
         }
@@ -191,18 +191,20 @@ async function cleanupStripe() {
 
     // Step 4: Void or delete open invoices
     for (const invoice of invoices.data) {
+      if (!invoice.id) {
+        console.warn(`Skipping invoice with missing ID`)
+        continue
+      }
+
       if (['draft', 'open'].includes(invoice.status ?? '')) {
-        // FIX: Handle null status
         console.log(`🟡 Voiding invoice: ${invoice.id}`)
         await safeStripeOperation(
-          () => stripeServerClient.invoices.voidInvoice(invoice.id),
+          () => stripeServerClient.invoices.voidInvoice(invoice.id!),
           `Failed to void invoice ${invoice.id}`
         )
       } else {
         console.log(
-          `Skipping invoice ${invoice.id} (status: ${
-            invoice.status || 'unknown'
-          })`
+          `Skipping invoice ${invoice.id} (status: ${invoice.status || 'unknown'})`
         )
       }
     }

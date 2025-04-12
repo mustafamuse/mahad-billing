@@ -27,10 +27,7 @@ export const studentFormSchema = z.object({
     .max(100, 'Email must be less than 100 characters'),
   phone: z
     .string()
-    .regex(
-      /^\d{3}-\d{3}-\d{4}$/,
-      'Please enter a valid phone number (XXX-XXX-XXXX)'
-    ),
+    .regex(/^\d{3}-\d{3}-\d{4}$/, 'Enter a valid phone number (XXX-XXX-XXXX)'),
   dateOfBirth: z
     .date()
     .min(new Date('1990-01-01'), 'Date of birth must be after 1990')

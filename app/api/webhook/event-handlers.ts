@@ -54,17 +54,31 @@ export const eventHandlers: Record<SupportedEventTypes, EventHandler> = {
   'invoice.updated': handleInvoiceUpdated,
 }
 
+// Add these interfaces after other type definitions
+interface StripeSubscriptionWithDates extends Stripe.Subscription {
+  current_period_start: number
+  current_period_end: number
+  billing_cycle_anchor: number
+  created: number
+}
+
+interface StripeInvoiceWithRefs extends Stripe.Invoice {
+  subscription: string
+  payment_intent: string | Stripe.PaymentIntent
+  charge: string | Stripe.Charge
+}
+
 // Subscription Handlers
 export async function handleSubscriptionCreated(
   event: Stripe.Event
 ): Promise<boolean> {
-  const subscription = event.data.object as Stripe.Subscription
+  const subscription = event.data.object as StripeSubscriptionWithDates
   const customerId = subscription.customer as string
 
   console.log('📅 Subscription Created - Date Info:', {
     billingCycleAnchor: new Date(subscription.billing_cycle_anchor * 1000),
-    currentPeriodStart: new Date(subscription.current_period_start * 1000),
-    currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    // currentPeriodStart: new Date(subscription.ended_at * 1000),
+    // currentPeriodEnd: new Date(subscription.ended_at * 1000),
     created: new Date(subscription.created * 1000),
   })
 
@@ -155,7 +169,7 @@ export async function handleSubscriptionCreated(
 export async function handleSubscriptionUpdated(
   event: Stripe.Event
 ): Promise<boolean> {
-  const subscription = event.data.object as Stripe.Subscription
+  const subscription = event.data.object as StripeSubscriptionWithDates
   const subscriptionId = subscription.id
 
   try {
@@ -288,7 +302,9 @@ export async function handleSubscriptionDeleted(
         where: { stripeSubscriptionId: subscriptionId },
         data: {
           status: SubscriptionStatus.CANCELED,
-          currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+          currentPeriodEnd: subscription.ended_at
+            ? new Date(subscription.ended_at * 1000)
+            : new Date(),
           gracePeriodEndsAt: null,
           lastPaymentError,
           paymentRetryCount: 0,
@@ -322,7 +338,7 @@ export async function handleSubscriptionDeleted(
 export async function handleInvoicePaymentSucceeded(
   event: Stripe.Event
 ): Promise<boolean> {
-  const invoice = event.data.object as Stripe.Invoice
+  const invoice = event.data.object as StripeInvoiceWithRefs
   const subscriptionId = invoice.subscription as string
 
   console.log('📅 Invoice Payment Succeeded - Date Info:', {
@@ -374,12 +390,12 @@ export async function handleInvoicePaymentSucceeded(
           lastPaymentDate: invoice.status_transitions?.paid_at
             ? new Date(invoice.status_transitions.paid_at * 1000)
             : new Date(),
-          currentPeriodStart: new Date(
-            stripeSubscription.current_period_start * 1000
-          ),
-          currentPeriodEnd: new Date(
-            stripeSubscription.current_period_end * 1000
-          ),
+          currentPeriodStart: stripeSubscription.start_date
+            ? new Date(stripeSubscription.start_date * 1000)
+            : new Date(),
+          currentPeriodEnd: stripeSubscription.ended_at
+            ? new Date(stripeSubscription.ended_at * 1000)
+            : new Date(),
           nextPaymentDate: new Date(
             stripeSubscription.billing_cycle_anchor * 1000
           ),
@@ -429,7 +445,7 @@ export async function handleInvoicePaymentSucceeded(
 export async function handleInvoicePaymentFailed(
   event: Stripe.Event
 ): Promise<boolean> {
-  const invoice = event.data.object as Stripe.Invoice
+  const invoice = event.data.object as StripeInvoiceWithRefs
   const subscriptionId = invoice.subscription as string
 
   try {
@@ -626,7 +642,9 @@ export async function handleSubscriptionCanceled(
         where: { stripeSubscriptionId: subscription.id },
         data: {
           status: SubscriptionStatus.CANCELED,
-          currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+          currentPeriodEnd: subscription.ended_at
+            ? new Date(subscription.ended_at * 1000)
+            : new Date(),
           gracePeriodEndsAt: null,
           lastPaymentError:
             subscription.cancellation_details?.reason ||

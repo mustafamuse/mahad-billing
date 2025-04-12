@@ -12,7 +12,6 @@ import { PaymentStep } from '../(payment-step)/payment-step'
 import { PayorDetailsStep } from '../(payor-details-step)/payor-details-step'
 import { StudentSelectionStep } from '../(student-selection-step)/student-selection-step'
 
-
 export function EnrollmentForm() {
   return (
     <EnrollmentProvider>
