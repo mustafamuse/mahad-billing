@@ -454,32 +454,3 @@ export default function HomePage() {
     </div>
   )
 }
-
-const features = [
-  {
-    title: 'Authentic Knowledge',
-    description:
-      'Learn from qualified instructors with traditional Islamic education.',
-  },
-  {
-    title: 'Modern Approach',
-    description:
-      'Combining classical teachings with contemporary learning methods.',
-  },
-  {
-    title: 'Flexible Schedule',
-    description: 'Programs designed to accommodate your busy lifestyle.',
-  },
-  {
-    title: 'Community Focus',
-    description: 'Build lasting connections within our vibrant community.',
-  },
-  {
-    title: 'Personalized Learning',
-    description: 'Individual attention and customized learning paths.',
-  },
-  {
-    title: 'Cultural Integration',
-    description: 'Bridge traditional values with modern context.',
-  },
-]
