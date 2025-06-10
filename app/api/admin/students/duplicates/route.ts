@@ -65,13 +65,6 @@ export async function GET(request: Request) {
             name: true,
           },
         },
-        payer: {
-          select: {
-            name: true,
-            email: true,
-            stripeCustomerId: true,
-          },
-        },
       },
       orderBy: {
         name: 'asc',

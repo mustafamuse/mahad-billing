@@ -58,11 +58,11 @@ export async function POST(req: Request) {
         }
 
         // Check if this customer exists in our database
-        const payer = await prisma.payer.findFirst({
+        const student = await prisma.student.findFirst({
           where: { stripeCustomerId: customer.id },
         })
 
-        if (payer) {
+        if (student) {
           // This customer exists in our database, so it's not abandoned
           continue
         }

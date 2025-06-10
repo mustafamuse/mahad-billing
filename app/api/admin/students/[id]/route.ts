@@ -15,7 +15,6 @@ export async function GET(
       },
       include: {
         batch: true,
-        payer: true,
       },
     })
 
@@ -61,7 +60,6 @@ export async function PATCH(
       data: body,
       include: {
         batch: true,
-        payer: true,
       },
     })
 

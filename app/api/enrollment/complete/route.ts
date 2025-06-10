@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 import { prisma } from '@/lib/db'
-import { AppError, ValidationError, handleStripeError } from '@/lib/errors'
+// import { handleStripeError } from '@/lib/errors'
 import { validateStudentForEnrollment } from '@/lib/queries/subscriptions'
 import { stripeServerClient } from '@/lib/stripe'
 
@@ -29,10 +29,9 @@ export async function POST(req: Request) {
     )
 
     if (setupIntent.status !== 'succeeded') {
-      throw new AppError(
-        'Bank account setup not completed',
-        'SETUP_NOT_COMPLETE',
-        400
+      return NextResponse.json(
+        { error: 'Bank account setup not completed' },
+        { status: 400 }
       )
     }
 
@@ -47,7 +46,10 @@ export async function POST(req: Request) {
       JSON.stringify(studentIds.sort()) !==
       JSON.stringify(storedStudentIds.sort())
     ) {
-      throw new AppError('Student selection mismatch', 'STUDENT_MISMATCH', 400)
+      return NextResponse.json(
+        { error: 'Student selection mismatch' },
+        { status: 400 }
+      )
     }
 
     // 5. Start database transaction
@@ -65,10 +67,8 @@ export async function POST(req: Request) {
       )
 
       if (failures.length > 0) {
-        throw new AppError(
-          `Student validation failed: ${failures[0].reason.message}`,
-          'STUDENT_VALIDATION_FAILED',
-          400
+        throw new Error(
+          `Student validation failed: ${failures[0].reason.message}`
         )
       }
 
@@ -77,76 +77,23 @@ export async function POST(req: Request) {
         (result) => (result as PromiseFulfilledResult<any>).value.student
       )
 
-      // 7. Find existing payer by email OR stripeCustomerId
-      let payer = await tx.payer.findFirst({
-        where: {
-          OR: [
-            { email: payerDetails.email },
-            { stripeCustomerId: setupIntent.customer as string },
-          ],
-        },
-      })
-
-      if (!payer) {
-        // Create new payer if neither email nor stripeCustomerId exists
-        console.log('Creating new payer:', {
-          email: payerDetails.email,
-          stripeCustomerId: setupIntent.customer,
-        })
-
-        payer = await tx.payer.create({
-          data: {
-            name: `${payerDetails.firstName} ${payerDetails.lastName}`,
-            email: payerDetails.email,
-            phone: payerDetails.phone,
-            stripeCustomerId: setupIntent.customer as string,
-            relationship: payerDetails.relationship,
-            isActive: true,
-          },
-        })
-      } else {
-        // Update existing payer with new details
-        console.log('Updating existing payer:', {
-          id: payer.id,
-          email: payerDetails.email,
-          stripeCustomerId: setupIntent.customer,
-        })
-
-        payer = await tx.payer.update({
-          where: { id: payer.id },
-          data: {
-            name: `${payerDetails.firstName} ${payerDetails.lastName}`,
-            phone: payerDetails.phone,
-            relationship: payerDetails.relationship,
-            // Update stripeCustomerId if it's different
-            ...(payer.stripeCustomerId !== setupIntent.customer && {
-              stripeCustomerId: setupIntent.customer as string,
-            }),
-          },
-        })
-      }
-
-      // 8. Update students with payer
+      // 7. Update students with Stripe customer ID
       await tx.student.updateMany({
         where: { id: { in: studentIds } },
         data: {
-          payerId: payer.id,
+          stripeCustomerId: setupIntent.customer as string,
           updatedAt: new Date(),
         },
       })
 
-      // 9. Set payment method as default for customer
+      // 8. Set payment method as default for customer
       const paymentMethodId =
         typeof setupIntent.payment_method === 'string'
           ? setupIntent.payment_method
           : setupIntent.payment_method?.id
 
       if (!paymentMethodId) {
-        throw new AppError(
-          'Invalid or missing payment method',
-          'PAYMENT_METHOD_ERROR',
-          400
-        )
+        throw new Error('Invalid or missing payment method')
       }
 
       await stripeServerClient.customers.update(
@@ -158,8 +105,8 @@ export async function POST(req: Request) {
         }
       )
 
-      // Create subscription in Stripe (but let webhook handle the database record)
-      await stripeServerClient.subscriptions.create({
+      // 9. Create subscription in Stripe (but let webhook handle the database record)
+      const subscription = await stripeServerClient.subscriptions.create({
         customer: setupIntent.customer as string,
         items: validatedStudents.map((student) => ({
           price_data: {
@@ -174,10 +121,8 @@ export async function POST(req: Request) {
           metadata: {
             studentId: student.id,
             studentName: student.name,
-            isCustomRate: student.hasCustomRate ? 'true' : 'false',
-            monthlyRate: student.monthlyRate,
-            discountApplied: student.discountApplied || 0,
-            familyId: student.familyId || '',
+            isCustomRate: student.customRate ? 'true' : 'false',
+            monthlyRate: student.monthlyRate.toString(),
           },
         })),
         payment_settings: {
@@ -185,102 +130,77 @@ export async function POST(req: Request) {
           save_default_payment_method: 'on_subscription',
         },
         metadata: {
-          payerId: payer.id,
           studentIds: JSON.stringify(studentIds),
-          totalMonthlyRate: validatedStudents.reduce(
-            (sum, s) => sum + s.monthlyRate,
-            0
-          ),
+          totalMonthlyRate: validatedStudents
+            .reduce((sum, s) => sum + s.monthlyRate, 0)
+            .toString(),
           enrollmentDate: new Date().toISOString(),
           totalStudents: validatedStudents.length.toString(),
-          hasFamilyDiscount: validatedStudents.some(
-            (s) => s.discountApplied > 0
-          )
-            ? 'true'
-            : 'false',
-          totalDiscountApplied: validatedStudents
-            .reduce((sum, s) => sum + (s.discountApplied || 0), 0)
-            .toString(),
-          setupIntentId: setupIntentId, // Add this for tracking
-          environment: process.env.NODE_ENV,
-          version: '2.0.0',
+          payerName: `${payerDetails.firstName} ${payerDetails.lastName}`,
+          payerEmail: payerDetails.email,
+          payerPhone: payerDetails.phone,
+          relationship: payerDetails.relationship,
         },
-        collection_method: 'charge_automatically',
       })
 
-      // Return success result with enhanced details
+      // 10. Update students with subscription ID
+      await tx.student.updateMany({
+        where: { id: { in: studentIds } },
+        data: {
+          stripeSubscriptionId: subscription.id,
+          subscriptionStatus: subscription.status as any,
+          updatedAt: new Date(),
+        },
+      })
+
+      // 11. Mark customer enrollment as complete
+      await stripeServerClient.customers.update(
+        setupIntent.customer as string,
+        {
+          metadata: {
+            enrollmentPending: 'false',
+            enrollmentCompleted: 'true',
+            completedAt: new Date().toISOString(),
+            studentIds: JSON.stringify(studentIds),
+          },
+        }
+      )
+
       return {
-        payerId: payer.id,
-        studentCount: validatedStudents.length,
-        totalMonthlyRate: validatedStudents.reduce(
-          (sum, s) => sum + s.monthlyRate,
-          0
-        ),
-        students: validatedStudents.map((s) => ({
-          id: s.id,
-          name: s.name,
-          rate: s.monthlyRate,
-          isCustomRate: s.hasCustomRate,
-          discountApplied: s.discountApplied || 0,
-          familyId: s.familyId || '',
-        })),
+        subscriptionId: subscription.id,
+        customerId: setupIntent.customer,
+        students: validatedStudents,
+        payerDetails,
       }
     })
 
     return NextResponse.json({
       success: true,
-      ...result,
+      data: result,
     })
   } catch (error) {
-    console.error('Enrollment completion failed:', {
-      error,
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-    })
+    console.error('Error completing enrollment:', error)
 
     if (error instanceof z.ZodError) {
-      const validationError = new ValidationError('Invalid enrollment data')
       return NextResponse.json(
-        {
-          success: false,
-          code: validationError.code,
-          errors: error.errors,
-        },
-        { status: validationError.statusCode }
+        { error: 'Invalid request data', details: error.errors },
+        { status: 400 }
       )
     }
 
-    if (error instanceof AppError) {
+    // Handle Stripe errors
+    if (error && typeof error === 'object' && 'type' in error) {
       return NextResponse.json(
-        {
-          success: false,
-          code: error.code,
-          message: error.message,
-        },
-        { status: error.statusCode }
+        { error: 'Payment processing error' },
+        { status: 400 }
       )
     }
 
-    if (error instanceof stripeServerClient.errors.StripeError) {
-      const stripeError = handleStripeError(error)
-      return NextResponse.json(
-        {
-          success: false,
-          code: stripeError.code,
-          message: stripeError.message,
-        },
-        { status: stripeError.statusCode }
-      )
-    }
-
-    // Generic error
     return NextResponse.json(
-      {
-        success: false,
-        code: 'ENROLLMENT_ERROR',
-        message: 'Failed to complete enrollment',
-      },
+      { error: 'Failed to complete enrollment' },
       { status: 500 }
     )
   }
 }
+
+export const dynamic = 'force-dynamic'

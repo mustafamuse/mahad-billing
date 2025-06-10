@@ -54,9 +54,8 @@ async function dropTables() {
   // Drop tables in order based on foreign key relationships
   await prisma.$transaction([
     // prisma.$executeRaw`DELETE FROM "_ClassGroupToStudent"`, // many-to-many
+    prisma.studentPayment.deleteMany(),
     prisma.student.deleteMany(),
-    prisma.subscription.deleteMany(),
-    prisma.payer.deleteMany(),
     prisma.sibling.deleteMany(),
     prisma.batch.deleteMany(),
   ])

@@ -5,13 +5,17 @@ import { cache } from 'react'
 import { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/db'
-import { BASE_RATE } from '@/lib/types'
-import { StudentStatus } from '@/lib/types/student'
 
-// Use string literal for subscription status
-const SUBSCRIPTION_STATUS_ACTIVE = 'ACTIVE' as const
+// Enums and constants
+export enum StudentStatus {
+  REGISTERED = 'registered',
+  ENROLLED = 'enrolled',
+  INACTIVE = 'inactive',
+  PENDING = 'pending',
+}
 
-// Define the exact Prisma return type we need
+const BASE_RATE = 150
+
 type StudentWithRelations = Prisma.StudentGetPayload<{
   include: {
     batch: {
@@ -32,22 +36,6 @@ type StudentWithRelations = Prisma.StudentGetPayload<{
         }
       }
     }
-    payer: {
-      include: {
-        subscriptions: {
-          where: {
-            status: { equals: 'ACTIVE' }
-          }
-          select: {
-            id: true
-            status: true
-            currentPeriodEnd: true
-            gracePeriodEndsAt: true
-            paymentRetryCount: true
-          }
-        }
-      }
-    }
   }
 }>
 
@@ -58,12 +46,14 @@ export interface StudentDTO {
   monthlyRate: number
   hasCustomRate: boolean
   status: StudentStatus
-  payorId: string | null
   siblingGroupId: string | null
   batchId: string | null
   batchName: string | null
   email: string | null
   phone: string | null
+  stripeCustomerId: string | null
+  stripeSubscriptionId: string | null
+  subscriptionStatus: string | null
   // Computed fields
   isEligibleForAutopay: boolean
   hasActiveSubscription: boolean
@@ -83,7 +73,9 @@ interface StudentQueryOptions {
 // Async mapper function for server components
 async function mapToDTO(student: StudentWithRelations): Promise<StudentDTO> {
   const siblingCount = student.siblingGroup?.students.length ?? 0
-  const hasActiveSubscription = (student.payer?.subscriptions.length ?? 0) > 0
+  const hasActiveSubscription =
+    student.stripeSubscriptionId !== null &&
+    student.subscriptionStatus === 'active'
 
   // Calculate tiered discount based on number of siblings
   let discount = 0
@@ -106,12 +98,14 @@ async function mapToDTO(student: StudentWithRelations): Promise<StudentDTO> {
     monthlyRate: calculatedRate,
     hasCustomRate: student.customRate,
     status: student.status as StudentStatus,
-    payorId: student.payerId,
     siblingGroupId: student.siblingGroupId,
     batchId: student.batch?.id ?? null,
     batchName: student.batch?.name ?? null,
     email: student.email,
     phone: student.phone,
+    stripeCustomerId: student.stripeCustomerId,
+    stripeSubscriptionId: student.stripeSubscriptionId,
+    subscriptionStatus: student.subscriptionStatus || null,
     // Computed fields
     isEligibleForAutopay: !hasActiveSubscription,
     hasActiveSubscription,
@@ -130,23 +124,15 @@ export const getStudents = cache(async (options: StudentQueryOptions = {}) => {
   try {
     const students = await prisma.student.findMany({
       where: {
-        OR: [
-          { payer: null },
-          {
-            payer: {
-              subscriptions: {
-                none: {
-                  status: SUBSCRIPTION_STATUS_ACTIVE,
-                  AND: {
-                    currentPeriodEnd: {
-                      gt: new Date(),
-                    },
-                  },
-                },
-              },
-            },
-          },
-        ],
+        // Only include students without active subscriptions for enrollment
+        ...(options.includeInactive
+          ? {}
+          : {
+              OR: [
+                { stripeSubscriptionId: null },
+                { subscriptionStatus: { not: 'active' } },
+              ],
+            }),
         status: options.includeInactive ? undefined : StudentStatus.REGISTERED,
         ...(options.siblingGroupId && {
           siblingGroupId: options.siblingGroupId,
@@ -167,22 +153,6 @@ export const getStudents = cache(async (options: StudentQueryOptions = {}) => {
                 id: true,
                 name: true,
                 monthlyRate: true,
-              },
-            },
-          },
-        },
-        payer: {
-          include: {
-            subscriptions: {
-              where: {
-                status: SUBSCRIPTION_STATUS_ACTIVE,
-              },
-              select: {
-                id: true,
-                status: true,
-                currentPeriodEnd: true,
-                gracePeriodEndsAt: true,
-                paymentRetryCount: true,
               },
             },
           },
@@ -212,6 +182,13 @@ export async function getEligibleStudentsForAutopay() {
 export async function getSiblings(siblingGroupId: string) {
   return getStudents({
     siblingGroupId,
+    includeBatchInfo: true,
+  })
+}
+
+export async function getAllStudents() {
+  return getStudents({
+    includeInactive: true,
     includeBatchInfo: true,
   })
 }

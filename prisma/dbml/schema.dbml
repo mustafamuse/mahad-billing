@@ -1,0 +1,185 @@
+//// ------------------------------------------------------
+//// THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+//// ------------------------------------------------------
+
+Table Subject {
+  id String [pk]
+  name String [unique, not null]
+  description String
+  isActive Boolean [not null, default: true]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  schedules ClassSchedule [not null]
+}
+
+Table Semester {
+  id String [pk]
+  name String [not null]
+  startDate DateTime [not null]
+  endDate DateTime [not null]
+  isActive Boolean [not null, default: true]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  schedules ClassSchedule [not null]
+}
+
+Table ClassSchedule {
+  id String [pk]
+  batchId String [not null]
+  subjectId String [not null]
+  semesterId String [not null]
+  isActive Boolean [not null, default: true]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  batch Batch [not null]
+  semester Semester [not null]
+  subject Subject [not null]
+  sessions ClassSession [not null]
+}
+
+Table ClassSession {
+  id String [pk]
+  classScheduleId String [not null]
+  date DateTime [not null]
+  startTime DateTime [not null]
+  endTime DateTime [not null]
+  status String [not null, default: 'SCHEDULED']
+  notes String
+  isActive Boolean [not null, default: true]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  attendance Attendance [not null]
+  schedule ClassSchedule [not null]
+}
+
+Table Attendance {
+  id String [pk]
+  studentId String [not null]
+  sessionId String [not null]
+  status AttendanceStatus [not null]
+  notes String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  session ClassSession [not null]
+  student Student [not null]
+
+  indexes {
+    (studentId, sessionId) [unique]
+  }
+}
+
+Table Student {
+  id String [pk]
+  name String [not null]
+  email String [unique]
+  monthlyRate Int [not null, default: 150]
+  customRate Boolean [not null, default: false]
+  status String [not null, default: 'registered']
+  lastPaymentDate DateTime
+  nextPaymentDue DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  batchId String
+  collegeGradYear Int
+  collegeGraduated Boolean [not null, default: false]
+  dateOfBirth DateTime
+  educationLevel EducationLevel
+  gradeLevel GradeLevel
+  highSchoolGradYear Int
+  highSchoolGraduated Boolean [not null, default: false]
+  phone String
+  postGradCompleted Boolean [not null, default: false]
+  postGradYear Int
+  schoolName String
+  siblingGroupId String
+  stripeCustomerId String [unique]
+  paidUntil DateTime
+  stripeSubscriptionId String
+  subscriptionStatus SubscriptionStatus
+  attendance Attendance [not null]
+  batch Batch
+  siblingGroup Sibling
+  StudentPayment StudentPayment [not null]
+}
+
+Table Sibling {
+  id String [pk]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  students Student [not null]
+}
+
+Table Batch {
+  id String [pk]
+  name String [unique, not null]
+  startDate DateTime
+  endDate DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  classSchedules ClassSchedule [not null]
+  students Student [not null]
+}
+
+Table StudentPayment {
+  id String [pk]
+  studentId String [not null]
+  stripeInvoiceId String
+  year Int [not null]
+  month Int [not null]
+  amountPaid Int [not null]
+  paidAt DateTime [not null]
+  Student Student [not null]
+
+  indexes {
+    (studentId, stripeInvoiceId) [unique]
+  }
+}
+
+Enum EducationLevel {
+  HIGH_SCHOOL
+  COLLEGE
+  POST_GRAD
+}
+
+Enum GradeLevel {
+  FRESHMAN
+  SOPHOMORE
+  JUNIOR
+  SENIOR
+}
+
+Enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+Enum SubscriptionStatus {
+  incomplete
+  incomplete_expired
+  trialing
+  active
+  past_due
+  canceled
+  unpaid
+  paused
+}
+
+Ref: ClassSchedule.batchId > Batch.id
+
+Ref: ClassSchedule.semesterId > Semester.id
+
+Ref: ClassSchedule.subjectId > Subject.id
+
+Ref: ClassSession.classScheduleId > ClassSchedule.id
+
+Ref: Attendance.sessionId > ClassSession.id
+
+Ref: Attendance.studentId > Student.id
+
+Ref: Student.batchId > Batch.id
+
+Ref: Student.siblingGroupId > Sibling.id
+
+Ref: StudentPayment.studentId > Student.id [delete: Cascade]

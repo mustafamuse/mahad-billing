@@ -1,16 +1,18 @@
 import { AdminNav } from '@/app/admin/dashboard/components/admin-nav'
-import { BaseHeader } from '@/components/base-header'
 
 export function DuplicateHeader() {
   return (
     <div className="space-y-4">
-      <BaseHeader
-        title="Duplicate Students"
-        description="Identify and manage potential duplicate student records"
-        layout="split"
-        titleClassName="text-3xl font-bold tracking-tight"
-        descriptionClassName="text-sm text-muted-foreground"
-      />
+      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight">
+            Duplicate Students
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Identify and manage potential duplicate student records
+          </p>
+        </div>
+      </div>
       <AdminNav />
     </div>
   )
