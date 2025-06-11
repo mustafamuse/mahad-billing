@@ -1,5 +1,6 @@
 /**
  * Test script for verifying duplicate customer prevention logic
+ * Updated for simplified schema where students manage their own Stripe customers
  *
  * Run with: npx ts-node scripts/test-duplicate-prevention.ts
  */
@@ -36,78 +37,125 @@ async function main() {
     console.log('No existing Stripe customers found with this email.')
   }
 
-  // Step 2: Check if a payer with this email exists in our database
+  // Step 2: Check if a student with this email exists in our database
   console.log(
-    `\nStep 2: Checking if payer with email ${testEmail} exists in our database...`
+    `\nStep 2: Checking if student with email ${testEmail} exists in our database...`
   )
-  const existingPayers = await prisma.payer.findMany({
+  const existingStudents = await prisma.student.findMany({
     where: { email: testEmail },
-    include: {
-      students: true,
-      subscriptions: true,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      stripeCustomerId: true,
+      stripeSubscriptionId: true,
+      subscriptionStatus: true,
     },
   })
 
-  if (existingPayers.length > 0) {
-    console.log(`Found ${existingPayers.length} existing payers:`)
-    existingPayers.forEach((payer) => {
-      console.log(`- ID: ${payer.id}, Name: ${payer.name}`)
-      console.log(`  Stripe Customer ID: ${payer.stripeCustomerId}`)
-      console.log(`  Students: ${payer.students.length}`)
-      console.log(`  Subscriptions: ${payer.subscriptions.length}`)
+  if (existingStudents.length > 0) {
+    console.log(`Found ${existingStudents.length} existing students:`)
+    existingStudents.forEach((student) => {
+      console.log(`- ID: ${student.id}, Name: ${student.name}`)
+      console.log(`  Stripe Customer ID: ${student.stripeCustomerId}`)
+      console.log(`  Stripe Subscription ID: ${student.stripeSubscriptionId}`)
+      console.log(`  Subscription Status: ${student.subscriptionStatus}`)
     })
   } else {
-    console.log('No existing payers found with this email.')
+    console.log('No existing students found with this email.')
   }
 
-  // Step 3: Simulate the prepare-setup logic
+  // Step 3: Simulate the prepare-setup logic for simplified schema
   console.log('\nStep 3: Simulating prepare-setup logic...')
 
   let stripeCustomerId: string | null = null
 
-  // Check if payer exists in our database
-  if (existingPayers.length > 0) {
-    const existingPayer = existingPayers[0]
-    console.log(`Found existing payer in database: ${existingPayer.id}`)
+  // Check if student exists in our database
+  if (existingStudents.length > 0) {
+    const existingStudent = existingStudents[0]
+    console.log(`Found existing student in database: ${existingStudent.id}`)
 
-    if (existingPayer.stripeCustomerId) {
+    if (existingStudent.stripeCustomerId) {
       console.log(
-        `Payer has Stripe customer ID: ${existingPayer.stripeCustomerId}`
+        `Student has Stripe customer ID: ${existingStudent.stripeCustomerId}`
       )
 
       // Verify this customer still exists in Stripe
       try {
         const stripeCustomer = await stripeServerClient.customers.retrieve(
-          existingPayer.stripeCustomerId
+          existingStudent.stripeCustomerId
         )
         if (!stripeCustomer.deleted) {
           console.log('Stripe customer exists and is not deleted')
-          stripeCustomerId = existingPayer.stripeCustomerId
+          stripeCustomerId = existingStudent.stripeCustomerId
           console.log('Would update existing customer with new details')
         } else {
           console.log('Stripe customer exists but is deleted')
-          console.log('Would create new customer and update payer record')
+          console.log('Would create new customer and update student record')
         }
       } catch (error) {
         console.log('Error retrieving Stripe customer:', error)
-        console.log('Would create new customer and update payer record')
+        console.log('Would create new customer and update student record')
       }
     } else {
-      console.log('Payer has no Stripe customer ID')
-      console.log('Would create new customer and update payer record')
+      console.log('Student has no Stripe customer ID')
+      console.log('Would create new customer and update student record')
     }
   }
-  // Check if customer exists in Stripe but not in our database
+  // Check if customer exists in Stripe but not linked to any student
   else if (existingStripeCustomers.data.length > 0) {
-    console.log('Found existing Stripe customer but no payer in database')
+    console.log(
+      'Found existing Stripe customer but no student in database with this email'
+    )
     stripeCustomerId = existingStripeCustomers.data[0].id
     console.log(`Would use existing Stripe customer: ${stripeCustomerId}`)
-    console.log('Would create new payer record with this Stripe customer ID')
+    console.log('Would link this customer to the student being enrolled')
   }
   // No existing customer found anywhere
   else {
     console.log('No existing customer found in database or Stripe')
-    console.log('Would create new Stripe customer and new payer record')
+    console.log('Would create new Stripe customer and link to student')
+  }
+
+  // Step 4: Check for potential sibling scenarios
+  console.log('\nStep 4: Checking for potential sibling scenarios...')
+
+  // Look for students with similar names or in the same sibling group
+  const potentialSiblings = await prisma.student.findMany({
+    where: {
+      OR: [
+        { email: { contains: testEmail.split('@')[0] } },
+        {
+          name: { contains: testEmail.split('@')[0].replace(/[^a-zA-Z]/g, '') },
+        },
+      ],
+    },
+    include: {
+      siblingGroup: {
+        include: {
+          students: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              stripeCustomerId: true,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (potentialSiblings.length > 0) {
+    console.log(`Found ${potentialSiblings.length} potential siblings:`)
+    potentialSiblings.forEach((student) => {
+      console.log(`- ${student.name} (${student.email})`)
+      if (student.siblingGroup) {
+        console.log(
+          `  Part of sibling group with ${student.siblingGroup.students.length} students`
+        )
+      }
+    })
   }
 
   console.log('\nTest completed!')

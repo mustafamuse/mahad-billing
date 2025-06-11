@@ -44,12 +44,10 @@ export interface StudentDetails {
       id: string
       name: string
     }
-    payer?: {
+    subscription?: {
       id: string
-      name: string
-      email: string
-      activeSubscriptions: number
-      totalStudents: number
+      status: string
+      isActive: boolean
     }
     siblingGroup?: {
       id: string

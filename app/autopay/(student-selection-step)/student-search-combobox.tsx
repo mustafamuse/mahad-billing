@@ -28,8 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { StudentDTO } from '@/lib/actions/get-students'
-import { StudentStatus } from '@/lib/types/student'
+import { StudentDTO, StudentStatus } from '@/lib/actions/get-students'
 import { cn } from '@/lib/utils'
 
 interface StudentSearchComboboxProps {
@@ -136,15 +135,15 @@ export function StudentSearchCombobox({
                                   <CheckCircle2 className="h-4 w-4" />
                                   <span className="text-xs">Enrolled</span>
                                 </>
-                              ) : student.status === StudentStatus.ON_LEAVE ? (
+                              ) : student.status === StudentStatus.INACTIVE ? (
                                 <>
                                   <Clock className="h-4 w-4" />
-                                  <span className="text-xs">On Leave</span>
+                                  <span className="text-xs">Inactive</span>
                                 </>
                               ) : (
                                 <>
                                   <XCircle className="h-4 w-4" />
-                                  <span className="text-xs">Withdrawn</span>
+                                  <span className="text-xs">Other</span>
                                 </>
                               )}
                             </div>
@@ -153,9 +152,9 @@ export function StudentSearchCombobox({
                             <p>
                               {student.status === StudentStatus.ENROLLED
                                 ? 'This student is already enrolled in the program'
-                                : student.status === StudentStatus.ON_LEAVE
-                                  ? 'This student is currently on leave'
-                                  : 'This student has withdrawn from the program'}
+                                : student.status === StudentStatus.INACTIVE
+                                  ? 'This student is currently inactive'
+                                  : 'This student is not available for enrollment'}
                             </p>
                           </TooltipContent>
                         </Tooltip>

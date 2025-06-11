@@ -3,9 +3,24 @@ import { NextResponse } from 'next/server'
 
 import Stripe from 'stripe'
 
-import { eventHandlers } from './event-handlers'
+import {
+  handleCheckoutSessionCompleted,
+  handleInvoicePaymentSucceeded,
+  handleSubscriptionDeleted,
+  handleSubscriptionUpdated,
+  handleInvoicePaymentFailed,
+} from './student-event-handlers'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+// Map event types to our new handler functions
+const eventHandlers = {
+  'checkout.session.completed': handleCheckoutSessionCompleted,
+  'invoice.payment_succeeded': handleInvoicePaymentSucceeded,
+  'invoice.payment_failed': handleInvoicePaymentFailed,
+  'customer.subscription.updated': handleSubscriptionUpdated,
+  'customer.subscription.deleted': handleSubscriptionDeleted,
+}
 
 export async function POST(req: Request) {
   try {

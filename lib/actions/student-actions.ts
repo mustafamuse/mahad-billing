@@ -20,14 +20,6 @@ export async function getStudentDetails(
     },
     include: {
       batch: true,
-      payer: {
-        include: {
-          subscriptions: {
-            where: { status: 'ACTIVE' },
-          },
-          students: true,
-        },
-      },
       siblingGroup: {
         include: {
           students: {
@@ -65,13 +57,11 @@ export async function getStudentDetails(
             name: student.batch.name,
           }
         : undefined,
-      payer: student.payer
+      subscription: student.stripeSubscriptionId
         ? {
-            id: student.payer.id,
-            name: student.payer.name,
-            email: student.payer.email,
-            activeSubscriptions: student.payer.subscriptions.length,
-            totalStudents: student.payer.students.length,
+            id: student.stripeSubscriptionId,
+            status: student.subscriptionStatus || 'unknown',
+            isActive: student.subscriptionStatus === 'active',
           }
         : undefined,
       siblingGroup: student.siblingGroup
@@ -93,14 +83,6 @@ export async function getStudentWarnings(
       siblingGroup: {
         include: { students: true },
       },
-      payer: {
-        include: {
-          students: true,
-          subscriptions: {
-            where: { status: 'ACTIVE' },
-          },
-        },
-      },
     },
   })
 
@@ -110,8 +92,8 @@ export async function getStudentWarnings(
 
   return {
     hasSiblings: (student.siblingGroup?.students?.length ?? 0) > 1,
-    isOnlyStudentForPayer: (student.payer?.students?.length ?? 0) === 1,
-    hasActiveSubscription: (student.payer?.subscriptions?.length ?? 0) > 0,
+    isOnlyStudentForPayer: false, // No longer relevant with simplified schema
+    hasActiveSubscription: student.subscriptionStatus === 'active',
   }
 }
 
@@ -121,14 +103,6 @@ export async function deleteStudent(studentId: string): Promise<void> {
     include: {
       siblingGroup: {
         include: { students: true },
-      },
-      payer: {
-        include: {
-          students: true,
-          subscriptions: {
-            where: { status: 'ACTIVE' },
-          },
-        },
       },
     },
   })
@@ -147,34 +121,33 @@ export async function deleteStudent(studentId: string): Promise<void> {
         })
       }
     }
-    // 2. Handle student status
-    if ((student.payer?.subscriptions?.length ?? 0) > 0) {
-      // If payer has active subscriptions and other students
-      const otherActiveStudents =
-        student.payer?.students?.filter(
-          (s) => s.id !== studentId && s.status === 'enrolled'
-        )?.length ?? 0
 
-      if (otherActiveStudents > 0) {
-        // Just mark this student as withdrawn, keep subscriptions active
-        await tx.student.update({
-          where: { id: studentId },
-          data: { status: 'withdrawn' },
-        })
-      }
+    // 2. Handle active subscription
+    if (student.subscriptionStatus === 'active') {
+      // Mark as withdrawn instead of deleting if they have an active subscription
+      await tx.student.update({
+        where: { id: studentId },
+        data: {
+          status: 'withdrawn',
+          subscriptionStatus: 'canceled', // Mark subscription as canceled
+        },
+      })
+
+      // Note: Actual Stripe subscription cancellation should be handled elsewhere
+      console.log(
+        `Student ${studentId} has active subscription. Marked as withdrawn but not deleted.`
+      )
+      return
     }
 
-    // 3. Delete the student
+    // 3. Delete student payments first (cascade should handle this but being explicit)
+    await tx.studentPayment.deleteMany({
+      where: { studentId },
+    })
+
+    // 4. Delete the student
     await tx.student.delete({
       where: { id: studentId },
     })
-
-    // 4. Update payer if no students left
-    if (student.payer && student.payer.students.length === 1) {
-      await tx.payer.update({
-        where: { id: student.payer.id },
-        data: { isActive: false },
-      })
-    }
   })
 }

@@ -1,4 +1,5 @@
 import { Analytics } from '@vercel/analytics/next'
+import type { Metadata } from 'next'
 import { Toaster } from 'sonner'
 
 import { EnrollmentProvider } from '@/contexts/enrollment-context'
@@ -7,10 +8,45 @@ import { ThemeProvider } from '@/providers/theme-provider'
 import { Providers } from './providers'
 import './globals.css'
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Roots of Knowledge - Islamic Education',
   description:
     'Comprehensive Islamic education and payment management system at Roots of Knowledge, Eden Prairie.',
+  icons: {
+    icon: [
+      {
+        url: '/official-logo.svg',
+        type: 'image/svg+xml',
+      },
+    ],
+    apple: [
+      {
+        url: '/official-logo.svg',
+        type: 'image/svg+xml',
+      },
+    ],
+  },
+  openGraph: {
+    title: 'Roots of Knowledge - Islamic Education',
+    description:
+      'Comprehensive Islamic education and payment management system at Roots of Knowledge, Eden Prairie.',
+    type: 'website',
+    images: [
+      {
+        url: '/official-logo.svg',
+        width: 200,
+        height: 52,
+        alt: 'Roots of Knowledge Official Logo',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Roots of Knowledge - Islamic Education',
+    description:
+      'Comprehensive Islamic education and payment management system at Roots of Knowledge, Eden Prairie.',
+    images: ['/official-logo.svg'],
+  },
 }
 
 export default function RootLayout({
@@ -30,9 +66,9 @@ export default function RootLayout({
         <Providers>
           <ThemeProvider
             attribute="class"
-            defaultTheme="dark"
-            enableSystem={false}
-            forcedTheme="dark"
+            defaultTheme="light"
+            enableSystem={true}
+            disableTransitionOnChange={false}
           >
             <EnrollmentProvider>{children}</EnrollmentProvider>
             <Toaster richColors position="top-right" />

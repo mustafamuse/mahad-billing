@@ -82,17 +82,17 @@ export function handleError(action: string, eventId: string, error: unknown) {
 
 export function getStatusColor(status: SubscriptionStatus) {
   switch (status) {
-    case SubscriptionStatus.ACTIVE:
+    case SubscriptionStatus.active:
       return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
-    case SubscriptionStatus.PAST_DUE:
+    case SubscriptionStatus.past_due:
       return 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
-    case SubscriptionStatus.CANCELED:
+    case SubscriptionStatus.canceled:
       return 'bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-400'
-    case SubscriptionStatus.INCOMPLETE:
+    case SubscriptionStatus.incomplete:
       return 'bg-orange-50 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400'
-    case SubscriptionStatus.TRIALING:
+    case SubscriptionStatus.trialing:
       return 'bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
-    case SubscriptionStatus.INACTIVE:
+    case SubscriptionStatus.unpaid:
       return 'bg-gray-50 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'
     default:
       return 'bg-gray-50 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'

@@ -1,72 +1,21 @@
 import { NextResponse } from 'next/server'
 
-import { Prisma } from '@prisma/client'
-
 import { prisma } from '@/lib/db'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const filter = searchParams.get('filter') || 'all' // 'all', 'with-payer', 'without-payer', 'with-stripe', 'without-stripe'
+    const filter = searchParams.get('filter') || 'all' // 'all', 'with-subscription', 'without-subscription'
 
-    // Base query to get all students with their payer information
-    const baseQuery = {
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        batchId: true,
-        payerId: true,
-        batch: {
-          select: {
-            name: true,
-          },
-        },
-        payer: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
-            stripeCustomerId: true,
-            relationship: true,
-          },
-        },
-      },
-      orderBy: [
-        { payerId: Prisma.SortOrder.asc },
-        { name: Prisma.SortOrder.asc },
-      ],
-    }
-
-    // Apply filters
+    // Base query to get all students with their subscription information
     let whereClause = {}
 
     switch (filter) {
-      case 'with-payer':
-        whereClause = { payerId: { not: null } }
+      case 'with-subscription':
+        whereClause = { stripeSubscriptionId: { not: null } }
         break
-      case 'without-payer':
-        whereClause = { payerId: null }
-        break
-      case 'with-stripe':
-        whereClause = {
-          payer: {
-            stripeCustomerId: { not: null },
-          },
-        }
-        break
-      case 'without-stripe':
-        whereClause = {
-          payerId: { not: null },
-          payer: {
-            stripeCustomerId: null,
-          },
-        }
+      case 'without-subscription':
+        whereClause = { stripeSubscriptionId: null }
         break
       default:
         // 'all' - no filter
@@ -75,69 +24,63 @@ export async function GET(request: Request) {
 
     // Get students with applied filters
     const students = await prisma.student.findMany({
-      ...baseQuery,
       where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        status: true,
+        subscriptionStatus: true,
+        stripeSubscriptionId: true,
+        stripeCustomerId: true,
+        createdAt: true,
+        updatedAt: true,
+        batchId: true,
+        batch: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: [{ name: 'asc' }],
     })
 
     // Calculate summary statistics
     const totalStudents = students.length
-    const withPayer = students.filter((s) => s.payerId).length
-    const withoutPayer = totalStudents - withPayer
-    const withStripe = students.filter((s) => s.payer?.stripeCustomerId).length
-    const withoutStripe = withPayer - withStripe
+    const withSubscription = students.filter(
+      (s) => s.stripeSubscriptionId
+    ).length
+    const withoutSubscription = totalStudents - withSubscription
+    const withStripeCustomer = students.filter((s) => s.stripeCustomerId).length
+    const withoutStripeCustomer = totalStudents - withStripeCustomer
 
-    // Group students by payer for better organization
-    const studentsByPayer: Record<string, any[]> = {}
-    const studentsWithoutPayer: any[] = []
-
-    students.forEach((student) => {
-      if (student.payerId && student.payer) {
-        const payerId = student.payerId
-        if (!studentsByPayer[payerId]) {
-          studentsByPayer[payerId] = []
-        }
-        studentsByPayer[payerId].push(student)
-      } else {
-        studentsWithoutPayer.push(student)
-      }
-    })
-
-    // Format the response
-    const payerGroups = Object.entries(studentsByPayer)
-      .map(([payerId, students]) => {
-        const payer = students[0].payer
-        return {
-          payer: {
-            id: payerId,
-            name: payer.name,
-            email: payer.email,
-            phone: payer.phone,
-            stripeCustomerId: payer.stripeCustomerId,
-            relationship: payer.relationship,
-            hasStripe: !!payer.stripeCustomerId,
-          },
-          students,
-          studentCount: students.length,
-        }
-      })
-      .sort((a, b) => {
-        // Sort by whether they have Stripe ID first, then by name
-        if (!!a.payer.stripeCustomerId !== !!b.payer.stripeCustomerId) {
-          return !!a.payer.stripeCustomerId ? 1 : -1 // Without Stripe first
-        }
-        return a.payer.name.localeCompare(b.payer.name)
-      })
+    // Group students by subscription status
+    const activeSubscriptions = students.filter(
+      (s) => s.subscriptionStatus === 'active'
+    )
+    const inactiveSubscriptions = students.filter(
+      (s) => s.subscriptionStatus && s.subscriptionStatus !== 'active'
+    )
+    const noSubscription = students.filter((s) => !s.stripeSubscriptionId)
 
     return NextResponse.json({
       summary: {
         totalStudents,
-        withPayer,
-        withoutPayer,
-        withStripe,
-        withoutStripe,
+        withSubscription,
+        withoutSubscription,
+        withStripeCustomer,
+        withoutStripeCustomer,
+        activeSubscriptions: activeSubscriptions.length,
+        inactiveSubscriptions: inactiveSubscriptions.length,
+        noSubscription: noSubscription.length,
       },
-      payerGroups,
-      studentsWithoutPayer,
+      students: {
+        active: activeSubscriptions,
+        inactive: inactiveSubscriptions,
+        none: noSubscription,
+      },
+      allStudents: students,
     })
   } catch (error) {
     console.error('Failed to fetch student payers:', error)

@@ -10,12 +10,11 @@ interface BackupValidation {
   students: {
     total: number
     withBatch: number
-    withPayer: number
+    withSubscription: number
     withSiblings: number
   }
   relationships: {
     validSiblingGroups: boolean
-    validPayerLinks: boolean
     validBatchLinks: boolean
   }
 }
@@ -29,11 +28,6 @@ export async function backupData() {
     const students = await prisma.student.findMany({
       include: {
         batch: true,
-        payer: {
-          include: {
-            subscriptions: true,
-          },
-        },
         siblingGroup: {
           include: {
             students: {
@@ -46,15 +40,24 @@ export async function backupData() {
             },
           },
         },
+        StudentPayment: true,
       },
     })
+
+    const batches = await prisma.batch.findMany()
+    const siblings = await prisma.sibling.findMany({
+      include: {
+        students: true,
+      },
+    })
+    const studentPayments = await prisma.studentPayment.findMany()
 
     // Validate relationships
     const validation: BackupValidation = {
       students: {
         total: students.length,
         withBatch: students.filter((s) => s.batch).length,
-        withPayer: students.filter((s) => s.payer).length,
+        withSubscription: students.filter((s) => s.stripeSubscriptionId).length,
         withSiblings: students.filter((s) => s.siblingGroup).length,
       },
       relationships: {
@@ -67,7 +70,6 @@ export async function backupData() {
                 sibling.siblingGroupId === s.siblingGroupId
             )
         ),
-        validPayerLinks: students.every((s) => !s.payerId || s.payer !== null),
         validBatchLinks: students.every((s) => !s.batchId || s.batch !== null),
       },
     }
@@ -79,39 +81,34 @@ export async function backupData() {
       throw new Error('Data validation failed: Invalid relationships detected')
     }
 
-    // Rest of your existing backup code...
+    // Create backup object
     const backup = {
       metadata: {
         timestamp: new Date().toISOString(),
-        version: '1.0',
+        version: '2.0',
         validation,
         totalCounts: {
           students: students.length,
-          batches: students.filter((s) => s.batch).length,
-          siblings: students.filter((s) => s.siblingGroup).length,
-          payers: students.filter((s) => s.payer).length,
-          subscriptions: students.reduce(
-            (acc, s) => acc + (s.payer?.subscriptions.length || 0),
-            0
-          ),
+          batches: batches.length,
+          siblings: siblings.length,
+          studentPayments: studentPayments.length,
         },
       },
       data: {
-        students,
-        batches: students.filter((s) => s.batch),
-        siblings: students.filter((s) => s.siblingGroup),
-        payers: students.filter((s) => s.payer),
-        subscriptions: students.reduce(
-          (acc, s) => acc + (s.payer?.subscriptions.length || 0),
-          0
-        ),
+        students: students.map((student) => ({
+          ...student,
+          StudentPayment: undefined, // Remove the included payments to avoid duplicates
+        })),
+        batches,
+        siblings,
+        studentPayments,
       },
     }
 
     // Create backups directory if it doesn't exist
     const backupDir = path.join(process.cwd(), 'backups')
     if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir)
+      fs.mkdirSync(backupDir, { recursive: true })
     }
 
     // Save to JSON file with detailed timestamp

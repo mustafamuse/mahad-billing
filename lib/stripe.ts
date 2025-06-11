@@ -11,7 +11,7 @@ export function getStripeClient(): Stripe {
   if (!stripeClient) {
     console.log('Initializing Stripe client...')
     stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2025-03-31.basil',
+      apiVersion: '2025-04-30.basil',
       typescript: true,
     })
   }

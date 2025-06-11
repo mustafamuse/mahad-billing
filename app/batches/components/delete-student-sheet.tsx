@@ -244,35 +244,32 @@ export function DeleteStudentSheet() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* Payer Information */}
-                  <AccordionItem value="payer">
-                    <AccordionTrigger>Payer Details</AccordionTrigger>
+                  {/* Subscription Information */}
+                  <AccordionItem value="subscription">
+                    <AccordionTrigger>Subscription Details</AccordionTrigger>
                     <AccordionContent>
-                      {studentDetails.associations.payer ? (
+                      {studentDetails.associations.subscription ? (
                         <div className="space-y-2">
                           <p className="font-medium">
-                            {studentDetails.associations.payer.name}
-                          </p>
-                          <p className="text-sm">
-                            {studentDetails.associations.payer.email}
+                            Subscription ID:{' '}
+                            {studentDetails.associations.subscription.id}
                           </p>
                           <div className="mt-2 text-sm text-muted-foreground">
                             <p>
-                              Active Subscriptions:{' '}
-                              {
-                                studentDetails.associations.payer
-                                  .activeSubscriptions
-                              }
+                              Status:{' '}
+                              {studentDetails.associations.subscription.status}
                             </p>
                             <p>
-                              Total Students:{' '}
-                              {studentDetails.associations.payer.totalStudents}
+                              Active:{' '}
+                              {studentDetails.associations.subscription.isActive
+                                ? 'Yes'
+                                : 'No'}
                             </p>
                           </div>
                         </div>
                       ) : (
                         <p className="text-sm text-muted-foreground">
-                          No payer assigned
+                          No subscription
                         </p>
                       )}
                     </AccordionContent>
@@ -348,7 +345,7 @@ export function DeleteStudentSheet() {
                 )}
                 {deleteWarnings?.hasActiveSubscription && (
                   <p className="text-yellow-600 dark:text-yellow-400">
-                    ⚠️ This student's payer has active subscriptions
+                    ⚠️ This student has an active subscription
                   </p>
                 )}
               </AlertDialogDescription>

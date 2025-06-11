@@ -25,7 +25,6 @@ import { toast } from 'sonner'
 
 import { BackupButton } from '@/app/components/backup-button'
 import { RestoreButton } from '@/app/components/restore-button'
-import { ThemeToggle } from '@/components/theme-toggle'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,6 +63,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 import {
   Tooltip,
   TooltipContent,
