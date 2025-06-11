@@ -9,6 +9,11 @@ export async function getBatchesForFilter() {
         id: true,
         name: true,
       },
+      where: {
+        name: {
+          not: 'Test',
+        },
+      },
       orderBy: {
         name: 'asc',
       },

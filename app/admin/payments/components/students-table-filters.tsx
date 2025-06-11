@@ -37,14 +37,10 @@ const studentStatuses = [
     color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   },
   {
-    value: 'past_due',
-    label: 'Past Due',
-    color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  },
-  {
-    value: 'inactive',
-    label: 'Inactive',
-    color: 'bg-muted text-muted-foreground',
+    value: 'withdrawn',
+    label: 'Withdrawn',
+    color:
+      'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   },
 ]
 

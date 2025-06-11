@@ -67,10 +67,20 @@ export async function StudentsTableShell({
 
   let where: any = {}
 
+  // Always exclude students from "Test" batch
+  const baseExcludeFilter = {
+    batch: {
+      name: {
+        not: 'Test',
+      },
+    },
+  }
+
   // Handle the special "needs billing" filter
   if (needsBilling === 'true') {
     where = {
       AND: [
+        baseExcludeFilter,
         {
           status: {
             not: 'withdrawn',
@@ -84,12 +94,17 @@ export async function StudentsTableShell({
   } else {
     // Regular filters
     where = {
-      name: {
-        contains: studentName,
-        mode: 'insensitive',
-      },
-      batchId: batchId || undefined,
-      status: status || undefined,
+      AND: [
+        baseExcludeFilter,
+        {
+          name: {
+            contains: studentName,
+            mode: 'insensitive',
+          },
+          batchId: batchId || undefined,
+          status: status || undefined,
+        },
+      ],
     }
   }
 

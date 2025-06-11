@@ -15,9 +15,7 @@ import { Button } from '@/components/ui/button'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { StudentWithDetails } from '@/types'
 
-
 import { PaymentHistoryDialog } from './payment-history-dialog'
-
 
 interface StudentsDataTableProps {
   data: StudentWithDetails[]

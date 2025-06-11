@@ -10,32 +10,60 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { prisma } from '@/lib/db'
 
 async function getStats() {
+  // Base filter to exclude "Test" batch students
+  const baseExcludeFilter = {
+    batch: {
+      name: {
+        not: 'Test',
+      },
+    },
+  }
+
   const [
     totalStudents,
     activeSubscriptions,
-    pastDue,
+    registeredStudents,
     totalRevenue,
     enrolledStudents,
   ] = await Promise.all([
-    prisma.student.count(),
     prisma.student.count({
-      where: { subscriptionStatus: 'active' },
+      where: {
+        AND: [baseExcludeFilter, { status: { not: 'withdrawn' } }],
+      },
     }),
     prisma.student.count({
-      where: { status: 'past_due' },
+      where: {
+        AND: [
+          baseExcludeFilter,
+          {
+            subscriptionStatus: 'active',
+            status: { not: 'withdrawn' },
+          },
+        ],
+      },
+    }),
+    prisma.student.count({
+      where: {
+        AND: [baseExcludeFilter, { status: 'registered' }],
+      },
     }),
     prisma.studentPayment.aggregate({
       _sum: { amountPaid: true },
+      where: {
+        Student: baseExcludeFilter,
+      },
     }),
     prisma.student.count({
-      where: { status: 'enrolled' },
+      where: {
+        AND: [baseExcludeFilter, { status: 'enrolled' }],
+      },
     }),
   ])
 
   return {
     totalStudents,
     activeSubscriptions,
-    pastDue,
+    registeredStudents,
     totalRevenue: totalRevenue._sum.amountPaid || 0,
     enrolledStudents,
   }
@@ -45,7 +73,7 @@ export async function StatsCards() {
   const {
     totalStudents,
     activeSubscriptions,
-    pastDue,
+    registeredStudents,
     totalRevenue,
     enrolledStudents,
   } = await getStats()
@@ -77,18 +105,14 @@ export async function StatsCards() {
       bottomBorder: 'bg-green-500/20 dark:bg-green-400/20',
     },
     {
-      title: 'Past Due',
-      value: pastDue,
+      title: 'Registered Students',
+      value: registeredStudents,
       icon: AlertTriangle,
-      description: pastDue > 0 ? 'Requires attention' : 'All up to date',
-      change: pastDue > 0 ? 'Action needed' : 'Great job!',
-      iconBg: pastDue > 0 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-muted',
-      iconColor:
-        pastDue > 0
-          ? 'text-red-600 dark:text-red-400'
-          : 'text-muted-foreground',
-      bottomBorder:
-        pastDue > 0 ? 'bg-red-500/20 dark:bg-red-400/20' : 'bg-muted/20',
+      description: 'Awaiting enrollment',
+      change: 'Need to start classes',
+      iconBg: 'bg-orange-100 dark:bg-orange-900/30',
+      iconColor: 'text-orange-600 dark:text-orange-400',
+      bottomBorder: 'bg-orange-500/20 dark:bg-orange-400/20',
     },
     {
       title: 'Total Revenue',

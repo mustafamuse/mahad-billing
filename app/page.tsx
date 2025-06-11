@@ -106,8 +106,8 @@ export default function HomePage() {
                   transition={{ duration: 0.8, delay: 0.6 }}
                 >
                   <Button size="lg" className="group w-full sm:w-auto" asChild>
-                    <Link href="/enrollment">
-                      Begin Your Journey{' '}
+                    <Link href="/register">
+                      Begin Registration{' '}
                       <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                     </Link>
                   </Button>

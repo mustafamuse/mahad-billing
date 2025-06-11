@@ -20,8 +20,6 @@ import { StudentWithDetails } from '@/types'
 
 import { PaymentHistoryDialog } from './payment-history-dialog'
 
-
-
 interface StudentsMobileCardsProps {
   data: StudentWithDetails[]
 }
