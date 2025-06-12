@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
 
 import type { Batch } from '@prisma/client'
 import {
@@ -39,6 +39,15 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
+// Constants
+const MONTHS = Array.from({ length: 12 }, (_, i) => ({
+  value: i + 1,
+  label: new Date(0, i).toLocaleString('default', { month: 'long' }),
+}))
+
+const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
+
+// Types
 interface ExcludedCharge {
   studentName: string
   studentEmail: string
@@ -72,18 +81,204 @@ interface ProfitShareCalculatorProps {
   batches: Batch[]
 }
 
-// Helper function to filter and sort batches
+interface DateState {
+  month: number
+  year: number
+}
+
+interface MonthYearSelectorProps {
+  date: DateState
+  setDate: Dispatch<SetStateAction<DateState>>
+  isOpen: boolean
+  setIsOpen: (isOpen: boolean) => void
+}
+
+// Helper functions
 function filterAndSortBatches(batches: Batch[]): Batch[] {
   return batches
     .filter((batch) => !batch.name.toLowerCase().includes('test'))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
-  const [date, setDate] = useState({
+function formatCurrency(amount: number): string {
+  return (amount / 100).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function getCurrentMonthYear() {
+  return {
     month: new Date().getMonth() + 1,
     year: new Date().getFullYear(),
-  })
+  }
+}
+
+// Components
+function MonthYearSelector({
+  date,
+  setDate,
+  isOpen,
+  setIsOpen,
+}: MonthYearSelectorProps) {
+  const handlePreviousMonth = () => {
+    setDate((prev) => ({
+      month: prev.month === 1 ? 12 : prev.month - 1,
+      year: prev.month === 1 ? prev.year - 1 : prev.year,
+    }))
+  }
+
+  const handleNextMonth = () => {
+    setDate((prev) => ({
+      month: prev.month === 12 ? 1 : prev.month + 1,
+      year: prev.month === 12 ? prev.year + 1 : prev.year,
+    }))
+  }
+
+  const isNextMonthDisabled =
+    date.year === new Date().getFullYear() &&
+    date.month >= new Date().getMonth() + 1
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={isOpen}
+          className="w-full justify-between py-6 text-lg"
+        >
+          <span>
+            {MONTHS[date.month - 1]?.label} {date.year}
+          </span>
+          <ChevronDown className="ml-2 h-5 w-5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0" align="start">
+        <div className="grid">
+          <div className="sticky top-0 flex items-center justify-between border-b bg-background p-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+              onClick={handlePreviousMonth}
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </Button>
+            <span className="text-base font-medium">
+              {MONTHS[date.month - 1]?.label} {date.year}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+              onClick={handleNextMonth}
+              disabled={isNextMonthDisabled}
+            >
+              <ChevronRight className="h-6 w-6" />
+            </Button>
+          </div>
+          <ScrollArea className="h-[min(70vh,400px)]">
+            <div className="grid grid-cols-1 p-4">
+              {YEARS.map((year) => (
+                <div key={year} className="mb-6">
+                  <div className="sticky top-0 mb-2 bg-background px-2 py-1 text-base font-medium">
+                    {year}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {MONTHS.map((month) => (
+                      <Button
+                        key={`${year}-${month.value}`}
+                        variant={
+                          date.month === month.value && date.year === year
+                            ? 'default'
+                            : 'ghost'
+                        }
+                        className="w-full justify-start py-6 text-base"
+                        disabled={
+                          year === new Date().getFullYear() &&
+                          month.value > new Date().getMonth() + 1
+                        }
+                        onClick={() => {
+                          setDate({ month: month.value, year })
+                          setIsOpen(false)
+                        }}
+                      >
+                        {month.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function StatCard({
+  title,
+  amount,
+  subtitle,
+  color = 'blue',
+}: {
+  title: string
+  amount: number
+  subtitle: string
+  color?: 'blue' | 'red' | 'green'
+}) {
+  const colorMap = {
+    blue: {
+      background: 'bg-blue-500/10 dark:bg-blue-500/20',
+      text: 'text-blue-700 dark:text-blue-300',
+      border: 'border-blue-500/20 dark:border-blue-500/30',
+      accent: 'bg-blue-500 dark:bg-blue-400',
+    },
+    red: {
+      background: 'bg-red-500/10 dark:bg-red-500/20',
+      text: 'text-red-700 dark:text-red-300',
+      border: 'border-red-500/20 dark:border-red-500/30',
+      accent: 'bg-red-500 dark:bg-red-400',
+    },
+    green: {
+      background: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+      text: 'text-emerald-700 dark:text-emerald-300',
+      border: 'border-emerald-500/20 dark:border-emerald-500/30',
+      accent: 'bg-emerald-500 dark:bg-emerald-400',
+    },
+  }
+
+  const colors = colorMap[color]
+
+  return (
+    <Card
+      className={`relative overflow-hidden border ${colors.border} ${colors.background}`}
+    >
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-bold sm:text-3xl ${colors.text}`}>
+          {formatCurrency(amount)}
+        </div>
+        <div className="text-sm text-muted-foreground">{subtitle}</div>
+        <div
+          className={`absolute right-0 top-0 h-full w-[4px] ${colors.accent}`}
+        />
+      </CardContent>
+    </Card>
+  )
+}
+
+// Main component
+export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
+  const [date, setDate] = useState(getCurrentMonthYear())
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<CalculationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -91,34 +286,14 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
   const [activeTab, setActiveTab] = useState<string>('')
   const [isMonthSelectorOpen, setIsMonthSelectorOpen] = useState(false)
 
-  // Filter out test batches and sort alphabetically
   const filteredBatches = filterAndSortBatches(batches)
 
-  const handlePreviousMonth = () => {
-    setDate((prev) => {
-      if (prev.month === 1) {
-        return { month: 12, year: prev.year - 1 }
-      }
-      return { ...prev, month: prev.month - 1 }
-    })
-  }
-
-  const handleNextMonth = () => {
-    setDate((prev) => {
-      if (prev.month === 12) {
-        return { month: 1, year: prev.year + 1 }
-      }
-      return { ...prev, month: prev.month + 1 }
-    })
-  }
-
   const handleBatchToggle = (batchId: string) => {
-    const isSelected = selectedBatchIds.includes(batchId)
-    if (isSelected) {
-      setSelectedBatchIds(selectedBatchIds.filter((id) => id !== batchId))
-    } else {
-      setSelectedBatchIds([...selectedBatchIds, batchId])
-    }
+    setSelectedBatchIds((prev) =>
+      prev.includes(batchId)
+        ? prev.filter((id) => id !== batchId)
+        : [...prev, batchId]
+    )
   }
 
   const handleCalculate = async () => {
@@ -127,12 +302,9 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
     setError(null)
 
     try {
-      console.log('Starting calculation...')
       const response = await fetch('/api/admin/profit-share', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           year: date.year,
           month: date.month,
@@ -147,7 +319,6 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
       }
 
       setResult(data)
-      console.log('Calculation completed:', data)
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'An unknown error occurred'
@@ -158,67 +329,47 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
     }
   }
 
-  // Update the activeTab when result changes
-  useEffect(() => {
-    if (result && Object.keys(chargesByBatch).length > 0) {
-      setActiveTab(Object.keys(chargesByBatch)[0])
-    }
-  }, [result])
-
-  const months = Array.from({ length: 12 }, (_, i) => ({
-    value: i + 1,
-    label: new Date(0, i).toLocaleString('default', { month: 'long' }),
-  }))
-
-  const years = Array.from(
-    { length: 5 },
-    (_, i) => new Date().getFullYear() - i
-  )
-
-  // Update the chargesByBatch calculation to only include students whose batchId matches the batch.id
+  // Group charges by batch
   const chargesByBatch = batches
     .filter((batch) => selectedBatchIds.includes(batch.id))
     .reduce(
       (acc, batch) => {
-        // Debug log to check student and batch data
-        if (result?.exclusionSummary?.length) {
-          console.log('Batch:', batch.id, batch.name)
-          console.log('First 3 students:', result.exclusionSummary.slice(0, 3))
-        }
-        // Get students for this batch only
-        const batchStudents = (result?.exclusionSummary || []).filter(
-          (student) => student.batchId === batch.id
-        )
+        const batchStudents =
+          result?.exclusionSummary?.filter(
+            (student) => student.batchId === batch.id
+          ) || []
 
-        if (!acc[batch.name]) acc[batch.name] = []
-
-        batchStudents.forEach((student) => {
-          // Find any charges for this student
+        acc[batch.name] = batchStudents.map((student) => {
           const studentCharges =
             result?.excludedCharges.filter(
               (charge) => charge.studentEmail === student.studentEmail
             ) || []
 
-          if (studentCharges.length > 0) {
-            acc[batch.name].push(...studentCharges)
-          } else {
-            acc[batch.name].push({
-              studentName: student.studentName,
-              studentEmail: student.studentEmail,
-              customerEmail: student.customerEmail,
-              chargeAmount: 0,
-              chargeId: '',
-              invoiceId: null,
-              payoutId: '',
-              customerId: student.customerId,
-            })
-          }
+          return studentCharges.length > 0
+            ? studentCharges[0]
+            : {
+                studentName: student.studentName,
+                studentEmail: student.studentEmail,
+                customerEmail: student.customerEmail,
+                chargeAmount: 0,
+                chargeId: '',
+                invoiceId: null,
+                payoutId: '',
+                customerId: student.customerId,
+              }
         })
 
         return acc
       },
       {} as Record<string, ExcludedCharge[]>
     )
+
+  // Set initial active tab
+  useEffect(() => {
+    if (result && Object.keys(chargesByBatch).length > 0) {
+      setActiveTab(Object.keys(chargesByBatch)[0])
+    }
+  }, [result, chargesByBatch])
 
   return (
     <div className="space-y-6">
@@ -235,88 +386,12 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Popover
-              open={isMonthSelectorOpen}
-              onOpenChange={setIsMonthSelectorOpen}
-            >
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={isMonthSelectorOpen}
-                  className="w-full justify-between py-6 text-lg"
-                >
-                  <span>
-                    {months[date.month - 1]?.label} {date.year}
-                  </span>
-                  <ChevronDown className="ml-2 h-5 w-5 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0" align="start">
-                <div className="grid">
-                  <div className="sticky top-0 flex items-center justify-between border-b bg-background p-4">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={handlePreviousMonth}
-                    >
-                      <ChevronLeft className="h-6 w-6" />
-                    </Button>
-                    <span className="text-base font-medium">
-                      {months[date.month - 1]?.label} {date.year}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={handleNextMonth}
-                      disabled={
-                        date.year === new Date().getFullYear() &&
-                        date.month >= new Date().getMonth() + 1
-                      }
-                    >
-                      <ChevronRight className="h-6 w-6" />
-                    </Button>
-                  </div>
-                  <ScrollArea className="h-[min(70vh,400px)]">
-                    <div className="grid grid-cols-1 p-4">
-                      {years.map((year) => (
-                        <div key={year} className="mb-6">
-                          <div className="sticky top-0 mb-2 bg-background px-2 py-1 text-base font-medium">
-                            {year}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {months.map((month) => (
-                              <Button
-                                key={`${year}-${month.value}`}
-                                variant={
-                                  date.month === month.value &&
-                                  date.year === year
-                                    ? 'default'
-                                    : 'ghost'
-                                }
-                                className="w-full justify-start py-6 text-base"
-                                disabled={
-                                  year === new Date().getFullYear() &&
-                                  month.value > new Date().getMonth() + 1
-                                }
-                                onClick={() => {
-                                  setDate({ month: month.value, year })
-                                  setIsMonthSelectorOpen(false)
-                                }}
-                              >
-                                {month.label}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <MonthYearSelector
+              date={date}
+              setDate={setDate}
+              isOpen={isMonthSelectorOpen}
+              setIsOpen={setIsMonthSelectorOpen}
+            />
           </CardContent>
         </Card>
 
@@ -399,69 +474,27 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
         <div className="space-y-6">
           {/* Summary Stats */}
           <div className="grid gap-4 md:grid-cols-3">
-            <Card className="relative overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Gross Payouts
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold sm:text-3xl">
-                  $
-                  {(result.totalPayoutAmount / 100).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Based on {result.payoutsFound} payouts
-                </div>
-                <div className="absolute right-0 top-0 h-full w-[4px] bg-blue-500" />
-              </CardContent>
-            </Card>
-            <Card className="relative overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Deductions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-500 sm:text-3xl">
-                  -$
-                  {(result.totalDeductions / 100).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  From selected batches
-                </div>
-                <div className="absolute right-0 top-0 h-full w-[4px] bg-red-500" />
-              </CardContent>
-            </Card>
-            <Card className="relative overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Final Adjusted Payout
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600 sm:text-3xl">
-                  $
-                  {(result.finalAdjustedPayout / 100).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Net profit share amount
-                </div>
-                <div className="absolute right-0 top-0 h-full w-[4px] bg-green-500" />
-              </CardContent>
-            </Card>
+            <StatCard
+              title="Total Gross Payouts"
+              amount={result.totalPayoutAmount}
+              subtitle={`Based on ${result.payoutsFound} payouts`}
+              color="blue"
+            />
+            <StatCard
+              title="Total Deductions"
+              amount={-result.totalDeductions}
+              subtitle="From selected batches"
+              color="red"
+            />
+            <StatCard
+              title="Final Adjusted Payout"
+              amount={result.finalAdjustedPayout}
+              subtitle="Net profit share amount"
+              color="green"
+            />
           </div>
 
-          {/* Batch Details Tabs */}
+          {/* Batch Details */}
           {Object.keys(chargesByBatch).length > 0 && (
             <Card>
               <CardHeader>
@@ -533,7 +566,7 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                                       <div className="break-all">
                                         {student.customerEmail}
                                       </div>
-                                      {student.customerId ? (
+                                      {student.customerId && (
                                         <a
                                           href={`https://dashboard.stripe.com/customers/${student.customerId}`}
                                           target="_blank"
@@ -543,19 +576,13 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                                           View Profile{' '}
                                           <ExternalLink className="h-4 w-4" />
                                         </a>
-                                      ) : null}
+                                      )}
                                     </div>
                                   </TableCell>
                                   <TableCell className="min-w-[120px] text-right font-mono">
                                     {student.chargeAmount > 0 ? (
                                       <span className="font-semibold text-red-600">
-                                        -$
-                                        {(
-                                          student.chargeAmount / 100
-                                        ).toLocaleString('en-US', {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        })}
+                                        {formatCurrency(-student.chargeAmount)}
                                       </span>
                                     ) : (
                                       <span className="text-muted-foreground">
@@ -564,7 +591,7 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                                     )}
                                   </TableCell>
                                   <TableCell className="min-w-[200px]">
-                                    {student.chargeAmount > 0 ? (
+                                    {student.chargeAmount > 0 && (
                                       <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2">
                                           <span className="font-mono text-sm">
@@ -611,7 +638,7 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                                           </div>
                                         )}
                                       </div>
-                                    ) : null}
+                                    )}
                                   </TableCell>
                                 </TableRow>
                               ))}

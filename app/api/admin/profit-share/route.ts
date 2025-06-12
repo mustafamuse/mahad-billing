@@ -6,7 +6,8 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db'
 import { stripeServerClient } from '@/lib/stripe'
 
-const schema = z.object({
+// Schema validation
+const requestSchema = z.object({
   year: z
     .number()
     .int()
@@ -16,6 +17,7 @@ const schema = z.object({
   batchIds: z.array(z.string()).optional(),
 })
 
+// Types
 interface ExcludedCharge {
   studentName: string
   studentEmail: string
@@ -36,10 +38,147 @@ interface StudentInfo {
   customerId: string
 }
 
+// Helper functions
+async function getStudentsInBatches(batchIds: string[]) {
+  if (batchIds.length === 0) return []
+
+  return await prisma.student.findMany({
+    where: {
+      batchId: { in: batchIds },
+    },
+    select: { name: true, email: true, batchId: true },
+  })
+}
+
+async function getStudentsWithSubscriptions(batchIds: string[]) {
+  if (batchIds.length === 0) return []
+
+  return await prisma.student.findMany({
+    where: {
+      batchId: { in: batchIds },
+      stripeSubscriptionId: { not: null },
+      email: { not: null },
+    },
+    select: {
+      name: true,
+      email: true,
+      stripeSubscriptionId: true,
+      batchId: true,
+    },
+  })
+}
+
+async function getCustomerEmailFromSubscription(student: {
+  stripeSubscriptionId: string | null
+  email: string | null
+  name: string
+  batchId: string | null
+}) {
+  if (!student.stripeSubscriptionId || !student.email) return null
+
+  try {
+    const subscription = await stripeServerClient.subscriptions.retrieve(
+      student.stripeSubscriptionId,
+      { expand: ['customer'] }
+    )
+
+    const customer = subscription.customer as Stripe.Customer
+    return customer.email
+      ? {
+          customerEmail: customer.email,
+          studentName: student.name || student.email,
+          studentEmail: student.email,
+          batchId: student.batchId ?? '',
+          customerId: customer.id,
+        }
+      : null
+  } catch (error) {
+    console.error(
+      `Failed to retrieve subscription for ${student.email}:`,
+      error
+    )
+    return null
+  }
+}
+
+async function processPayouts(
+  startDate: Date,
+  endDate: Date,
+  emailsToExclude: string[],
+  studentEmailToInfo: Record<
+    string,
+    {
+      studentName: string
+      studentEmail: string
+      batchId: string
+      customerId: string
+    }
+  >
+) {
+  let totalPayoutAmount = 0
+  let totalDeductions = 0
+  let payoutsFoundCount = 0
+  const excludedCharges: ExcludedCharge[] = []
+
+  const payoutParams: Stripe.PayoutListParams = {
+    arrival_date: {
+      gte: Math.floor(startDate.getTime() / 1000),
+      lt: Math.floor(endDate.getTime() / 1000),
+    },
+    status: 'paid',
+    limit: 100,
+  }
+
+  for await (const payout of stripeServerClient.payouts.list(payoutParams)) {
+    payoutsFoundCount++
+    totalPayoutAmount += payout.amount
+
+    const balanceTransactions =
+      await stripeServerClient.balanceTransactions.list({
+        payout: payout.id,
+        limit: 100,
+        expand: ['data.source.customer'],
+      })
+
+    for (const txn of balanceTransactions.data) {
+      if (txn.reporting_category === 'charge') {
+        const charge = txn.source as Stripe.Charge
+        if (charge.customer && charge.paid === true) {
+          const customer = charge.customer as Stripe.Customer
+          const customerEmail = customer.email
+
+          if (customerEmail && emailsToExclude.includes(customerEmail)) {
+            const studentInfo = studentEmailToInfo[customerEmail]
+            totalDeductions += txn.net
+
+            excludedCharges.push({
+              studentName: studentInfo.studentName,
+              studentEmail: studentInfo.studentEmail,
+              customerEmail: customerEmail,
+              chargeAmount: txn.net,
+              chargeId: charge.id,
+              invoiceId: (charge as any).invoice || null,
+              payoutId: payout.id,
+              customerId: customer.id,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    totalPayoutAmount,
+    totalDeductions,
+    payoutsFoundCount,
+    excludedCharges,
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const validation = schema.safeParse(body)
+    const validation = requestSchema.safeParse(body)
 
     if (!validation.success) {
       return NextResponse.json(
@@ -49,10 +188,8 @@ export async function POST(req: Request) {
     }
 
     const { year, month, batchIds = [] } = validation.data
-
     const emailsToExclude: string[] = []
     const exclusionLog: Record<string, StudentInfo> = {}
-    const excludedCharges: ExcludedCharge[] = []
     const studentEmailToInfo: Record<
       string,
       {
@@ -63,101 +200,46 @@ export async function POST(req: Request) {
       }
     > = {}
 
-    let allStudentsInBatches: Array<{
-      name: string
-      email: string | null
-      batchId: string
-    }> = []
-    if (batchIds.length > 0) {
-      const studentsRaw = await prisma.student.findMany({
-        where: {
-          batchId: { in: batchIds },
-        },
-        select: { name: true, email: true, batchId: true },
-      })
-      allStudentsInBatches = studentsRaw.map((student) => ({
-        name: student.name,
-        email: student.email,
-        batchId: student.batchId ?? '',
-      }))
-    }
+    // Get all students in selected batches
+    const allStudentsInBatches = await getStudentsInBatches(batchIds)
+    const studentsWithSubscriptions =
+      await getStudentsWithSubscriptions(batchIds)
 
-    if (batchIds.length > 0) {
-      const studentsInBatches = await prisma.student.findMany({
-        where: {
-          batchId: { in: batchIds },
-          stripeSubscriptionId: { not: null },
-          email: { not: null },
-        },
-        select: {
-          name: true,
-          email: true,
-          stripeSubscriptionId: true,
-          batchId: true,
-        },
-      })
+    // Process student subscriptions
+    const customerEmailPromises = studentsWithSubscriptions.map(
+      getCustomerEmailFromSubscription
+    )
+    const customerEmails = await Promise.all(customerEmailPromises)
 
-      console.log(
-        `Found ${studentsInBatches.length} students in selected batches`
-      )
-
-      const emailPromises = studentsInBatches.map(async (student) => {
-        if (!student.stripeSubscriptionId || !student.email) {
-          return null
+    customerEmails.forEach((result) => {
+      if (result) {
+        const {
+          customerEmail,
+          studentName,
+          studentEmail,
+          batchId,
+          customerId,
+        } = result
+        studentEmailToInfo[customerEmail] = {
+          studentName,
+          studentEmail,
+          batchId,
+          customerId,
         }
-        try {
-          const subscription = await stripeServerClient.subscriptions.retrieve(
-            student.stripeSubscriptionId,
-            { expand: ['customer'] }
-          )
-
-          const customer = subscription.customer as Stripe.Customer
-          const customerEmail = customer.email
-
-          if (customerEmail) {
-            const studentName = student.name || student.email
-            console.log(
-              `Student ${studentName} (${student.email}) -> Customer email: ${customerEmail}`
-            )
-            studentEmailToInfo[customerEmail] = {
-              studentName: studentName,
-              studentEmail: student.email,
-              batchId: student.batchId ?? '',
-              customerId: customer.id,
-            }
-            return customerEmail
-          }
-        } catch (error) {
-          console.error(
-            `Failed to retrieve subscription for ${student.email}:`,
-            error
-          )
+        emailsToExclude.push(customerEmail)
+        exclusionLog[customerEmail] = {
+          studentName,
+          studentEmail,
+          customerEmail,
+          chargesFound: 0,
+          batchId,
+          customerId,
         }
-        return null
-      })
+      }
+    })
 
-      const resolvedEmails = await Promise.all(emailPromises)
-
-      resolvedEmails.forEach((email) => {
-        if (email && studentEmailToInfo[email]) {
-          emailsToExclude.push(email)
-          exclusionLog[email] = {
-            studentName: studentEmailToInfo[email].studentName,
-            studentEmail: studentEmailToInfo[email].studentEmail,
-            customerEmail: email,
-            chargesFound: 0,
-            batchId: studentEmailToInfo[email].batchId ?? '',
-            customerId: studentEmailToInfo[email].customerId,
-          }
-        }
-      })
-
-      console.log('Emails to exclude:', emailsToExclude)
-    }
-
-    // After exclusionLog is built, add any missing students to exclusionLog
+    // Add missing students to exclusionLog
     allStudentsInBatches.forEach((student) => {
-      // If this student's email is not already in exclusionLog, add them
       const alreadyIncluded = Object.values(exclusionLog).some(
         (log) => log.studentEmail === student.email
       )
@@ -173,83 +255,33 @@ export async function POST(req: Request) {
       }
     })
 
+    // Process payouts
     const startDate = new Date(Date.UTC(year, month - 1, 1))
     const endDate = new Date(Date.UTC(year, month, 1))
 
-    let totalPayoutAmount = 0
-    let totalDeductions = 0
-    let payoutsFoundCount = 0
+    const {
+      totalPayoutAmount,
+      totalDeductions,
+      payoutsFoundCount,
+      excludedCharges,
+    } = await processPayouts(
+      startDate,
+      endDate,
+      emailsToExclude,
+      studentEmailToInfo
+    )
 
-    const payoutParams: Stripe.PayoutListParams = {
-      arrival_date: {
-        gte: Math.floor(startDate.getTime() / 1000),
-        lt: Math.floor(endDate.getTime() / 1000),
-      },
-      status: 'paid',
-      limit: 100,
-    }
-
-    for await (const payout of stripeServerClient.payouts.list(payoutParams)) {
-      payoutsFoundCount++
-      totalPayoutAmount += payout.amount
-
-      const balanceTransactions =
-        await stripeServerClient.balanceTransactions.list({
-          payout: payout.id,
-          limit: 100,
-          expand: ['data.source.customer'],
-        })
-
-      for (const txn of balanceTransactions.data) {
-        if (txn.reporting_category === 'charge') {
-          const charge = txn.source as Stripe.Charge
-          if (charge.customer && charge.paid === true) {
-            const customer = charge.customer as Stripe.Customer
-            const customerEmail = customer.email
-
-            if (customerEmail && emailsToExclude.includes(customerEmail)) {
-              const studentInfo = studentEmailToInfo[customerEmail]
-
-              console.log(
-                `Excluding charge from ${customerEmail}, Net: $${(txn.net / 100).toFixed(2)}, Charge ID: ${charge.id}`
-              )
-
-              totalDeductions += txn.net
-              if (exclusionLog[customerEmail]) {
-                exclusionLog[customerEmail].chargesFound++
-              }
-
-              // Collect detailed charge information
-              excludedCharges.push({
-                studentName: studentInfo.studentName,
-                studentEmail: studentInfo.studentEmail,
-                customerEmail: customerEmail,
-                chargeAmount: txn.net,
-                chargeId: charge.id,
-                invoiceId: (charge as any).invoice || null,
-                payoutId: payout.id,
-                customerId: customer.id,
-              })
-            }
-          }
-        }
+    // Update chargesFound count in exclusionLog
+    excludedCharges.forEach((charge) => {
+      if (exclusionLog[charge.customerEmail]) {
+        exclusionLog[charge.customerEmail].chargesFound++
       }
-    }
-
-    console.log('\n--- Exclusion Summary ---')
-    Object.entries(exclusionLog).forEach(([_, log]) => {
-      console.log(
-        `Student: ${log.studentName} (${log.studentEmail}) | Customer: ${log.customerEmail} | Charges Deducted: ${log.chargesFound} | Batch: ${log.batchId}`
-      )
     })
-    console.log('-----------------------\n')
-
-    const finalAdjustedPayout = totalPayoutAmount - totalDeductions
 
     return NextResponse.json({
       totalPayoutAmount,
       totalDeductions,
-      finalAdjustedPayout,
+      finalAdjustedPayout: totalPayoutAmount - totalDeductions,
       payoutsFound: payoutsFoundCount,
       excludedCharges,
       exclusionSummary: Object.values(exclusionLog),
