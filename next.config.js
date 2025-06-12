@@ -35,9 +35,7 @@ const nextConfig = {
     KV_REST_API_READ_ONLY_TOKEN: process.env.KV_REST_API_READ_ONLY_TOKEN,
     KV_URL: process.env.KV_URL,
   },
-  experimental: {
-    esmExternals: 'loose',
-  },
+
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,

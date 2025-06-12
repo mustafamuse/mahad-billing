@@ -92,6 +92,8 @@ async function main() {
 
       // Create a payment record for each student on the subscription.
       for (const student of studentsOnThisSub) {
+        if (!invoice.id) continue // Skip if invoice ID is missing
+
         await prisma.studentPayment.upsert({
           where: {
             studentId_stripeInvoiceId: {
