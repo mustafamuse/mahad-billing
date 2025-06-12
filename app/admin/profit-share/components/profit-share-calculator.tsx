@@ -72,6 +72,13 @@ interface ProfitShareCalculatorProps {
   batches: Batch[]
 }
 
+// Helper function to filter and sort batches
+function filterAndSortBatches(batches: Batch[]): Batch[] {
+  return batches
+    .filter((batch) => !batch.name.toLowerCase().includes('test'))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
   const [date, setDate] = useState({
     month: new Date().getMonth() + 1,
@@ -83,6 +90,9 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState<string>('')
   const [isMonthSelectorOpen, setIsMonthSelectorOpen] = useState(false)
+
+  // Filter out test batches and sort alphabetically
+  const filteredBatches = filterAndSortBatches(batches)
 
   const handlePreviousMonth = () => {
     setDate((prev) => {
@@ -333,7 +343,7 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
           <CardContent>
             <ScrollArea className="h-[min(50vh,300px)] pr-4">
               <div className="space-y-4">
-                {batches.map((batch) => (
+                {filteredBatches.map((batch) => (
                   <div
                     key={batch.id}
                     className="flex items-center space-x-3 rounded-lg border p-4 transition-colors hover:bg-muted/50"
