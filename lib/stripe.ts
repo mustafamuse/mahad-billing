@@ -2,15 +2,15 @@ import Stripe from 'stripe'
 let stripeClient: Stripe | null = null
 // Get configured server-side Stripe client
 export function getStripeClient(): Stripe {
-  if (!process.env.STRIPE_SECRET_KEY) {
+  if (!process.env.STRIPE_LIVE_SECRET_KEY) {
     throw new Error(
-      'STRIPE_SECRET_KEY is not defined. Please set it in your environment variables.'
+      'STRIPE_LIVE_SECRET_KEY is not defined. Please set it in your environment variables.'
     )
   }
 
   if (!stripeClient) {
     console.log('Initializing Stripe client...')
-    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    stripeClient = new Stripe(process.env.STRIPE_LIVE_SECRET_KEY, {
       apiVersion: '2025-04-30.basil',
       typescript: true,
     })
