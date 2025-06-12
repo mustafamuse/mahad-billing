@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 import type { Batch } from '@prisma/client'
 import { ExternalLink } from 'lucide-react'
@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface ExcludedCharge {
   studentName: string
@@ -67,6 +68,7 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
   const [result, setResult] = useState<CalculationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState<string>('')
 
   const handleBatchToggle = (batchId: string) => {
     const isSelected = selectedBatchIds.includes(batchId)
@@ -113,6 +115,13 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
       setIsLoading(false)
     }
   }
+
+  // Update the activeTab when result changes
+  useEffect(() => {
+    if (result && Object.keys(chargesByBatch).length > 0) {
+      setActiveTab(Object.keys(chargesByBatch)[0])
+    }
+  }, [result])
 
   const years = Array.from(
     { length: 5 },
@@ -169,7 +178,7 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
     )
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="year">Year</Label>
@@ -293,133 +302,152 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
             </CardContent>
           </Card>
 
-          {/* Render a table for each selected batch */}
-          {Object.entries(chargesByBatch).map(([batchName, students]) => (
-            <div key={batchName} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">{batchName}</h2>
-                <span className="text-sm text-muted-foreground">
-                  {students.length} students
-                </span>
-              </div>
-              <div className="overflow-x-auto rounded-lg border bg-background">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Customer Email</TableHead>
-                      <TableHead className="text-right">
-                        Charge Amount
-                      </TableHead>
-                      <TableHead>Payment Details</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {students.map((student, studentIndex) => (
-                      <TableRow
-                        key={`${student.studentEmail}-${studentIndex}`}
-                        className={
-                          student.chargeAmount === 0 ? 'bg-muted/30' : undefined
-                        }
+          {/* Batch Tables in Tabs */}
+          {Object.keys(chargesByBatch).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Batch Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="w-full">
+                    {Object.entries(chargesByBatch).map(([batchName]) => (
+                      <TabsTrigger
+                        key={batchName}
+                        value={batchName}
+                        className="flex-1"
                       >
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">
-                              {student.studentName}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {student.studentEmail}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div>{student.customerEmail}</div>
-                            {student.customerId ? (
-                              <a
-                                href={`https://dashboard.stripe.com/customers/${student.customerId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
-                              >
-                                View Profile{' '}
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {student.chargeAmount > 0 ? (
-                            <span className="font-semibold text-red-600">
-                              -${(student.chargeAmount / 100).toFixed(2)}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">
-                              No charges
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {student.chargeAmount > 0 ? (
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs">
-                                  Payout
-                                </span>
-                                <a
-                                  href={`https://dashboard.stripe.com/payouts/${student.payoutId}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
-                                >
-                                  {student.payoutId.slice(-8)}{' '}
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs">
-                                  Charge
-                                </span>
-                                <a
-                                  href={`https://dashboard.stripe.com/payments/${student.chargeId}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
-                                >
-                                  {student.chargeId.slice(-8)}{' '}
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              </div>
-                              {student.invoiceId && (
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs">
-                                    Invoice
-                                  </span>
-                                  <a
-                                    href={`https://dashboard.stripe.com/invoices/${student.invoiceId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
-                                  >
-                                    {student.invoiceId.slice(-8)}{' '}
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              No payment details
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                        {batchName}
+                      </TabsTrigger>
                     ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-          ))}
+                  </TabsList>
+                  {Object.entries(chargesByBatch).map(
+                    ([batchName, students]) => (
+                      <TabsContent key={batchName} value={batchName}>
+                        <div className="rounded-lg border bg-background">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Student</TableHead>
+                                <TableHead>Customer Email</TableHead>
+                                <TableHead className="text-right">
+                                  Charge Amount
+                                </TableHead>
+                                <TableHead>Payment Details</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {students.map((student, studentIndex) => (
+                                <TableRow
+                                  key={`${student.studentEmail}-${studentIndex}`}
+                                  className={
+                                    student.chargeAmount === 0
+                                      ? 'bg-muted/30'
+                                      : undefined
+                                  }
+                                >
+                                  <TableCell>
+                                    <div>
+                                      <div className="font-medium">
+                                        {student.studentName}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {student.studentEmail}
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div>
+                                      <div>{student.customerEmail}</div>
+                                      {student.customerId ? (
+                                        <a
+                                          href={`https://dashboard.stripe.com/customers/${student.customerId}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                                        >
+                                          View Profile{' '}
+                                          <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono">
+                                    {student.chargeAmount > 0 ? (
+                                      <span className="font-semibold text-red-600">
+                                        -$
+                                        {(student.chargeAmount / 100).toFixed(
+                                          2
+                                        )}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">
+                                        No charges
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    {student.chargeAmount > 0 ? (
+                                      <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-mono text-xs">
+                                            Payout
+                                          </span>
+                                          <a
+                                            href={`https://dashboard.stripe.com/payouts/${student.payoutId}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                                          >
+                                            {student.payoutId.slice(-8)}{' '}
+                                            <ExternalLink className="h-3 w-3" />
+                                          </a>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-mono text-xs">
+                                            Charge
+                                          </span>
+                                          <a
+                                            href={`https://dashboard.stripe.com/payments/${student.chargeId}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                                          >
+                                            {student.chargeId.slice(-8)}{' '}
+                                            <ExternalLink className="h-3 w-3" />
+                                          </a>
+                                        </div>
+                                        {student.invoiceId && (
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-mono text-xs">
+                                              Invoice
+                                            </span>
+                                            <a
+                                              href={`https://dashboard.stripe.com/invoices/${student.invoiceId}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                                            >
+                                              {student.invoiceId.slice(-8)}{' '}
+                                              <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </TabsContent>
+                    )
+                  )}
+                </Tabs>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>
