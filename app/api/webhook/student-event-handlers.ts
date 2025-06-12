@@ -203,7 +203,7 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   let invoice: Stripe.Invoice
   try {
     invoice = await stripe.invoices.retrieve(stripeInvoiceId, {
-      expand: ['lines.data.price.product', 'subscription'],
+      expand: ['lines.data', 'subscription'],
     })
   } catch (error) {
     console.error(
@@ -227,12 +227,12 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   // This part remains, as it's about logging a historical event, not just current state.
 
   const subscriptionLineItem = invoice.lines.data.find(
-    (line: any) => line.type === 'subscription'
+    (line: any) => line.parent?.type === 'subscription_item_details'
   )
 
   if (!subscriptionLineItem?.period) {
     console.error(
-      `[WEBHOOK] Error: Invoice ${invoice.id} is missing subscription line item or period info.`
+      `[WEBHOOK] Error: Invoice ${invoice.id} is missing a subscription line item with period info. Check 'expand' and line item type.`
     )
     return
   }
@@ -260,8 +260,8 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
     studentId: student.id,
     stripeInvoiceId: stripeInvoiceId,
     amountPaid: amountPerStudent,
-    year: periodStart.getFullYear(),
-    month: periodStart.getMonth() + 1,
+    year: periodStart.getUTCFullYear(),
+    month: periodStart.getUTCMonth() + 1,
     paidAt: paidAt,
   }))
 
