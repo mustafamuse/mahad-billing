@@ -24,6 +24,7 @@ interface ExcludedCharge {
   chargeId: string
   invoiceId: string | null
   payoutId: string
+  customerId: string
 }
 
 interface StudentInfo {
@@ -32,6 +33,7 @@ interface StudentInfo {
   customerEmail: string
   chargesFound: number
   batchId: string
+  customerId: string
 }
 
 export async function POST(req: Request) {
@@ -53,8 +55,32 @@ export async function POST(req: Request) {
     const excludedCharges: ExcludedCharge[] = []
     const studentEmailToInfo: Record<
       string,
-      { studentName: string; studentEmail: string; batchId: string }
+      {
+        studentName: string
+        studentEmail: string
+        batchId: string
+        customerId: string
+      }
     > = {}
+
+    let allStudentsInBatches: Array<{
+      name: string
+      email: string | null
+      batchId: string
+    }> = []
+    if (batchIds.length > 0) {
+      const studentsRaw = await prisma.student.findMany({
+        where: {
+          batchId: { in: batchIds },
+        },
+        select: { name: true, email: true, batchId: true },
+      })
+      allStudentsInBatches = studentsRaw.map((student) => ({
+        name: student.name,
+        email: student.email,
+        batchId: student.batchId ?? '',
+      }))
+    }
 
     if (batchIds.length > 0) {
       const studentsInBatches = await prisma.student.findMany({
@@ -97,6 +123,7 @@ export async function POST(req: Request) {
               studentName: studentName,
               studentEmail: student.email,
               batchId: student.batchId ?? '',
+              customerId: customer.id,
             }
             return customerEmail
           }
@@ -120,12 +147,31 @@ export async function POST(req: Request) {
             customerEmail: email,
             chargesFound: 0,
             batchId: studentEmailToInfo[email].batchId ?? '',
+            customerId: studentEmailToInfo[email].customerId,
           }
         }
       })
 
       console.log('Emails to exclude:', emailsToExclude)
     }
+
+    // After exclusionLog is built, add any missing students to exclusionLog
+    allStudentsInBatches.forEach((student) => {
+      // If this student's email is not already in exclusionLog, add them
+      const alreadyIncluded = Object.values(exclusionLog).some(
+        (log) => log.studentEmail === student.email
+      )
+      if (!alreadyIncluded) {
+        exclusionLog[student.email ?? student.name] = {
+          studentName: student.name,
+          studentEmail: student.email ?? '',
+          customerEmail: '',
+          chargesFound: 0,
+          batchId: student.batchId ?? '',
+          customerId: '',
+        }
+      }
+    })
 
     const startDate = new Date(Date.UTC(year, month - 1, 1))
     const endDate = new Date(Date.UTC(year, month, 1))
@@ -182,6 +228,7 @@ export async function POST(req: Request) {
                 chargeId: charge.id,
                 invoiceId: (charge as any).invoice || null,
                 payoutId: payout.id,
+                customerId: customer.id,
               })
             }
           }

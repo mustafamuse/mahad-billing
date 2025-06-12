@@ -25,7 +25,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-
 interface ExcludedCharge {
   studentName: string
   studentEmail: string
@@ -34,6 +33,7 @@ interface ExcludedCharge {
   chargeId: string
   invoiceId: string | null
   payoutId: string
+  customerId?: string
 }
 
 interface StudentInfo {
@@ -42,6 +42,7 @@ interface StudentInfo {
   customerEmail: string
   chargesFound: number
   batchId: string
+  customerId?: string
 }
 
 interface CalculationResult {
@@ -157,6 +158,7 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
               chargeId: '',
               invoiceId: null,
               payoutId: '',
+              customerId: student.customerId,
             })
           }
         })
@@ -333,16 +335,17 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                         <TableCell>
                           <div>
                             <div>{student.customerEmail}</div>
-                            <a
-                              href={`https://dashboard.stripe.com/customers?email=${encodeURIComponent(
-                                student.customerEmail
-                              )}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
-                            >
-                              View Profile <ExternalLink className="h-3 w-3" />
-                            </a>
+                            {student.customerId ? (
+                              <a
+                                href={`https://dashboard.stripe.com/customers/${student.customerId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                              >
+                                View Profile{' '}
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-mono">
