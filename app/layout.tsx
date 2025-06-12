@@ -9,6 +9,7 @@ import { Providers } from './providers'
 import './globals.css'
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://rootsofknowledge.net'),
   title: 'Roots of Knowledge - Islamic Education',
   description:
     'Comprehensive Islamic education and payment management system at Roots of Knowledge, Eden Prairie.',
