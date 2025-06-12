@@ -9,8 +9,10 @@ import {
   ChevronRight,
   ExternalLink,
   InfoIcon,
+  CheckCircle2,
 } from 'lucide-react'
 
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -210,11 +212,17 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {/* Selection Controls */}
+      <div className="grid gap-4 md:grid-cols-2">
         {/* Month Selection Card */}
-        <Card>
+        <Card className="md:col-span-1">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Select Month</CardTitle>
+            <CardTitle className="flex items-center justify-between text-sm font-medium">
+              Select Month
+              <Badge variant="secondary" className="font-normal">
+                {selectedBatchIds.length} batches selected
+              </Badge>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <Popover
@@ -226,72 +234,72 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                   variant="outline"
                   role="combobox"
                   aria-expanded={isMonthSelectorOpen}
-                  className="w-full justify-between"
+                  className="w-full justify-between py-6 text-lg"
                 >
                   <span>
                     {months[date.month - 1]?.label} {date.year}
                   </span>
-                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  <ChevronDown className="ml-2 h-5 w-5 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-full p-0" align="start">
                 <div className="grid">
-                  <div className="flex items-center justify-between border-b p-2">
+                  <div className="sticky top-0 flex items-center justify-between border-b bg-background p-4">
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-10 w-10"
                       onClick={handlePreviousMonth}
                     >
-                      <ChevronLeft className="h-4 w-4" />
+                      <ChevronLeft className="h-6 w-6" />
                     </Button>
-                    <span className="text-sm font-medium">
+                    <span className="text-base font-medium">
                       {months[date.month - 1]?.label} {date.year}
                     </span>
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-10 w-10"
                       onClick={handleNextMonth}
                       disabled={
                         date.year === new Date().getFullYear() &&
                         date.month >= new Date().getMonth() + 1
                       }
                     >
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronRight className="h-6 w-6" />
                     </Button>
                   </div>
-                  <ScrollArea className="h-72">
-                    <div className="grid grid-cols-1 p-2">
+                  <ScrollArea className="h-[min(70vh,400px)]">
+                    <div className="grid grid-cols-1 p-4">
                       {years.map((year) => (
-                        <div key={year} className="mb-4">
-                          <div className="sticky top-0 mb-2 bg-background px-2 py-1 text-sm font-medium">
+                        <div key={year} className="mb-6">
+                          <div className="sticky top-0 mb-2 bg-background px-2 py-1 text-base font-medium">
                             {year}
                           </div>
-                          {months.map((month) => (
-                            <Button
-                              key={`${year}-${month.value}`}
-                              variant="ghost"
-                              className="w-full justify-start px-2 py-1.5"
-                              disabled={
-                                year === new Date().getFullYear() &&
-                                month.value > new Date().getMonth() + 1
-                              }
-                              onClick={() => {
-                                setDate({ month: month.value, year })
-                                setIsMonthSelectorOpen(false)
-                              }}
-                            >
-                              <span
-                                className={
+                          <div className="grid grid-cols-2 gap-2">
+                            {months.map((month) => (
+                              <Button
+                                key={`${year}-${month.value}`}
+                                variant={
                                   date.month === month.value &&
                                   date.year === year
-                                    ? 'font-medium text-primary'
-                                    : ''
+                                    ? 'default'
+                                    : 'ghost'
                                 }
+                                className="w-full justify-start py-6 text-base"
+                                disabled={
+                                  year === new Date().getFullYear() &&
+                                  month.value > new Date().getMonth() + 1
+                                }
+                                onClick={() => {
+                                  setDate({ month: month.value, year })
+                                  setIsMonthSelectorOpen(false)
+                                }}
                               >
                                 {month.label}
-                              </span>
-                            </Button>
-                          ))}
+                              </Button>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -303,7 +311,7 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
         </Card>
 
         {/* Batch Selection Card */}
-        <Card className="col-span-2">
+        <Card className="md:col-span-1">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium">
@@ -323,20 +331,27 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
             </div>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-[120px] pr-4">
+            <ScrollArea className="h-[min(50vh,300px)] pr-4">
               <div className="space-y-4">
                 {batches.map((batch) => (
-                  <div key={batch.id} className="flex items-center space-x-2">
+                  <div
+                    key={batch.id}
+                    className="flex items-center space-x-3 rounded-lg border p-4 transition-colors hover:bg-muted/50"
+                  >
                     <Checkbox
                       id={batch.id}
                       checked={selectedBatchIds.includes(batch.id)}
                       onCheckedChange={() => handleBatchToggle(batch.id)}
+                      className="h-5 w-5"
                     />
                     <Label
                       htmlFor={batch.id}
-                      className="flex-1 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      className="flex flex-1 cursor-pointer items-center justify-between text-base"
                     >
                       {batch.name}
+                      {selectedBatchIds.includes(batch.id) && (
+                        <CheckCircle2 className="h-5 w-5 text-primary" />
+                      )}
                     </Label>
                   </div>
                 ))}
@@ -350,11 +365,12 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
         <Button
           onClick={handleCalculate}
           disabled={isLoading || selectedBatchIds.length === 0}
-          className="w-full md:w-auto"
+          className="w-full py-6 text-lg md:w-auto"
+          size="lg"
         >
           {isLoading ? (
             <>
-              <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <div className="mr-2 h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
               Calculating...
             </>
           ) : (
@@ -364,7 +380,7 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-base text-red-600">
           {error}
         </div>
       )}
@@ -380,14 +396,14 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold sm:text-3xl">
                   $
                   {(result.totalPayoutAmount / 100).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-sm text-muted-foreground">
                   Based on {result.payoutsFound} payouts
                 </div>
                 <div className="absolute right-0 top-0 h-full w-[4px] bg-blue-500" />
@@ -400,14 +416,14 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-500">
+                <div className="text-2xl font-bold text-red-500 sm:text-3xl">
                   -$
                   {(result.totalDeductions / 100).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-sm text-muted-foreground">
                   From selected batches
                 </div>
                 <div className="absolute right-0 top-0 h-full w-[4px] bg-red-500" />
@@ -420,14 +436,14 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-600 sm:text-3xl">
                   $
                   {(result.finalAdjustedPayout / 100).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-sm text-muted-foreground">
                   Net profit share amount
                 </div>
                 <div className="absolute right-0 top-0 h-full w-[4px] bg-green-500" />
@@ -441,37 +457,45 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
               <CardHeader>
                 <CardTitle>Batch Details</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-0 sm:px-6">
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="w-full">
-                    {Object.entries(chargesByBatch).map(
-                      ([batchName, students]) => (
-                        <TabsTrigger
-                          key={batchName}
-                          value={batchName}
-                          className="flex-1"
-                        >
-                          <span>{batchName}</span>
-                          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">
-                            {students.length}
-                          </span>
-                        </TabsTrigger>
-                      )
-                    )}
-                  </TabsList>
+                  <ScrollArea className="w-full">
+                    <TabsList className="inline-flex w-auto space-x-2 p-2 sm:w-full">
+                      {Object.entries(chargesByBatch).map(
+                        ([batchName, students]) => (
+                          <TabsTrigger
+                            key={batchName}
+                            value={batchName}
+                            className="min-w-[150px] flex-none sm:flex-1"
+                          >
+                            <span className="truncate">{batchName}</span>
+                            <Badge variant="secondary" className="ml-2">
+                              {students.length}
+                            </Badge>
+                          </TabsTrigger>
+                        )
+                      )}
+                    </TabsList>
+                  </ScrollArea>
                   {Object.entries(chargesByBatch).map(
                     ([batchName, students]) => (
                       <TabsContent key={batchName} value={batchName}>
-                        <div className="rounded-lg border bg-background">
+                        <div className="overflow-x-auto">
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Student</TableHead>
-                                <TableHead>Customer Email</TableHead>
-                                <TableHead className="text-right">
+                                <TableHead className="min-w-[200px]">
+                                  Student
+                                </TableHead>
+                                <TableHead className="min-w-[200px]">
+                                  Customer Email
+                                </TableHead>
+                                <TableHead className="min-w-[120px] text-right">
                                   Charge Amount
                                 </TableHead>
-                                <TableHead>Payment Details</TableHead>
+                                <TableHead className="min-w-[200px]">
+                                  Payment Details
+                                </TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -484,33 +508,35 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                                       : undefined
                                   }
                                 >
-                                  <TableCell>
+                                  <TableCell className="min-w-[200px]">
                                     <div>
                                       <div className="font-medium">
                                         {student.studentName}
                                       </div>
-                                      <div className="text-xs text-muted-foreground">
+                                      <div className="text-sm text-muted-foreground">
                                         {student.studentEmail}
                                       </div>
                                     </div>
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="min-w-[200px]">
                                     <div>
-                                      <div>{student.customerEmail}</div>
+                                      <div className="break-all">
+                                        {student.customerEmail}
+                                      </div>
                                       {student.customerId ? (
                                         <a
                                           href={`https://dashboard.stripe.com/customers/${student.customerId}`}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                                          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
                                         >
                                           View Profile{' '}
-                                          <ExternalLink className="h-3 w-3" />
+                                          <ExternalLink className="h-4 w-4" />
                                         </a>
                                       ) : null}
                                     </div>
                                   </TableCell>
-                                  <TableCell className="text-right font-mono">
+                                  <TableCell className="min-w-[120px] text-right font-mono">
                                     {student.chargeAmount > 0 ? (
                                       <span className="font-semibold text-red-600">
                                         -$
@@ -527,50 +553,50 @@ export function ProfitShareCalculator({ batches }: ProfitShareCalculatorProps) {
                                       </span>
                                     )}
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="min-w-[200px]">
                                     {student.chargeAmount > 0 ? (
-                                      <div className="flex flex-col gap-1">
+                                      <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2">
-                                          <span className="font-mono text-xs">
+                                          <span className="font-mono text-sm">
                                             Payout
                                           </span>
                                           <a
                                             href={`https://dashboard.stripe.com/payouts/${student.payoutId}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                                            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
                                           >
                                             {student.payoutId.slice(-8)}{' '}
-                                            <ExternalLink className="h-3 w-3" />
+                                            <ExternalLink className="h-4 w-4" />
                                           </a>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                          <span className="font-mono text-xs">
+                                          <span className="font-mono text-sm">
                                             Charge
                                           </span>
                                           <a
                                             href={`https://dashboard.stripe.com/payments/${student.chargeId}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                                            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
                                           >
                                             {student.chargeId.slice(-8)}{' '}
-                                            <ExternalLink className="h-3 w-3" />
+                                            <ExternalLink className="h-4 w-4" />
                                           </a>
                                         </div>
                                         {student.invoiceId && (
                                           <div className="flex items-center gap-2">
-                                            <span className="font-mono text-xs">
+                                            <span className="font-mono text-sm">
                                               Invoice
                                             </span>
                                             <a
                                               href={`https://dashboard.stripe.com/invoices/${student.invoiceId}`}
                                               target="_blank"
                                               rel="noopener noreferrer"
-                                              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                                              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
                                             >
                                               {student.invoiceId.slice(-8)}{' '}
-                                              <ExternalLink className="h-3 w-3" />
+                                              <ExternalLink className="h-4 w-4" />
                                             </a>
                                           </div>
                                         )}
