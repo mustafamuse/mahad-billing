@@ -12,6 +12,9 @@ import { stripeServerClient as stripe } from '@/lib/stripe'
  * @param subscriptionId - The ID of the Stripe subscription to sync.
  */
 async function syncStudentSubscriptionState(subscriptionId: string) {
+  console.log(
+    `[WEBHOOK] syncStudentSubscriptionState: Starting sync for Subscription ID: ${subscriptionId}`
+  )
   try {
     const subscription: Stripe.Subscription =
       await stripe.subscriptions.retrieve(subscriptionId)
@@ -23,7 +26,7 @@ async function syncStudentSubscriptionState(subscriptionId: string) {
 
     if (students.length === 0) {
       console.log(
-        `No students found for subscription ${subscription.id}. Skipping sync.`
+        `[WEBHOOK] syncStudentSubscriptionState: No students found for Subscription ID: ${subscription.id}. Skipping sync.`
       )
       return
     }
@@ -37,10 +40,13 @@ async function syncStudentSubscriptionState(subscriptionId: string) {
     })
 
     console.log(
-      `Successfully synced subscription ${subscription.id}. Matched and updated ${count} student(s) to status: ${subscription.status}`
+      `[WEBHOOK] syncStudentSubscriptionState: Successfully synced Subscription ID: ${subscription.id}. Matched and updated ${count} student(s) to status: ${subscription.status}.`
     )
   } catch (error) {
-    console.error(`Error syncing subscription ${subscriptionId}:`, error)
+    console.error(
+      `[WEBHOOK] syncStudentSubscriptionState: Error syncing Subscription ID: ${subscriptionId}.`,
+      error
+    )
   }
 }
 
@@ -51,6 +57,10 @@ async function syncStudentSubscriptionState(subscriptionId: string) {
  */
 export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
   const session = event.data.object as Stripe.Checkout.Session
+  console.log(
+    `[WEBHOOK] Processing 'checkout.session.completed' for Session ID: ${session.id}`
+  )
+
   // Exit if this checkout session didn't create a subscription
   if (
     session.mode !== 'subscription' ||
@@ -58,7 +68,7 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     !session.customer
   ) {
     console.log(
-      `Checkout session ${session.id} is not a subscription creation event. Skipping.`
+      `[WEBHOOK] Checkout session ${session.id} is not a subscription creation event. Skipping.`
     )
     return
   }
@@ -72,7 +82,7 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
 
   if (existingStudent) {
     console.log(
-      `Student ${existingStudent.id} is already linked to subscription ${subscriptionId}. Skipping.`
+      `[WEBHOOK] Student ${existingStudent.id} is already linked to subscription ${subscriptionId}. Skipping.`
     )
     return
   }
@@ -94,7 +104,9 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     })
     if (students.length === 1) {
       studentToUpdate = students[0]
-      console.log(`Found unique student by name: ${studentName}`)
+      console.log(
+        `[WEBHOOK] Found unique student by name: ${studentName}. Student ID: ${studentToUpdate.id}`
+      )
     }
   }
 
@@ -116,7 +128,7 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       if (students.length === 1) {
         studentToUpdate = students[0]
         console.log(
-          `Found unique student by normalized phone: ${normalizedPhone}`
+          `[WEBHOOK] Found unique student by normalized phone: ${normalizedPhone}. Student ID: ${studentToUpdate.id}`
         )
       }
     }
@@ -133,7 +145,9 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     })
     if (students.length === 1) {
       studentToUpdate = students[0]
-      console.log(`Found unique student by payer email: ${payerEmail}`)
+      console.log(
+        `[WEBHOOK] Found unique student by payer email: ${payerEmail}. Student ID: ${studentToUpdate.id}`
+      )
     }
   }
 
@@ -149,7 +163,7 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       },
     })
     console.log(
-      `Successfully linked subscription ${subscriptionId} to student ${studentToUpdate.name} (${studentToUpdate.id})`
+      `[WEBHOOK] Successfully linked Subscription ID: ${subscriptionId} to Student: ${studentToUpdate.name} (${studentToUpdate.id})`
     )
 
     // Sync the initial state. The subscription is now linked, and its status
@@ -161,7 +175,7 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       (f) => f.key === 'studentswhatsappthatyouuseforourgroup'
     )?.numeric?.value
     console.warn(
-      `Could not find a unique, unlinked student for subscription ${subscriptionId}. ` +
+      `[WEBHOOK] Could not find a unique, unlinked student for subscription ${subscriptionId}. ` +
         `Attempted lookup with name: "${studentName || 'N/A'}", ` +
         `phone: "${studentPhone || 'N/A'}", ` +
         `and payer email: "${payerEmail || 'N/A'}". Manual review required.`
@@ -176,9 +190,12 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
 export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   const invoicePayload = event.data.object as Stripe.Invoice
   const stripeInvoiceId = invoicePayload.id
+  console.log(
+    `[WEBHOOK] Processing 'invoice.payment_succeeded' for Invoice ID: ${stripeInvoiceId}`
+  )
 
   if (!stripeInvoiceId) {
-    console.error('Received an invoice event with no ID. Skipping.')
+    console.error('[WEBHOOK] Received an invoice event with no ID. Skipping.')
     return
   }
 
@@ -190,7 +207,7 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
     })
   } catch (error) {
     console.error(
-      `Failed to retrieve invoice ${stripeInvoiceId} from Stripe:`,
+      `[WEBHOOK] Failed to retrieve invoice ${stripeInvoiceId} from Stripe:`,
       error
     )
     return
@@ -201,7 +218,7 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
 
   if (!subscription) {
     console.log(
-      `Invoice ${invoice.id} succeeded but is not tied to a subscription. Skipping payment record creation.`
+      `[WEBHOOK] Invoice ${invoice.id} succeeded but is not tied to a subscription. Skipping payment record creation.`
     )
     return
   }
@@ -215,7 +232,7 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
 
   if (!subscriptionLineItem?.period) {
     console.error(
-      `Error: Invoice ${invoice.id} is missing subscription line item or period info.`
+      `[WEBHOOK] Error: Invoice ${invoice.id} is missing subscription line item or period info.`
     )
     return
   }
@@ -226,7 +243,7 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
 
   if (students.length === 0) {
     console.log(
-      `Invoice ${invoice.id} succeeded, but no students found for subscription ${subscription.id}.`
+      `[WEBHOOK] Invoice ${invoice.id} succeeded, but no students found for subscription ${subscription.id}.`
     )
     return
   }
@@ -255,7 +272,7 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
 
   if (createdCount > 0) {
     console.log(
-      `Successfully created ${createdCount} payment record(s) for invoice ${stripeInvoiceId}.`
+      `[WEBHOOK] Successfully created ${createdCount} payment record(s) for Invoice ID: ${stripeInvoiceId}.`
     )
   }
   // --- End of Transactional Record Creation ---
@@ -271,6 +288,9 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
  */
 export async function handleInvoicePaymentFailed(event: Stripe.Event) {
   const invoice = event.data.object as Stripe.Invoice
+  console.log(
+    `[WEBHOOK] Processing 'invoice.payment_failed' for Invoice ID: ${invoice.id}`
+  )
   const subscriptionId = (invoice as any).subscription as string | null
 
   if (subscriptionId) {
@@ -305,7 +325,7 @@ export async function handleInvoicePaymentFailed(event: Stripe.Event) {
       description: dynamicDescription,
     })
     console.log(
-      `Successfully created a pending late fee for customer ${customerId}.`
+      `[WEBHOOK] Successfully created a pending late fee for Customer ID: ${customerId}.`
     )
   }
 }
@@ -316,6 +336,9 @@ export async function handleInvoicePaymentFailed(event: Stripe.Event) {
  */
 export async function handleSubscriptionUpdated(event: Stripe.Event) {
   const subscription = event.data.object as Stripe.Subscription
+  console.log(
+    `[WEBHOOK] Processing 'customer.subscription.updated' for Subscription ID: ${subscription.id}`
+  )
   await syncStudentSubscriptionState(subscription.id)
 }
 
@@ -325,6 +348,9 @@ export async function handleSubscriptionUpdated(event: Stripe.Event) {
  */
 export async function handleSubscriptionDeleted(event: Stripe.Event) {
   const subscription = event.data.object as Stripe.Subscription
+  console.log(
+    `[WEBHOOK] Processing 'customer.subscription.deleted' for Subscription ID: ${subscription.id}`
+  )
 
   // First, find the students associated with the subscription before it's gone.
   const students = await prisma.student.findMany({
@@ -343,7 +369,7 @@ export async function handleSubscriptionDeleted(event: Stripe.Event) {
       },
     })
     console.log(
-      `Subscription ${subscription.id} deleted. Unlinked and marked ${count} student(s) as canceled.`
+      `[WEBHOOK] Subscription ${subscription.id} deleted. Unlinked and marked ${count} student(s) as canceled.`
     )
   }
 }
