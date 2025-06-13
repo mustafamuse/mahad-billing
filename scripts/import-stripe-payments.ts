@@ -1,93 +1,99 @@
+import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 
 import { stripeServerClient } from '../lib/stripe'
 
 const prisma = new PrismaClient()
-const GROUP_SUBSCRIPTION_THRESHOLD = 150 * 100 // Stripe amounts are in cents
 
 async function main() {
+  console.log('Fetching all students with a Stripe Subscription ID...')
   const students = await prisma.student.findMany({
     where: { stripeSubscriptionId: { not: null } },
     select: { id: true, name: true, stripeSubscriptionId: true },
   })
 
-  const flaggedSubscriptions = new Set<string>()
+  // Get a unique set of subscription IDs to process each subscription only once.
+  const uniqueSubIds = new Set(
+    students.map((s) => s.stripeSubscriptionId).filter(Boolean)
+  )
+  const subscriptionIds = Array.from(uniqueSubIds) as string[]
+  console.log(
+    `Found ${subscriptionIds.length} unique subscriptions to process.`
+  )
 
-  for (const student of students) {
-    if (!student.stripeSubscriptionId) continue
+  for (const subId of subscriptionIds) {
+    if (!subId) continue
 
+    // Find all students sharing this subscription in our database
+    const studentsOnThisSub = students.filter(
+      (s) => s.stripeSubscriptionId === subId
+    )
+    const studentNames = studentsOnThisSub.map((s) => s.name).join(', ')
     console.log(
-      `Processing student: ${student.name} (${student.stripeSubscriptionId})`
+      `\nProcessing Subscription ID: ${subId} (Shared by: ${studentNames})`
     )
 
-    // Fetch all invoices for this subscription
+    // Fetch all paid invoices for this subscription
     let invoices
     try {
+      // We use `expand` to ensure we get the full line item objects,
+      // including their period details, within the list call.
       invoices = await stripeServerClient.invoices.list({
-        subscription: student.stripeSubscriptionId,
+        subscription: subId,
         status: 'paid',
         limit: 100,
-        expand: ['data.lines'],
+        expand: ['data.lines.data'],
       })
     } catch (err: any) {
       if (err?.raw?.code === 'resource_missing') {
         console.warn(
-          `Skipping student ${student.name} (${student.stripeSubscriptionId}): subscription not found in this Stripe mode`
+          `Skipping subscription ${subId}: not found in this Stripe mode.`
         )
         continue
       }
       throw err
     }
 
-    console.log(`  Found ${invoices.data.length} invoices for student.`)
+    console.log(`  Found ${invoices.data.length} paid invoices.`)
 
     for (const invoice of invoices.data) {
-      console.log(
-        `  Invoice: ${invoice.id}, lines: ${invoice.lines.data.length}`
+      // The total amount paid for this invoice.
+      const totalAmountPaid = invoice.amount_paid
+      const paidAt = invoice.status_transitions?.paid_at
+        ? new Date(invoice.status_transitions.paid_at * 1000)
+        : new Date(invoice.created * 1000)
+
+      // Get the period from the subscription line item.
+      // We identify it by checking the parent object's type.
+      const subLineItem = invoice.lines.data.find(
+        (line) =>
+          line.parent?.type === 'subscription_item_details' && line.period
       )
-      // Log the full invoice object for inspection
-      console.dir(invoice, { depth: 3 })
-      for (const line of invoice.lines.data) {
-        // Check if this is a subscription line item
-        if (!line.subscription) {
-          console.warn(
-            `Line ${line.id} is not a subscription line item, skipping.`
-          )
-          continue
-        }
 
-        // For subscription line items, we know it's recurring
-        console.log(
-          `    Line: ${line.id}, amount: ${line.amount}, subscription: ${line.subscription}`
+      if (!subLineItem) {
+        console.warn(
+          `  Skipping Invoice ${invoice.id}: No line item found with type 'subscription_item_details' and a 'period'.`
         )
-        // Log the full line object for inspection
-        console.dir(line, { depth: 3 })
+        continue
+      }
+      const periodStart = new Date(subLineItem.period.start * 1000)
+      const year = periodStart.getUTCFullYear()
+      const month = periodStart.getUTCMonth() + 1 // JS months are 0-based
 
-        const amountPaid = line.amount ?? 0
-        const paidAt = invoice.status_transitions?.paid_at
-          ? new Date(invoice.status_transitions.paid_at * 1000)
-          : new Date(invoice.created * 1000)
+      // Calculate the amount per student for this invoice.
+      const amountPerStudent =
+        studentsOnThisSub.length > 0
+          ? Math.floor(totalAmountPaid / studentsOnThisSub.length)
+          : totalAmountPaid // Fallback for safety
 
-        // Stripe period is in seconds since epoch
-        const periodStart = new Date(line.period.start * 1000)
-        const year = periodStart.getUTCFullYear()
-        const month = periodStart.getUTCMonth() + 1 // JS months are 0-based
+      console.log(
+        `  Processing Invoice ${invoice.id} for ${year}-${month}. Total: $${totalAmountPaid / 100}, Per Student: $${amountPerStudent / 100}`
+      )
 
-        // Flag if amount is over threshold
-        if (amountPaid > GROUP_SUBSCRIPTION_THRESHOLD) {
-          flaggedSubscriptions.add(student.stripeSubscriptionId)
-          console.log(
-            `Flagged group/family subscription: ${student.name} (${student.stripeSubscriptionId}) - amount: ${amountPaid / 100}`
-          )
-        }
+      // Create a payment record for each student on the subscription.
+      for (const student of studentsOnThisSub) {
+        if (!invoice.id) continue // Skip if invoice ID is missing
 
-        // Skip if invoice.id is undefined
-        if (!invoice.id) {
-          console.warn(`Invoice ID is undefined, skipping payment record`)
-          continue
-        }
-
-        // Upsert StudentPayment (avoid duplicates)
         await prisma.studentPayment.upsert({
           where: {
             studentId_stripeInvoiceId: {
@@ -96,7 +102,7 @@ async function main() {
             },
           },
           update: {
-            amountPaid: amountPaid, // Store as cents (Stripe format)
+            amountPaid: amountPerStudent,
             paidAt,
             year,
             month,
@@ -106,22 +112,18 @@ async function main() {
             stripeInvoiceId: invoice.id,
             year,
             month,
-            amountPaid: amountPaid, // Store as cents (Stripe format)
+            amountPaid: amountPerStudent,
             paidAt,
           },
         })
         console.log(
-          `Created payment for ${student.name} (${year}-${month}): $${amountPaid / 100} on ${paidAt.toISOString()}`
+          `    Upserted payment for ${student.name} (${year}-${month})`
         )
       }
     }
   }
 
-  // Log all flagged subscriptions at the end
-  if (flaggedSubscriptions.size > 0) {
-    console.log('\nFlagged possible group/family subscriptions:')
-    flaggedSubscriptions.forEach((subId) => console.log(`  - ${subId}`))
-  }
+  console.log('\n✅ Stripe payment import completed successfully.')
 }
 
 main()

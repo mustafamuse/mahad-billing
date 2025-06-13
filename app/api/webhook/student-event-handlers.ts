@@ -6,12 +6,61 @@ import { prisma } from '@/lib/db'
 import { stripeServerClient as stripe } from '@/lib/stripe'
 
 /**
+ * The single source of truth for syncing a subscription from Stripe to our database.
+ * This function fetches the latest subscription data from Stripe and updates the
+ * corresponding student records.
+ * @param subscriptionId - The ID of the Stripe subscription to sync.
+ */
+async function syncStudentSubscriptionState(subscriptionId: string) {
+  console.log(
+    `[WEBHOOK] syncStudentSubscriptionState: Starting sync for Subscription ID: ${subscriptionId}`
+  )
+  try {
+    const subscription: Stripe.Subscription =
+      await stripe.subscriptions.retrieve(subscriptionId)
+
+    // Find all students linked to this subscription
+    const students = await prisma.student.findMany({
+      where: { stripeSubscriptionId: subscription.id },
+    })
+
+    if (students.length === 0) {
+      console.log(
+        `[WEBHOOK] syncStudentSubscriptionState: No students found for Subscription ID: ${subscription.id}. Skipping sync.`
+      )
+      return
+    }
+
+    const { count } = await prisma.student.updateMany({
+      where: { stripeSubscriptionId: subscription.id },
+      data: {
+        subscriptionStatus: subscription.status,
+        paidUntil: new Date((subscription as any).current_period_end * 1000),
+      },
+    })
+
+    console.log(
+      `[WEBHOOK] syncStudentSubscriptionState: Successfully synced Subscription ID: ${subscription.id}. Matched and updated ${count} student(s) to status: ${subscription.status}.`
+    )
+  } catch (error) {
+    console.error(
+      `[WEBHOOK] syncStudentSubscriptionState: Error syncing Subscription ID: ${subscriptionId}.`,
+      error
+    )
+  }
+}
+
+/**
  * Handles 'checkout.session.completed'
  * Finds a pre-registered student and links them to their new Stripe subscription.
  * This is the primary mechanism for onboarding a new paying student.
  */
 export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
   const session = event.data.object as Stripe.Checkout.Session
+  console.log(
+    `[WEBHOOK] Processing 'checkout.session.completed' for Session ID: ${session.id}`
+  )
+
   // Exit if this checkout session didn't create a subscription
   if (
     session.mode !== 'subscription' ||
@@ -19,19 +68,21 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     !session.customer
   ) {
     console.log(
-      `Checkout session ${session.id} is not a subscription creation event. Skipping.`
+      `[WEBHOOK] Checkout session ${session.id} is not a subscription creation event. Skipping.`
     )
     return
   }
 
+  const subscriptionId = session.subscription as string
+
   // Idempotency Check: Prevent re-linking a subscription
   const existingStudent = await prisma.student.findFirst({
-    where: { stripeSubscriptionId: session.subscription as string },
+    where: { stripeSubscriptionId: subscriptionId },
   })
 
   if (existingStudent) {
     console.log(
-      `Student ${existingStudent.id} is already linked to subscription ${session.subscription}. Skipping.`
+      `[WEBHOOK] Student ${existingStudent.id} is already linked to subscription ${subscriptionId}. Skipping.`
     )
     return
   }
@@ -53,7 +104,9 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     })
     if (students.length === 1) {
       studentToUpdate = students[0]
-      console.log(`Found unique student by name: ${studentName}`)
+      console.log(
+        `[WEBHOOK] Found unique student by name: ${studentName}. Student ID: ${studentToUpdate.id}`
+      )
     }
   }
 
@@ -65,12 +118,7 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     const studentPhoneFromStripe = studentPhoneField?.numeric?.value
 
     if (studentPhoneFromStripe) {
-      // Normalize the phone number from Stripe by removing non-numeric characters.
       const normalizedPhone = studentPhoneFromStripe.replace(/\D/g, '')
-
-      // Use a raw query to compare the normalized phone number against a normalized
-      // `phone` column in the database. This handles format differences (e.g., '123-456-7890' vs '1234567890').
-      // NOTE: This syntax `REGEXP_REPLACE` is specific to PostgreSQL (which Supabase uses).
       const students = await prisma.$queryRaw<Student[]>(Prisma.sql`
         SELECT * FROM "Student"
         WHERE REGEXP_REPLACE("phone", '[^0-9]', '', 'g') = ${normalizedPhone}
@@ -80,7 +128,7 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       if (students.length === 1) {
         studentToUpdate = students[0]
         console.log(
-          `Found unique student by normalized phone: ${normalizedPhone}`
+          `[WEBHOOK] Found unique student by normalized phone: ${normalizedPhone}. Student ID: ${studentToUpdate.id}`
         )
       }
     }
@@ -97,7 +145,9 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     })
     if (students.length === 1) {
       studentToUpdate = students[0]
-      console.log(`Found unique student by payer email: ${payerEmail}`)
+      console.log(
+        `[WEBHOOK] Found unique student by payer email: ${payerEmail}. Student ID: ${studentToUpdate.id}`
+      )
     }
   }
 
@@ -107,27 +157,25 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       where: { id: studentToUpdate.id },
       data: {
         stripeCustomerId: session.customer as string,
-        stripeSubscriptionId: session.subscription as string,
-        // The subscription is active because the checkout was successful.
-        subscriptionStatus: 'active',
-        // The student's lifecycle status is now 'enrolled'.
+        stripeSubscriptionId: subscriptionId,
         status: 'enrolled',
-        // Update email to the payer's email for billing correspondence
         email: payerEmail,
       },
     })
     console.log(
-      `Successfully linked subscription ${session.subscription} to student ${studentToUpdate.name} (${studentToUpdate.id})`
+      `[WEBHOOK] Successfully linked Subscription ID: ${subscriptionId} to Student: ${studentToUpdate.name} (${studentToUpdate.id})`
     )
+
+    // Sync the initial state. The subscription is now linked, and its status
+    // will be updated to reflect the true state from Stripe (e.g., 'trialing' or 'active').
+    await syncStudentSubscriptionState(subscriptionId)
   } else {
     // If no unique student was found, log a detailed warning for manual review.
     const studentPhone = session.custom_fields?.find(
       (f) => f.key === 'studentswhatsappthatyouuseforourgroup'
     )?.numeric?.value
     console.warn(
-      `Could not find a unique, unlinked student for subscription ${
-        session.subscription
-      }. ` +
+      `[WEBHOOK] Could not find a unique, unlinked student for subscription ${subscriptionId}. ` +
         `Attempted lookup with name: "${studentName || 'N/A'}", ` +
         `phone: "${studentPhone || 'N/A'}", ` +
         `and payer email: "${payerEmail || 'N/A'}". Manual review required.`
@@ -137,190 +185,191 @@ export async function handleCheckoutSessionCompleted(event: Stripe.Event) {
 
 /**
  * Handles 'invoice.payment_succeeded'.
- * Updates `paidUntil` and ensures status is 'active' for all students on a subscription.
- * Most importantly, it creates a permanent, auditable `StudentPayment` record for each student covered by the invoice.
+ * Creates a permanent, auditable `StudentPayment` record and then triggers a state sync.
  */
 export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
-  const invoice = event.data.object as any // Using any to bypass TS errors on expanded props
-  const subscriptionId = invoice.subscription
-  const stripeInvoiceId = invoice.id
-
-  if (!subscriptionId || !stripeInvoiceId) {
-    console.log(
-      `Invoice ${stripeInvoiceId} succeeded but is not tied to a subscription. Skipping payment record creation.`
-    )
-    return
-  }
-
-  const subscriptionLineItem = invoice.lines.data.find(
-    (line: any) => line.type === 'subscription'
+  const invoicePayload = event.data.object as Stripe.Invoice
+  const stripeInvoiceId = invoicePayload.id
+  console.log(
+    `[WEBHOOK] Processing 'invoice.payment_succeeded' for Invoice ID: ${stripeInvoiceId}`
   )
 
-  // We need the billing period to correctly assign the payment month/year.
-  if (!subscriptionLineItem?.period) {
+  if (!stripeInvoiceId) {
+    console.error('[WEBHOOK] Received an invoice event with no ID. Skipping.')
+    return
+  }
+
+  // Retrieve the full invoice from Stripe first to get all necessary data.
+  let invoice: Stripe.Invoice
+  try {
+    invoice = await stripe.invoices.retrieve(stripeInvoiceId, {
+      expand: ['lines.data', 'subscription'],
+    })
+  } catch (error) {
     console.error(
-      `Error: Invoice ${stripeInvoiceId} is missing subscription line item or period info.`
+      `[WEBHOOK] Failed to retrieve invoice ${stripeInvoiceId} from Stripe:`,
+      error
     )
     return
   }
 
-  // Find all students associated with this subscription.
+  const subscription = (invoice as any)
+    .subscription as Stripe.Subscription | null
+
+  if (!subscription) {
+    console.log(
+      `[WEBHOOK] Invoice ${invoice.id} succeeded but is not tied to a subscription. Skipping payment record creation.`
+    )
+    return
+  }
+
+  // --- Start of Transactional Record Creation ---
+  // This part remains, as it's about logging a historical event, not just current state.
+
+  const subscriptionLineItem = invoice.lines.data.find(
+    (line: any) => line.parent?.type === 'subscription_item_details'
+  )
+
+  if (!subscriptionLineItem?.period) {
+    console.error(
+      `[WEBHOOK] Error: Invoice ${invoice.id} is missing a subscription line item with period info. Check 'expand' and line item type.`
+    )
+    return
+  }
+
   const students = await prisma.student.findMany({
-    where: { stripeSubscriptionId: subscriptionId },
+    where: { stripeSubscriptionId: subscription.id },
   })
 
   if (students.length === 0) {
-    // Not an error, we might have subscriptions we don't track.
+    console.log(
+      `[WEBHOOK] Invoice ${invoice.id} succeeded, but no students found for subscription ${subscription.id}.`
+    )
     return
   }
 
   const periodStart = new Date(subscriptionLineItem.period.start * 1000)
-  const paidAt = invoice.paid_at ? new Date(invoice.paid_at * 1000) : new Date()
+  const paidAt = invoice.status_transitions.paid_at
+    ? new Date(invoice.status_transitions.paid_at * 1000)
+    : new Date()
 
-  // Calculate the amount paid per student for this invoice.
   const amountPerStudent =
-    students.length > 0 ? invoice.total / students.length : 0
+    students.length > 0 ? Math.floor(invoice.amount_paid / students.length) : 0
 
-  // Create a payment record for each student on the subscription.
   const paymentData = students.map((student) => ({
     studentId: student.id,
     stripeInvoiceId: stripeInvoiceId,
-    amountPaid: amountPerStudent, // Use the proportional amount from the invoice
-    year: periodStart.getFullYear(),
-    month: periodStart.getMonth() + 1, // JS months are 0-indexed
+    amountPaid: amountPerStudent,
+    year: periodStart.getUTCFullYear(),
+    month: periodStart.getUTCMonth() + 1,
     paidAt: paidAt,
   }))
 
   const { count: createdCount } = await prisma.studentPayment.createMany({
     data: paymentData,
-    skipDuplicates: true, // This is key for idempotency, based on our @@unique constraint.
+    skipDuplicates: true,
   })
 
   if (createdCount > 0) {
     console.log(
-      `Successfully created ${createdCount} payment record(s) for invoice ${stripeInvoiceId}.`
+      `[WEBHOOK] Successfully created ${createdCount} payment record(s) for Invoice ID: ${stripeInvoiceId}.`
     )
   }
+  // --- End of Transactional Record Creation ---
 
-  // We still update the paidUntil status for the student record as before.
-  const paidUntil = new Date(subscriptionLineItem.period.end * 1000)
-  const { count: updatedCount } = await prisma.student.updateMany({
-    where: { stripeSubscriptionId: subscriptionId as string },
-    data: {
-      subscriptionStatus: 'active',
-      paidUntil: paidUntil,
-    },
-  })
-
-  if (updatedCount > 0) {
-    console.log(
-      `Successfully updated ${updatedCount} student(s) paidUntil status for subscription ${subscriptionId}.`
-    )
-  }
+  // After creating the historical record, sync the student's state from the subscription.
+  await syncStudentSubscriptionState(subscription.id)
 }
 
 /**
- * Handles 'invoice.payment_failed' event to add a late fee to the customer.
- * This function is solely responsible for creating a pending invoice item that will be
- * added to the customer's next invoice.
- * Student status changes are handled by `handleSubscriptionUpdated`.
+ * Handles 'invoice.payment_failed' event.
+ * Syncs the subscription state, which will be 'past_due'.
+ * Optionally, you can add specific logic here, like creating a late fee.
  */
 export async function handleInvoicePaymentFailed(event: Stripe.Event) {
   const invoice = event.data.object as Stripe.Invoice
-  const customerId = invoice.customer
+  console.log(
+    `[WEBHOOK] Processing 'invoice.payment_failed' for Invoice ID: ${invoice.id}`
+  )
+  const subscriptionId = (invoice as any).subscription as string | null
 
-  if (typeof customerId !== 'string') {
-    console.log(
-      `Invoice ${invoice.id} payment failed, but is missing customer ID. Cannot create late fee.`
-    )
-    return
+  if (subscriptionId) {
+    await syncStudentSubscriptionState(subscriptionId)
   }
 
-  // Check if a PENDING late fee already exists for this customer to prevent duplicates.
-  const existingItems = await stripe.invoiceItems.list({
-    customer: customerId,
-    pending: true,
-  })
-
-  // Dynamically create a description for the late fee, e.g., "June 2025 Failed Payment Fee"
+  // --- Optional: Late Fee Logic ---
+  const customerId = invoice.customer
+  if (typeof customerId !== 'string') {
+    return
+  }
   const failedInvoiceMonth = new Date(invoice.created * 1000).toLocaleString(
     'default',
     { month: 'long', year: 'numeric' }
   )
   const dynamicDescription = `${failedInvoiceMonth} Failed Payment Fee`
 
+  const existingItems = await stripe.invoiceItems.list({
+    customer: customerId,
+    pending: true,
+  })
+
   const hasLateFee = existingItems.data.some(
     (item: Stripe.InvoiceItem) => item.description === dynamicDescription
   )
 
-  if (hasLateFee) {
+  if (!hasLateFee) {
+    await stripe.invoiceItems.create({
+      customer: customerId,
+      amount: 1000,
+      currency: 'usd',
+      description: dynamicDescription,
+    })
     console.log(
-      `Customer ${customerId} already has a pending late fee for ${failedInvoiceMonth}. Skipping creation.`
+      `[WEBHOOK] Successfully created a pending late fee for Customer ID: ${customerId}.`
     )
-    return
   }
-
-  // Create a pending $10 late fee with the dynamic description.
-  await stripe.invoiceItems.create({
-    customer: customerId,
-    amount: 1000, // 1000 cents = $10.00
-    currency: 'usd',
-    description: dynamicDescription,
-  })
-
-  console.log(
-    `Successfully created a pending late fee for customer ${customerId} for failed invoice from ${failedInvoiceMonth}.`
-  )
 }
 
 /**
  * Handles 'customer.subscription.updated' events.
- * This is the primary handler for managing student status based on their subscription lifecycle.
- * It's the source of truth for `active`, `past_due`, and `unpaid` statuses.
+ * This is now a simple wrapper around our sync function.
  */
 export async function handleSubscriptionUpdated(event: Stripe.Event) {
   const subscription = event.data.object as Stripe.Subscription
-
-  // Find all students linked to this subscription
-  const students = await prisma.student.findMany({
-    where: { stripeSubscriptionId: subscription.id },
-  })
-
-  if (students.length === 0) {
-    // This is not an error, as Stripe may have subscriptions we don't track.
-    return
-  }
-
-  // Update all found students to reflect the latest subscription status
-  const { count } = await prisma.student.updateMany({
-    where: { stripeSubscriptionId: subscription.id },
-    data: { subscriptionStatus: subscription.status },
-  })
-
   console.log(
-    `Subscription ${subscription.id} updated. Matched and updated ${count} student(s) to status: ${subscription.status}`
+    `[WEBHOOK] Processing 'customer.subscription.updated' for Subscription ID: ${subscription.id}`
   )
+  await syncStudentSubscriptionState(subscription.id)
 }
 
 /**
  * Handles 'customer.subscription.deleted' events.
- * Marks the subscription as canceled for all students sharing it and removes the link.
+ * Marks the subscription as canceled and unlinks it from the students.
  */
 export async function handleSubscriptionDeleted(event: Stripe.Event) {
   const subscription = event.data.object as Stripe.Subscription
+  console.log(
+    `[WEBHOOK] Processing 'customer.subscription.deleted' for Subscription ID: ${subscription.id}`
+  )
 
-  const { count } = await prisma.student.updateMany({
+  // First, find the students associated with the subscription before it's gone.
+  const students = await prisma.student.findMany({
     where: { stripeSubscriptionId: subscription.id },
-    data: {
-      subscriptionStatus: 'canceled',
-      stripeSubscriptionId: null, // Unlink the subscription
-      paidUntil: null, // Clear the paid until date
-    },
   })
 
-  if (count > 0) {
+  if (students.length > 0) {
+    const { count } = await prisma.student.updateMany({
+      where: {
+        id: { in: students.map((s) => s.id) },
+      },
+      data: {
+        subscriptionStatus: 'canceled',
+        stripeSubscriptionId: null, // Unlink the subscription
+        paidUntil: null, // Clear the paid until date
+      },
+    })
     console.log(
-      `Subscription ${subscription.id} deleted. Unlinked and marked ${count} student(s) as canceled.`
+      `[WEBHOOK] Subscription ${subscription.id} deleted. Unlinked and marked ${count} student(s) as canceled.`
     )
   }
 }

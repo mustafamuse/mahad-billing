@@ -35,14 +35,12 @@ const nextConfig = {
     KV_REST_API_READ_ONLY_TOKEN: process.env.KV_REST_API_READ_ONLY_TOKEN,
     KV_URL: process.env.KV_URL,
   },
-  experimental: {
-    esmExternals: 'loose',
-  },
+  transpilePackages: ['@react-pdf/renderer'],
   webpack: (config) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@react-pdf/renderer': '@react-pdf/renderer/lib/react-pdf.js',
-    }
+    config.externals = config.externals || []
+    config.externals.push({
+      canvas: 'canvas',
+    })
     return config
   },
   // compiler: {
